@@ -1,0 +1,6 @@
+@page
+@model HrSystemDhg.Web.Pages.Hr.CorrectionsModel
+@{ViewData["Title"]="Corrections & exceptions";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Corrections & exceptions</h1>
+<div asp-validation-summary="All"></div>
+<div class="card table-scroll"><table><tr><th>Employee</th><th>Date</th><th>Request</th><th>Status</th><th>Resolution</th></tr>@foreach(var c in Model.Items){<tr><td>@Model.Names.GetValueOrDefault(c.EmployeeId)</td><td>@c.AttendanceDate?.ToString("dd MMM yyyy")</td><td>@c.Details</td><td>@c.Status</td><td>@if(c.Status=="Pending"){<form method="post"><input type="hidden" name="id" value="@c.Id"/><label>Resolution / reason<input name="resolution" required/></label><button name="status" value="Resolved">Resolve</button><button name="status" value="Rejected">Reject</button></form>}else{@c.Resolution}</td></tr>}</table></div><p>Apply attendance corrections in Attendance or personal corrections in the employee record before resolving.</p>

@@ -1,0 +1,6 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.SupportModel
+@{ViewData["Title"]="Support view";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Support view</h1>
+<div asp-validation-summary="All"></div>
+<p>Open a 15-minute read-only session as another account. The action is audited and does not require their password.</p><form method="post" class="card"><label>Account<select name="id">@foreach(var u in Model.Users){<option value="@u.Id">@u.Email</option>}</select></label><label>Support reason<input name="reason" required/></label><button>Open read-only support view</button></form>

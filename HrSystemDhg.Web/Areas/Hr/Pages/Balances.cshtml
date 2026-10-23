@@ -1,0 +1,6 @@
+@page
+@model HrSystemDhg.Web.Pages.Hr.BalancesModel
+@{ViewData["Title"]="Leave balance credits";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Leave balance credits</h1>
+<div asp-validation-summary="All"></div>
+<p>Annual credits replace the leave type’s default entitlement for a selected employee and year. Approved working days are subtracted automatically.</p><form method="post" class="card"><div class="grid"><label>Employee<select name="employeeId">@foreach(var e in Model.Employees){<option value="@e.Id">@e.FullName</option>}</select></label><label>Type<select name="typeId">@foreach(var t in Model.Types){<option value="@t.Id">@t.Name</option>}</select></label><label>Year<input name="year" type="number" value="@HrSystemDhg.Web.Services.BusinessClock.Today.Year" min="2000" max="2200"/></label><label>Credited days<input name="days" type="number" step="0.01" min="0"/></label><label>Reason<input name="reason" required/></label></div><button>Set annual credit</button></form><div class="card"><table><tr><th>Employee ID</th><th>Type ID</th><th>Year</th><th>Credit</th></tr>@foreach(var b in Model.Balances){<tr><td>@b.EmployeeId</td><td>@b.LeaveTypeId</td><td>@b.Year</td><td>@b.Days</td></tr>}</table></div>

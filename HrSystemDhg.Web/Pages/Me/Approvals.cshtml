@@ -1,0 +1,6 @@
+@page
+@model HrSystemDhg.Web.Pages.Me.ApprovalsModel
+@{ViewData["Title"]="Reporting manager approvals";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Reporting manager approvals</h1>
+<div asp-validation-summary="All"></div>
+<p>Only requests from your direct reports are listed. HR completes the final approval.</p><div class="card"><table><tr><th>Employee</th><th>Dates</th><th>Reason</th><th>Decision</th></tr>@foreach(var r in Model.Items){<tr><td>@Model.Names.GetValueOrDefault(r.EmployeeId)</td><td>@r.From.ToString("dd MMM yyyy") – @r.To.ToString("dd MMM yyyy")</td><td>@r.Reason</td><td><form method="post"><input type="hidden" name="id" value="@r.Id"/><label>Reason<input name="reason"/></label><button name="approve" value="true">Approve for HR review</button><button name="approve" value="false">Reject</button></form></td></tr>}</table></div>

@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+App_Data/
+*.user
+.env
+
+scripts/backup.sh
+
+.DS_Store

@@ -1,0 +1,6 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.DevicesModel
+@{ViewData["Title"]="Attendance devices";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Attendance devices</h1>
+<div asp-validation-summary="All"></div>
+<p>Manual import mode is enabled. Register device identifiers to preserve source attribution.</p><form method="post" class="card"><label>Device name<input name="name" required/></label><label>Reference / location<input name="endpoint"/></label><button>Add device</button></form><div class="card"><table><tr><th>ID</th><th>Device</th><th>Reference</th></tr>@foreach(var d in Model.Items){<tr><td>@d.Id</td><td>@d.Name</td><td>@d.Endpoint</td></tr>}</table></div>

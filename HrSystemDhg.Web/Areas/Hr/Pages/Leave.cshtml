@@ -1,0 +1,6 @@
+@page
+@model HrSystemDhg.Web.Pages.Hr.LeaveModel
+@{ViewData["Title"]="Leave approvals";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Leave approvals</h1>
+<div asp-validation-summary="All"></div>
+<p>Review working-day balances and supporting documents before deciding.</p><div class="card table-scroll"><table><tr><th>Employee</th><th>Type / dates</th><th>Reason</th><th>Status</th><th>Decision</th></tr>@foreach(var r in Model.Items){<tr><td>@Model.Names.GetValueOrDefault(r.EmployeeId)</td><td>@Model.Types.GetValueOrDefault(r.LeaveTypeId)<br/>@r.From.ToString("dd MMM yyyy") – @r.To.ToString("dd MMM yyyy")<br/>@r.StartTime – @r.EndTime @if(r.DocumentId!=null){<a href="/Files/Download?id=@r.DocumentId">Document</a>}</td><td>@r.Reason</td><td>@r.Status<br/>@r.DecisionReason</td><td>@if(r.Status is "Pending" or "Manager approved"){<form method="post"><input type="hidden" name="id" value="@r.Id"/><label>Decision reason<input name="reason"/></label><button name="decision" value="Approved">Approve</button> <button name="decision" value="Rejected">Reject</button></form>}</td></tr>}</table></div><a href="/Hr/Balances">Manage annual leave credits</a>

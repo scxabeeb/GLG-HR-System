@@ -1,0 +1,6 @@
+@page
+@model HrSystemDhg.Web.Pages.Hr.EmploymentModel
+@{ViewData["Title"]="Employment & shift";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Employment & shift</h1>
+<div asp-validation-summary="All"></div>
+<form method="post" class="card"><input type="hidden" asp-for="EmployeeId"/><h2>@Model.Employee.FullName</h2><div class="grid"><label>Status<select asp-for="Status"><option>Active</option><option>Probation</option><option>Suspended</option><option>Terminated</option></select></label><label>Termination date<input asp-for="Termination" type="date"/></label><label>Current assignment shift<select asp-for="ShiftId"><option value="">Default work calendar</option>@foreach(var s in Model.Shifts){<option value="@s.Id">@s.Name</option>}</select></label><label>Grade / level<input asp-for="Grade"/></label><label>Contract end date<input asp-for="ContractEnd" type="date"/></label><label>Reason<input asp-for="Reason" required/></label></div><button>Save employment details</button></form>

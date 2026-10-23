@@ -1,0 +1,5 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.AuditModel
+@{ViewData["Title"]="Audit log";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Audit log</h1>
+<div class="card"><table><tr><th>UTC</th><th>Actor</th><th>Action</th></tr>@foreach(var a in Model.Items){<tr><td>@a.At.ToString("g")</td><td>@a.Actor</td><td>@a.Action</td></tr>}</table></div>

@@ -1,0 +1,6 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.OrganizationModel
+@{ViewData["Title"]="Organization structure";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Organization structure</h1>
+<div asp-validation-summary="All"></div>
+<p>Branches, departments and sub-departments connect every employee to their workplace.</p><div class="actions"><a class="button" href="/Admin/OrgEdit?kind=Branch">+ Branch</a><a class="button" href="/Admin/OrgEdit?kind=Department">+ Department</a><a class="button" href="/Admin/OrgEdit?kind=SubDepartment">+ Sub-department</a></div>@foreach(var b in Model.Branches){<div class="card"><h2>@b.Name <span class="badge">@(b.IsActive?"Active":"Inactive")</span></h2><p>@b.Code · @b.City · @b.Timezone · <a href="/Admin/OrgEdit?kind=Branch&id=@b.Id">Edit branch</a></p>@foreach(var d in Model.Departments.Where(x=>x.BranchId==b.Id)){<div class="org-unit"><strong>@d.Name</strong> · @d.Code · @(d.IsActive?"Active":"Inactive") <a href="/Admin/OrgEdit?kind=Department&id=@d.Id">Edit</a>@foreach(var s in Model.Subs.Where(x=>x.DepartmentId==d.Id)){<p>↳ @s.Name · @(s.IsActive?"Active":"Inactive") · <a href="/Admin/OrgEdit?kind=SubDepartment&id=@s.Id">Edit</a></p>}</div>}</div>}

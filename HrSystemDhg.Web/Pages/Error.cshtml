@@ -1,0 +1,4 @@
+@page
+@model HrSystemDhg.Web.Pages.ErrorModel
+@{ViewData["Title"]="Unable to complete request";}
+<div class="card"><h1>Unable to complete this request</h1><p>Please retry, or contact your administrator if the problem continues.</p>@if(Model.ShowRequestId){<p>Reference: @Model.RequestId</p>}<a class="button" href="/">Return to workspace</a></div>

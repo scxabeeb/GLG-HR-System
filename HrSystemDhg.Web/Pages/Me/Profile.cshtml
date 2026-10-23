@@ -1,0 +1,100 @@
+@page
+@model HrSystemDhg.Web.Pages.Me.ProfileModel
+@{ViewData["Title"]="My workspace";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div>
+<h1>My workspace</h1>
+<div asp-validation-summary="All">
+</div>
+@if(Model.Employee==null){<div class="card">
+<p>Your account has no employee profile. An administrator can link an employee account.</p>
+</div>}else{<p>Welcome, @Model.Employee.FullName.</p>
+<div class="grid">
+<div class="card">
+@if(Model.PhotoId!=null){<img class="employee-photo" src="/Files/Download?id=@Model.PhotoId&inline=true" alt="My employee photo"/>}<h2>@Model.Employee.FullName</h2>
+<p>@Model.Employee.EmployeeNumber · @Model.Employee.WorkEmail</p>
+<span class="badge">@Model.Employee.Status</span>
+<p>Hire date: @Model.Employee.HireDate.ToString("dd MMM yyyy")</p>
+</div>
+<div class="card">
+<h2>Current salary</h2>@if(Model.Salary!=null){<strong>@Model.Salary.Currency @((Model.Salary.Basic+Model.Salary.Housing+Model.Salary.Transport+Model.Salary.Allowances).ToString("N2"))</strong>
+<p>Basic @Model.Salary.Basic · Allowances @(Model.Salary.Housing+Model.Salary.Transport+Model.Salary.Allowances)</p>}else{<p>No published current salary.</p>}</div>
+</div>
+<div class="card">
+<h2>Leave balances · @HrSystemDhg.Web.Services.BusinessClock.Today.Year</h2>
+<div class="grid">@foreach(var b in Model.Balances){<div>
+<strong>@b.Key</strong>
+@if(Model.Types.Any(t=>t.Name==b.Key&&!t.EnforceBalance)){<p>No balance limit</p>}else{<p>@b.Value.ToString("N2") days remaining</p>}
+</div>}</div>
+</div>
+<div class="card">
+<h2>Request leave</h2>
+<p>Optional start/end times are for a single partial day. Weekends and public holidays do not consume balance.</p>
+<form method="post" enctype="multipart/form-data">
+<div class="grid">
+<label>Leave type<select asp-for="LeaveTypeId">@foreach(var t in Model.Types){<option value="@t.Id">@t.Name (@(t.IsPaid?"Paid":"Unpaid"))</option>}</select>
+</label>
+<label>From<input asp-for="From" type="date"/>
+</label>
+<label>To<input asp-for="To" type="date"/>
+</label>
+<label>Partial-day start<input asp-for="Start" type="time"/>
+</label>
+<label>Partial-day end<input asp-for="End" type="time"/>
+</label>
+<label>Reason<textarea asp-for="Reason" required>
+</textarea>
+</label>
+<label>Supporting document<input asp-for="Upload" type="file" accept=".pdf,.jpg,.jpeg,.png"/>
+</label>
+</div>
+<button>Submit request</button>
+</form>
+<div class="table-scroll">
+<table>
+<tr>
+<th>Dates</th>
+<th>Reason</th>
+<th>Status</th>
+<th>Action</th>
+</tr>@foreach(var l in Model.Leave){<tr>
+<td>@l.From.ToString("dd MMM yyyy") – @l.To.ToString("dd MMM yyyy")<br/>@l.StartTime – @l.EndTime</td>
+<td>@l.Reason</td>
+<td>@l.Status<br/>@l.DecisionReason</td>
+<td>@if(l.Status=="Pending"){<form method="post" asp-page-handler="Cancel">
+<input type="hidden" name="id" value="@l.Id"/>
+<button>Cancel</button>
+</form>}</td>
+</tr>}</table>
+</div>
+</div>
+<div class="card">
+<h2>Attendance calendar</h2>
+<form method="get" class="inline">
+<label>Month<input asp-for="Month" type="month"/>
+</label>
+<button>View</button>
+</form>
+<div class="calendar">@foreach(var d in Model.Attendance){<div class="calendar-day">
+<strong>@d.Date.ToString("ddd dd")</strong>
+<span class="badge">@d.Status</span>
+<small>@d.FirstIn?.ToString("HH:mm") – @d.LastOut?.ToString("HH:mm")</small>
+<small>@d.WorkedHours.ToString("N2") hours · @d.LateMinutes min late</small>
+</div>}</div>
+<details>
+<summary>Raw punches</summary>@foreach(var punch in Model.Punches){<p>@punch.PunchTime.ToString("dd MMM yyyy HH:mm:ss") · device @punch.DeviceId</p>}</details>
+</div>
+<div class="card">
+<h2>Published payslips</h2>@foreach(var l in Model.Pay){<p>
+<a href="/Me/Payslip?id=@l.Id">@Model.Periods.GetValueOrDefault(l.PayrollPeriodId) · @l.Currency @l.Net.ToString("N2") · revision @l.Revision</a>
+</p>}</div>
+<div class="card">
+<h2>Request a correction</h2>
+<form method="post" asp-page-handler="Correction">
+<label>Attendance date (leave empty for profile correction)<input name="date" type="date"/>
+</label>
+<label>Requested correction<textarea name="details" required>
+</textarea>
+</label>
+<button>Send to HR</button>
+</form>@foreach(var c in Model.Corrections){<p>@c.Details · <span class="badge">@c.Status</span>
+<br/>@c.Resolution</p>}</div>}

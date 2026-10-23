@@ -1,0 +1,5 @@
+@page
+@model HrSystemDhg.Web.Pages.Hr.EmployeesModel
+@{ViewData["Title"]="Employee directory";}
+<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Employee directory</h1>
+<p>The people behind your organization.</p><a class="button" href="/Hr/Register">+ Register employee</a><div class="card"><table><tr><th>Employee</th><th>Number</th><th>Email</th><th>Status</th></tr>@foreach(var e in Model.Items){<tr><td><a href="/Hr/Details?employeeId=@e.Id">@e.FullName</a></td><td>@e.EmployeeNumber</td><td>@e.WorkEmail</td><td><span class="badge">@(e.RegistrationComplete?e.Status:"Onboarding")</span></td></tr>}</table>@if(!Model.Items.Any()){<p>No employees yet. Register your first team member.</p>}</div>

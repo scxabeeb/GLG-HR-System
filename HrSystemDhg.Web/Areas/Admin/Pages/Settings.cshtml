@@ -1,0 +1,18 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.SettingsModel
+@{ViewData["Title"]="System settings";}
+<div class="eyebrow">ADMINISTRATION</div><h1>System settings</h1><p class="page-intro">Manage your organization, working policies and access from one place.</p>
+@if(TempData["Success"] is string message){<div class="notice" role="status">@message</div>}
+<div asp-validation-summary="All"></div>
+<div class="grid">
+<a class="card settings-link" href="/Admin/Users"><h2>Users & permissions →</h2><p>Create accounts, grant or revoke roles, and control branch access.</p></a>
+<a class="card settings-link" href="/Admin/Organization"><h2>Organization structure →</h2><p>Add and edit branches, departments and sub-departments. Deactivate units no longer in use.</p></a>
+<a class="card settings-link" href="/Admin/LeaveTypes"><h2>Leave policies →</h2><p>Manage leave types, allowances and approval requirements.</p></a>
+<a class="card settings-link" href="/Admin/Rules"><h2>Hours & deductions →</h2><p>Configure shifts, working days and attendance deduction rules.</p></a>
+<a class="card settings-link" href="/Admin/Devices"><h2>Attendance devices →</h2><p>Manage devices and employee PIN mappings for manual imports.</p></a>
+<a class="card settings-link" href="/Admin/Audit"><h2>Activity & audit →</h2><p>Review account, configuration and HR changes.</p></a>
+</div>
+<form method="post" class="card"><h2>General preferences</h2><p>These policies apply across the organization.</p><label>Organization name<input asp-for="Input.CompanyName" required maxlength="200"/></label><hr/>
+<label class="inline"><input asp-for="Input.AllowFutureHires"/> Allow future-dated hires</label><p>Register employees before their employment start date.</p>
+<label class="inline"><input asp-for="Input.ManagerApproval"/> Require manager approval before HR</label><p>Management and Admin can override this approval step.</p>
+<label class="inline"><input asp-for="Input.ManagementBankAccess"/> Allow Management to export bank details</label><p>HR and Admin retain access to bank exports.</p><button>Save preferences</button></form>

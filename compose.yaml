@@ -1,0 +1,33 @@
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: hr_system_dhg
+      MYSQL_USER: hr_app
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:5189:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__DefaultConnection: Server=db;Database=hr_system_dhg;User=hr_app;Password=${MYSQL_PASSWORD};
+      Bootstrap__Email: ${BOOTSTRAP_EMAIL:?Set BOOTSTRAP_EMAIL in .env}
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD:?Set BOOTSTRAP_PASSWORD in .env}
+    volumes:
+      - hr-files:/app/App_Data
+      - hr-keys:/home/app/.aspnet/DataProtection-Keys
+volumes:
+  mysql-data:
+  hr-files:
+  hr-keys:
