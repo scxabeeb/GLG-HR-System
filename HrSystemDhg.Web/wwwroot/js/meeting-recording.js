@@ -46,7 +46,7 @@ window.createMeetingRecorder = (root, grid, send) => {
             fallback.href = unsavedUrl;
             fallback.download = blob.type.startsWith('video/mp4') ? 'meeting.mp4' : 'meeting.webm';
             fallback.hidden = false;
-            status.textContent = 'Could not save to Garowe HR. Download this recording before closing the room.';
+            status.textContent = 'Could not save to Garowe City Management System. Download this recording before closing the room.';
         } finally {
             saving = false;
             button.disabled = false;
@@ -80,7 +80,7 @@ window.createMeetingRecorder = (root, grid, send) => {
         ctx.fillStyle = '#10213b';
         ctx.fillRect(0, 0, width, height);
         ctx.font = '13px system-ui';
-        if (!videos.length) { ctx.fillStyle = '#fff'; ctx.fillText('Garowe HR meeting', 24, 40); }
+        if (!videos.length) { ctx.fillStyle = '#fff'; ctx.fillText('Garowe City Management System meeting', 24, 40); }
         videos.forEach((video, i) => {
             const x = (i % cols) * w, y = Math.floor(i / cols) * h;
             if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {

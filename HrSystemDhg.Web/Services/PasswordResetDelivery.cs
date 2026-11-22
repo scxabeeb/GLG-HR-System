@@ -21,7 +21,7 @@ public class PasswordResetDelivery(IConfiguration config,IWebHostEnvironment env
   var host=config["Smtp:Host"]??throw new InvalidOperationException("Password reset delivery is not configured.");
   using var smtp=new SmtpClient(host,config.GetValue<int?>("Smtp:Port")??587){EnableSsl=true};
   if(!string.IsNullOrWhiteSpace(config["Smtp:Username"]))smtp.Credentials=new NetworkCredential(config["Smtp:Username"],config["Smtp:Password"]);
-  using var message=new MailMessage(config["Smtp:From"]??throw new InvalidOperationException("SMTP sender is not configured."),email,"Reset your Garowe HR password",$"A password reset was requested for your Garowe HR account.\n\nOpen this link within one hour:\n{link}\n\nIf you did not request this, ignore this message.");
+  using var message=new MailMessage(config["Smtp:From"]??throw new InvalidOperationException("SMTP sender is not configured."),email,"Reset your Garowe City Management System password",$"A password reset was requested for your Garowe City Management System account.\n\nOpen this link within one hour:\n{link}\n\nIf you did not request this, ignore this message.");
   await smtp.SendMailAsync(message);
  }
 }

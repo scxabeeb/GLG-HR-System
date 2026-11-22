@@ -138,7 +138,7 @@ public class MeetingsModel(HrDbContext db, RoomLinks links, OperationsNotices no
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         await rooms.BroadcastEndedAsync(id);
-        TempData["OperationsNotice"] = "Meeting ended in Garowe HR.";
+        TempData["OperationsNotice"] = "Meeting ended in Garowe City Management System.";
         return RedirectToPage(new { Mode, Period });
     }
 

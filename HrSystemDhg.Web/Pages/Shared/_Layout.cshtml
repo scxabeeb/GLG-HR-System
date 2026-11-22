@@ -23,7 +23,7 @@
     var unreadOperations = operationsActor == null || isErrorPage ? 0 : await OperationsNotices.Visible(
         OperationsDb.OperationsNotifications.Where(n => n.RecipientId == operationsActor && n.ReadUtc == null), hiddenModules).CountAsync();
 }
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>@ViewData["Title"] · Garowe HR</title><link rel="icon" type="image/jpeg" href="~/images/garowe-local-government.jpg"/><link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/><link rel="stylesheet" href="~/css/civic.css" asp-append-version="true"/></head><body class="civic-shell @(signedIn ? "" : "civic-public")"><a class="skip-link" href="#main-content">Skip to main content</a><button class="nav-scrim" aria-label="Close navigation" onclick="toggleNavigation()"></button><aside id="workspace-nav"><a class="brand" href="/" aria-label="Garowe Local Government HR home"><img class="brand-logo" src="~/images/garowe-local-government.jpg" alt="Garowe Local Government emblem"/><span class="brand-copy"><span class="brand-name">Garowe</span><span class="brand-subtitle">Local Government</span></span></a><div class="nav-tools"><span>YOUR WORKSPACE</span><button type="button" id="expand-menus">Expand all</button></div><nav aria-label="Main navigation">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>@ViewData["Title"] · Garowe City Management System</title><link rel="icon" type="image/jpeg" href="~/images/garowe-local-government.jpg"/><link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/><link rel="stylesheet" href="~/css/civic.css" asp-append-version="true"/></head><body class="civic-shell @(signedIn ? "" : "civic-public")"><a class="skip-link" href="#main-content">Skip to main content</a><button class="nav-scrim" aria-label="Close navigation" onclick="toggleNavigation()"></button><aside id="workspace-nav"><a class="brand" href="/" aria-label="Garowe City Management System home"><img class="brand-logo" src="~/images/garowe-local-government.jpg" alt="Garowe Local Government emblem"/><span class="brand-copy"><span class="brand-name">Garowe City</span><span class="brand-subtitle">Management System</span></span></a><div class="nav-tools"><span>YOUR WORKSPACE</span><button type="button" id="expand-menus">Expand all</button></div><nav aria-label="Main navigation">
 @if (signedIn)
 {
     <details class="nav-group" data-menu="workspace">
@@ -142,7 +142,7 @@
     <div class="civic-masthead">
         <button class="menu-toggle" type="button" aria-label="Toggle navigation" aria-controls="workspace-nav" aria-expanded="false" onclick="toggleNavigation()">☰</button>
         @if (!signedIn) { <img class="civic-public-seal" src="~/images/garowe-local-government.jpg" alt="Garowe Local Government seal" /> }
-        <div class="civic-masthead-title"><span>Garowe Local Government</span><strong>Human Resources &amp; Operations</strong></div>
+        <div class="civic-masthead-title"><span>Garowe Local Government</span><strong>Garowe City Management System</strong></div>
     </div>
     @if (signedIn) {
         <div class="civic-account">

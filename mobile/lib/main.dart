@@ -69,7 +69,7 @@ class GaroweHrApp extends StatelessWidget {
       secondaryContainer: const Color(0xffe2eaff),
     );
     return MaterialApp(
-      title: 'Garowe HR',
+      title: 'Garowe City Management System',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: scheme,
@@ -116,7 +116,7 @@ class _EmployeeShellState extends State<_EmployeeShell> {
   Widget build(BuildContext context) {
     if (_signingIn) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Garowe HR')),
+        appBar: AppBar(title: const Text('Garowe City Management System', maxLines: 2, style: TextStyle(fontSize: 17))),
         body: _PortalPage(
           server: widget.server!,
           page: EmployeePage.login,
@@ -134,7 +134,7 @@ class _EmployeeShellState extends State<_EmployeeShell> {
         leading: _openPage != null
             ? BackButton(onPressed: () => setState(() => _openPage = null))
             : null,
-        title: Text(page?.title ?? 'Garowe HR'),
+        title: Text(page?.title ?? 'Garowe City Management System', maxLines: 2, style: const TextStyle(fontSize: 17)),
         actions: [
           IconButton(
             tooltip: 'Notifications',
@@ -176,7 +176,7 @@ class _EmployeeShellState extends State<_EmployeeShell> {
           ? const _Message(
               icon: Icons.link_off_rounded,
               title: 'Server setup required',
-              detail: 'This app needs the Garowe HR HTTPS address.',
+              detail: 'This app needs the Garowe City Management System HTTPS address.',
             )
           : _PortalPage(
               key: ValueKey(page),
@@ -978,7 +978,7 @@ class _PortalPageState extends State<_PortalPage> {
               color: _paper,
               child: _Message(
                 icon: Icons.cloud_off_rounded,
-                title: 'Unable to load Garowe HR',
+                title: 'Unable to load Garowe City Management System',
                 detail: 'Check your connection and try again.',
                 onRetry: () {
                   setState(() {

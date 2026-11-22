@@ -1,4 +1,4 @@
-# Garowe Local Government — HR System DHG
+# Garowe City Management System
 
 A multi-role HR platform built with **ASP.NET Core 8 Razor Pages**, **Identity**, **EF Core 8**, **Pomelo**, and **MySQL 8**. The supplied Garowe emblem and its blue, red, white, and gold palette are used throughout the UI. The original specification is preserved in [REQUIREMENTS.md](REQUIREMENTS.md).
 

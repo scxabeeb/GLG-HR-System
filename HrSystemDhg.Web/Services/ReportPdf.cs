@@ -30,7 +30,7 @@ public static class ReportPdf
         subtitle.Format.Font.Size = 12;
         subtitle.Format.SpaceAfter = Unit.FromCentimeter(.4);
         var footer = section.Footers.Primary.AddParagraph();
-        footer.AddText("Garowe HR · ");
+        footer.AddText("Garowe City Management System · ");
         footer.AddPageField();
         footer.AddText(" / ");
         footer.AddNumPagesField();

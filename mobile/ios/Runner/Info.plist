@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>NSCameraUsageDescription</key>
-    <string>Use your camera in Garowe HR video meetings.</string>
+    <string>Use your camera in Garowe City Management System video meetings.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Use your microphone in Garowe HR video meetings.</string>
+    <string>Use your microphone in Garowe City Management System video meetings.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSExceptionDomains</key>
@@ -20,7 +20,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Garowe HR</string>
+	<string>Garowe City Management System</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
