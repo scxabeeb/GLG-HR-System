@@ -1,7 +1,7 @@
 name: garowe_hr_mobile
-description: Employee workspace for Garowe Local Government.
+description: Native employee app for Garowe City Management System.
 publish_to: none
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: ^3.10.0
@@ -10,10 +10,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  permission_handler: ^12.0.3
   file_picker: ^11.0.3
-  webview_flutter_android: ^3.16.9
-  webview_flutter: ^4.9.0
+  flutter_secure_storage: ^9.2.4
+  flutter_webrtc: ^1.2.0
   url_launcher: ^6.3.2
 
 dev_dependencies:

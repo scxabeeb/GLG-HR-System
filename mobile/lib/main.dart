@@ -1,803 +1,589 @@
-import 'dart:convert';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
 
-const _blue = Color(0xff1745c3);
-const _ink = Color(0xff14234b);
-const _paper = Color(0xfff3f6fc);
-const _sessionPath = '/api/mobile/v1/session';
+import 'api.dart';
+import 'meeting_room.dart';
+export 'api.dart' show parseServer;
+
+const blue = Color(0xff1745c3);
+const ink = Color(0xff15264b);
+const paper = Color(0xfff3f6fc);
 
 void main() {
-  const server = String.fromEnvironment('GAROWE_HR_URL');
-  runApp(GaroweHrApp(server: parseServer(server, allowLoopback: kDebugMode)));
-}
-
-Uri? parseServer(String value, {bool allowLoopback = false}) {
-  final uri = Uri.tryParse(value.trim());
-  if (uri == null ||
-      (uri.scheme != 'https' &&
-          !(allowLoopback &&
-              uri.scheme == 'http' &&
-              uri.host == '127.0.0.1')) ||
-      uri.host.isEmpty ||
-      uri.userInfo.isNotEmpty ||
-      (uri.path.isNotEmpty && uri.path != '/') ||
-      uri.hasQuery ||
-      uri.hasFragment) {
-    return null;
-  }
-  return uri;
-}
-
-enum EmployeePage {
-  overview("Overview", "/"),
-  logout('Sign out', '/Identity/Account/Logout?mobile=true'),
-  login('Sign in', '/Identity/Account/Login?ReturnUrl=$_sessionPath'),
-  notifications('Notifications', '/Operations/Notifications'),
-  profile('My profile', '/Me/Profile'),
-  attendance('Attendance', '/Me/Profile#attendance'),
-  payroll('Payroll', '/Me/Profile#payroll'),
-  tasks('My tasks', '/Operations/Tasks?view=mine'),
-  meetings('My meetings', '/Operations/Meetings');
-
-  const EmployeePage(this.title, this.path);
-  final String title;
-  final String path;
-
-  Uri url(Uri server) => server.resolve(path);
-  Uri dataUrl(Uri server) => this == login || this == logout
-      ? url(server)
-      : server.resolve('/api/mobile/v1/$name');
+  const url = String.fromEnvironment(
+    'GAROWE_HR_URL',
+    defaultValue: 'https://garowe-hr-production.up.railway.app',
+  );
+  runApp(GaroweHrApp(server: parseServer(url, allowLoopback: kDebugMode)));
 }
 
 class GaroweHrApp extends StatelessWidget {
   const GaroweHrApp({super.key, required this.server});
-
   final Uri? server;
-
   @override
-  Widget build(BuildContext context) {
-    final scheme = ColorScheme.fromSeed(seedColor: _blue).copyWith(
-      primary: _blue,
-      onSurface: _ink,
-      secondaryContainer: const Color(0xffe2eaff),
-    );
-    return MaterialApp(
-      title: 'Garowe City Management System',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: scheme,
-        scaffoldBackgroundColor: _paper,
-        appBarTheme: const AppBarTheme(backgroundColor: _paper),
-      ),
-      home: _EmployeeShell(server: server),
-    );
-  }
-}
-
-class _EmployeeShell extends StatefulWidget {
-  const _EmployeeShell({required this.server});
-
-  final Uri? server;
-
-  @override
-  State<_EmployeeShell> createState() => _EmployeeShellState();
-}
-
-class _EmployeeShellState extends State<_EmployeeShell> {
-  EmployeePage _selected = EmployeePage.overview;
-  EmployeePage? _openPage;
-  MemoryImage? _avatar;
-
-  void _updateAvatar(Uint8List? bytes) {
-    setState(() => _avatar = bytes == null ? null : MemoryImage(bytes));
-  }
-
-  void _signedOut() => setState(() {
-    _avatar = null;
-    _openPage = null;
-    _selected = EmployeePage.overview;
-    _signingIn = widget.server != null;
-  });
-  late bool _signingIn = widget.server != null;
-
-  void _select(EmployeePage page) => setState(() {
-    _selected = page;
-    _openPage = null;
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (_signingIn) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Garowe City Management System', maxLines: 2, style: TextStyle(fontSize: 17))),
-        body: _PortalPage(
-          server: widget.server!,
-          page: EmployeePage.login,
-          onSignedIn: () => setState(() => _signingIn = false),
-        ),
-      );
-    }
-    final page =
-        _openPage ??
-        (_selected == EmployeePage.overview && widget.server == null
-            ? null
-            : _selected);
-    return Scaffold(
-      appBar: AppBar(
-        leading: _openPage != null
-            ? BackButton(onPressed: () => setState(() => _openPage = null))
-            : null,
-        title: Text(page?.title ?? 'Garowe City Management System', maxLines: 2, style: const TextStyle(fontSize: 17)),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () =>
-                setState(() => _openPage = EmployeePage.notifications),
-          ),
-          PopupMenuButton<EmployeePage>(
-            tooltip: 'Account',
-            icon: CircleAvatar(
-              radius: 16,
-              foregroundImage: _avatar,
-              backgroundColor: const Color(0xffe2eaff),
-              child: const Icon(Icons.person_outline, size: 20, color: _blue),
-            ),
-            onSelected: (value) => setState(() => _openPage = value),
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: EmployeePage.profile,
-                child: ListTile(
-                  leading: Icon(Icons.person_outline),
-                  title: Text('My profile'),
-                ),
-              ),
-              PopupMenuItem(
-                value: EmployeePage.logout,
-                child: ListTile(
-                  leading: Icon(Icons.logout),
-                  title: Text('Sign out'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: page == null
-          ? const _Overview()
-          : widget.server == null
-          ? const _Message(
-              icon: Icons.link_off_rounded,
-              title: 'Server setup required',
-              detail: 'This app needs the Garowe City Management System HTTPS address.',
-            )
-          : _PortalPage(
-              key: ValueKey(page),
-              server: widget.server!,
-              page: page,
-              onSignedOut: _signedOut,
-              onAvatar: _updateAvatar,
-            ),
-      bottomNavigationBar: _EmployeeNavigation(
-        selected: _selected,
-        onSelect: _select,
-      ),
-    );
-  }
-}
-
-class _EmployeeNavigation extends StatelessWidget {
-  const _EmployeeNavigation({required this.selected, required this.onSelect});
-
-  final EmployeePage selected;
-  final ValueChanged<EmployeePage> onSelect;
-
-  static const _tabs = [
-    (
-      EmployeePage.overview,
-      'Overview',
-      Icons.dashboard_outlined,
-      Icons.dashboard_rounded,
-    ),
-    (
-      EmployeePage.tasks,
-      'Tasks',
-      Icons.assignment_outlined,
-      Icons.assignment_rounded,
-    ),
-    (
-      EmployeePage.meetings,
-      'Meetings',
-      Icons.groups_outlined,
-      Icons.groups_rounded,
-    ),
-    (
-      EmployeePage.attendance,
-      'Attendance',
-      Icons.event_available_outlined,
-      Icons.event_available_rounded,
-    ),
-    (
-      EmployeePage.payroll,
-      'Payroll',
-      Icons.receipt_long_outlined,
-      Icons.receipt_long_rounded,
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Material(
-      color: Colors.white,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xffdce4f0))),
-        ),
-        child: SafeArea(
-          top: false,
-          minimum: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-          child: Center(
-            heightFactor: 1,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final (page, label, icon, selectedIcon) in _tabs)
-                    Expanded(
-                      child: Semantics(
-                        label: label,
-                        selected: page == selected,
-                        onTap: () => onSelect(page),
-                        button: true,
-                        child: ExcludeSemantics(
-                          child: InkWell(
-                            key: ValueKey('nav-${page.name}'),
-                            onTap: () => onSelect(page),
-                            borderRadius: BorderRadius.circular(14),
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(minHeight: 60),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 1,
-                                  vertical: 5,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 160,
-                                      ),
-                                      width: 42,
-                                      height: 27,
-                                      decoration: BoxDecoration(
-                                        color: page == selected
-                                            ? theme
-                                                  .colorScheme
-                                                  .secondaryContainer
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      child: Icon(
-                                        page == selected ? selectedIcon : icon,
-                                        size: 21,
-                                        color: page == selected ? _blue : _ink,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      label,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        height: 1.1,
-                                        fontWeight: page == selected
-                                            ? FontWeight.w800
-                                            : FontWeight.w600,
-                                        color: page == selected ? _blue : _ink,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Garowe City',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: blue,
+      ).copyWith(primary: blue),
+      scaffoldBackgroundColor: paper,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: paper,
+        titleTextStyle: TextStyle(
+          color: ink,
+          fontSize: 19,
+          fontWeight: FontWeight.w700,
         ),
       ),
-    );
-  }
-}
-
-class _Overview extends StatelessWidget {
-  const _Overview({this.data, this.onRefresh});
-
-  final _OverviewData? data;
-  final VoidCallback? onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 620),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [_ink, _blue],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipOval(
-                        child: Image.asset(
-                          'assets/garowe-local-government.jpg',
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                          excludeFromSemantics: true,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Employee dashboard',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Text(
-                        'Garowe Local Government',
-                        style: TextStyle(color: Color(0xffe2eaff)),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (data case final overview?) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'My progress',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: onRefresh,
-                        icon: const Icon(Icons.refresh),
-                        tooltip: 'Refresh progress',
-                      ),
-                    ],
-                  ),
-                  if (overview.tasks case final tasks?)
-                    _TaskProgressGraphic(tasks: tasks),
-                  if (overview.hours != null || overview.meetings != null)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (overview.hours case final hours?)
-                          Chip(
-                            avatar: const Icon(Icons.schedule),
-                            label: Text(
-                              '${hours.toStringAsFixed(1)} work hours this month',
-                            ),
-                          ),
-                        if (overview.meetings case final meetings?)
-                          Chip(
-                            avatar: const Icon(Icons.event_outlined),
-                            label: Text(
-                              '$meetings active or upcoming meetings',
-                            ),
-                          ),
-                      ],
-                    ),
-                  const SizedBox(height: 16),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _OverviewData {
-  const _OverviewData(this.tasks, this.hours, this.meetings);
-
-  factory _OverviewData.fromJson(Map<String, dynamic> data) {
-    final tasks = data['tasks'] as Map<String, dynamic>?;
-    return _OverviewData(
-      tasks == null
-          ? null
-          : (
-              open: tasks['open'] as int,
-              inProgress: tasks['inProgress'] as int,
-              done: tasks['done'] as int,
-            ),
-      data['hoursThisMonth'] as num?,
-      data['upcomingMeetings'] as int?,
-    );
-  }
-
-  final ({int open, int inProgress, int done})? tasks;
-  final num? hours;
-  final int? meetings;
-}
-
-class _TaskProgressGraphic extends StatelessWidget {
-  const _TaskProgressGraphic({required this.tasks});
-
-  final ({int open, int inProgress, int done}) tasks;
-
-  @override
-  Widget build(BuildContext context) {
-    final total = tasks.open + tasks.inProgress + tasks.done;
-    final progress = total == 0 ? 0.0 : tasks.done / total;
-    final percent = '${total == 0 ? 0 : tasks.done * 100 ~/ total}%';
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      color: Colors.white,
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            SizedBox.square(
-              dimension: 80,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 7,
-                    backgroundColor: const Color(0xffe2eaff),
-                    semanticsLabel: 'Task completion',
-                    semanticsValue: percent,
-                  ),
-                  Center(
-                    child: Text(
-                      percent,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'My tasks',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  Text(
-                    total == 0
-                        ? 'No assigned tasks yet'
-                        : '${tasks.done} of $total completed',
-                  ),
-                  Wrap(
-                    spacing: 10,
-                    children: [
-                      Text('${tasks.open} open'),
-                      Text('${tasks.inProgress} in progress'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
       ),
-    );
-  }
+      cardTheme: const CardThemeData(elevation: 0, color: Colors.white),
+      useMaterial3: true,
+    ),
+    home: server == null
+        ? const Scaffold(
+            body: Center(
+              child: Text('Configure the Garowe City server address.'),
+            ),
+          )
+        : SessionGate(api: Api(server!)),
+  );
 }
 
-class _PortalPage extends StatefulWidget {
-  const _PortalPage({
-    super.key,
-    required this.server,
-    required this.page,
-    this.onSignedIn,
-    this.onSignedOut,
-    this.onAvatar,
-  });
+void message(BuildContext context, Object text) {
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(text.toString())));
+}
 
-  final Uri server;
-  final EmployeePage page;
-  final VoidCallback? onSignedIn;
-  final VoidCallback? onSignedOut;
-  final ValueChanged<Uint8List?>? onAvatar;
-
+class SessionGate extends StatefulWidget {
+  const SessionGate({super.key, required this.api});
+  final Api api;
   @override
-  State<_PortalPage> createState() => _PortalPageState();
+  State<SessionGate> createState() => _SessionGateState();
 }
 
-class _PortalPageState extends State<_PortalPage> {
-  late final WebViewController _controller;
-  bool _loading = true;
-  bool _failed = false;
-  bool _scrollToSection = false;
-  bool _usePortal = false;
-  List<_EmployeeRow>? _items;
-  _OverviewData? _overview;
-  String? _message;
-  String? _portalPath;
-  String _filter = 'All';
-  bool get _showsAvatar =>
-      widget.page == EmployeePage.overview ||
-      widget.page == EmployeePage.profile;
-  bool get _isWorkList =>
-      widget.page == EmployeePage.tasks || widget.page == EmployeePage.meetings;
-
-  Uri get _target => _usePortal
-      ? (_portalPath == null
-            ? widget.page.url(widget.server)
-            : widget.server.resolve(_portalPath!))
-      : widget.page.dataUrl(widget.server);
+class _SessionGateState extends State<SessionGate> {
+  bool loading = true;
+  bool signedIn = false;
+  String? error;
 
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController(
-      onPermissionRequest: defaultTargetPlatform == TargetPlatform.android
-          ? _requestMeetingMedia
-          : null,
-    );
-    _open();
+    widget.api.onUnauthorized = () {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      setState(() => signedIn = false);
+    };
+    _restore();
   }
 
-  Future<void> _requestMeetingMedia(WebViewPermissionRequest request) async {
+  Future<void> _restore() async {
     try {
-      final current = Uri.tryParse(await _controller.currentUrl() ?? '');
-      if (current?.httpOrigin != widget.server.origin ||
-          current?.path.toLowerCase() != '/operations/meetingroom' ||
-          !mounted) {
-        await request.deny();
-        return;
-      }
-      final permissions = [
-        for (final type in request.types)
-          if (type == WebViewPermissionResourceType.camera)
-            Permission.camera
-          else if (type == WebViewPermissionResourceType.microphone)
-            Permission.microphone,
-      ];
-      if (permissions.isEmpty || permissions.length != request.types.length) {
-        await request.deny();
-        return;
-      }
-      final results = await permissions.request();
-      if (results.values.every((status) => status.isGranted)) {
-        await request.grant();
-      } else {
-        await request.deny();
-      }
-    } catch (_) {
-      await request.deny();
+      signedIn = await widget.api.restore();
+    } catch (e) {
+      error = e.toString();
     }
+    if (mounted) setState(() => loading = false);
   }
 
-  Future<void> _open() async {
-    try {
-      final platform = _controller.platform;
-      if (platform is AndroidWebViewController &&
-          widget.page == EmployeePage.profile) {
-        await platform.setOnShowFileSelector((_) async {
-          final result = await FilePicker.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: ['jpg', 'jpeg', 'png'],
-          );
-          final path = result?.files.single.path;
-          return path == null ? [] : [Uri.file(path).toString()];
-        });
-      }
-      await _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      if (_showsAvatar) {
-        await _controller.removeJavaScriptChannel('GaroweAvatar');
-        await _controller.addJavaScriptChannel(
-          'GaroweAvatar',
-          onMessageReceived: _receiveAvatar,
-        );
-      }
-      await _controller.setNavigationDelegate(
-        NavigationDelegate(
-          onNavigationRequest: (request) async {
-            final uri = Uri.tryParse(request.url);
-            if (uri?.httpOrigin == widget.server.origin) {
-              return NavigationDecision.navigate;
-            }
-            if (request.isMainFrame &&
-                uri?.scheme == 'https' &&
-                uri?.httpOrigin != null &&
-                mounted) {
-              await _offerExternalLink(uri!);
-            }
-            return NavigationDecision.prevent;
-          },
-          onPageStarted: (_) {
-            if (mounted) {
-              setState(() {
-                _loading = true;
-                _failed = false;
-              });
-            }
-          },
-          onPageFinished: _pageFinished,
-          onHttpError: (error) {
-            if (mounted && error.request?.uri == _target) _showFailure();
-          },
-          onWebResourceError: (error) {
-            if (mounted && error.isForMainFrame == true) _showFailure();
-          },
+  void _refresh() => setState(() => signedIn = widget.api.token != null);
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (error != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(error!),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      error = null;
+                      loading = true;
+                    });
+                    _restore();
+                  },
+                  child: const Text('Try again'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await widget.api.clear();
+                    if (mounted) {
+                      setState(() {
+                        error = null;
+                        signedIn = false;
+                      });
+                    }
+                  },
+                  child: const Text('Sign in'),
+                ),
+              ],
+            ),
+          ),
         ),
       );
-      await _controller.loadRequest(_target);
-    } catch (_) {
-      if (mounted) _showFailure();
     }
+    if (!signedIn) return LoginScreen(api: widget.api, onSignedIn: _refresh);
+    if (widget.api.mustChange) {
+      return PasswordScreen(
+        api: widget.api,
+        requiredChange: true,
+        onChanged: _refresh,
+      );
+    }
+    return EmployeeShell(
+      api: widget.api,
+      onSignedOut: () {
+        setState(() => signedIn = false);
+      },
+    );
+  }
+}
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key, required this.api, required this.onSignedIn});
+  final Api api;
+  final VoidCallback onSignedIn;
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final username = TextEditingController();
+  final password = TextEditingController();
+  bool busy = false;
+  bool show = false;
+  String? error;
+  final form = GlobalKey<FormState>();
+
+  @override
+  void dispose() {
+    username.dispose();
+    password.dispose();
+    super.dispose();
   }
 
-  Future<void> _pageFinished(String url) async {
-    if (!mounted) return;
-    final current = Uri.tryParse(url);
-    if (current?.httpOrigin != widget.server.origin) return;
+  Future<void> login() async {
+    if (!form.currentState!.validate()) return;
+    setState(() {
+      busy = true;
+      error = null;
+    });
     try {
-      if (widget.page == EmployeePage.logout &&
-          current?.path.toLowerCase() == '/identity/account/login') {
-        widget.onSignedOut?.call();
-        return;
-      }
-      if (_showsAvatar &&
-          (current?.path == widget.page.dataUrl(widget.server).path ||
-              current?.path.toLowerCase() == '/me/profile')) {
-        await _loadAvatar();
-      }
-      if (widget.page == EmployeePage.login && current?.path == _sessionPath) {
-        final session = await _readJson();
-        if (mounted && session['signedIn'] == true) widget.onSignedIn?.call();
-        return;
-      }
-      if (!_usePortal &&
-          widget.page != EmployeePage.login &&
-          widget.page != EmployeePage.logout &&
-          current?.path == _target.path) {
-        final feed = await _readJson();
-        if (widget.page == EmployeePage.overview) {
-          if (!mounted) return;
-          setState(() {
-            _overview = _OverviewData.fromJson(feed);
-            _loading = false;
-          });
-          return;
-        }
-        final items = (feed['items'] as List<dynamic>)
-            .map((item) => _EmployeeRow.fromJson(item as Map<String, dynamic>))
-            .toList();
-        if (!mounted || _usePortal) return;
-        setState(() {
-          _items = items;
-          _message = feed['message'] as String?;
-        });
-      } else if (_scrollToSection && current?.path == _target.path) {
-        _scrollToSection = false;
-        await _controller.runJavaScript(
-          '(() => { const el = document.getElementById(${jsonEncode(_target.fragment)}); '
-          'const group = el?.closest("details"); if (group) group.open = true; '
-          'el?.scrollIntoView(); })()',
-        );
-      }
-      if (mounted) setState(() => _loading = false);
-    } catch (_) {
-      if (mounted) _showFailure();
+      await widget.api.login(username.text, password.text);
+      widget.onSignedIn();
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
-  Future<void> _loadAvatar() => _controller.runJavaScript("""
-    (() => {
-      const image = new Image();
-      image.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = 96;
-        const side = Math.min(image.naturalWidth, image.naturalHeight);
-        if (!side) { GaroweAvatar.postMessage(''); return; }
-        canvas.getContext('2d').drawImage(image,
-          (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2,
-          side, side, 0, 0, 96, 96);
-        GaroweAvatar.postMessage(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
-      };
-      image.onerror = () => GaroweAvatar.postMessage('');
-      image.src = '/api/mobile/v1/avatar';
-    })();
-  """);
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Form(
+              key: form,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Image.asset(
+                      'assets/garowe-local-government.jpg',
+                      width: 86,
+                      height: 86,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Garowe City',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: ink,
+                    ),
+                  ),
+                  const Text('Management System', textAlign: TextAlign.center),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Sign in',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: username,
+                    decoration: const InputDecoration(
+                      labelText: 'Email or employee number',
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    autofillHints: const [AutofillHints.username],
+                    textInputAction: TextInputAction.next,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Enter your email or employee number.'
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: password,
+                    obscureText: !show,
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        tooltip: show ? 'Hide password' : 'Show password',
+                        icon: Icon(
+                          show ? Icons.visibility_off : Icons.visibility,
+                        ),
+                        onPressed: () => setState(() => show = !show),
+                      ),
+                    ),
+                    autofillHints: const [AutofillHints.password],
+                    onFieldSubmitted: (_) {
+                      if (!busy) login();
+                    },
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Enter your password.'
+                        : null,
+                  ),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        error!,
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: busy ? null : login,
+                    child: Text(busy ? 'Signing in…' : 'Sign in'),
+                  ),
+                  TextButton(
+                    onPressed: busy
+                        ? null
+                        : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => RecoveryScreen(api: widget.api),
+                            ),
+                          ),
+                    child: const Text('Forgot password?'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
 
-  Future<void> _receiveAvatar(JavaScriptMessage message) async {
-    final current = Uri.tryParse(await _controller.currentUrl() ?? '');
-    if (!mounted ||
-        current?.httpOrigin != widget.server.origin ||
-        message.message.length > 65536) {
+class RecoveryScreen extends StatefulWidget {
+  const RecoveryScreen({super.key, required this.api});
+  final Api api;
+  @override
+  State<RecoveryScreen> createState() => _RecoveryScreenState();
+}
+
+class _RecoveryScreenState extends State<RecoveryScreen> {
+  final email = TextEditingController();
+  final code = TextEditingController();
+  final password = TextEditingController();
+  bool sent = false, busy = false, show = false;
+  String? notice;
+  @override
+  void dispose() {
+    email.dispose();
+    code.dispose();
+    password.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    if (!email.text.contains('@')) {
+      message(context, 'Enter your registered email.');
       return;
     }
-    try {
-      widget.onAvatar?.call(
-        message.message.isEmpty ? null : base64Decode(message.message),
+    if (sent && (code.text.trim().isEmpty || password.text.length < 10)) {
+      message(
+        context,
+        'Enter the reset code and a password of at least 10 characters.',
       );
-    } on FormatException {
-      // An invalid image leaves the existing avatar in place.
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      final result =
+          await widget.api
+                  .post('/api/mobile/v2/auth/${sent ? 'reset' : 'forgot'}', {
+                    'email': email.text.trim(),
+                    if (sent) 'code': code.text.trim(),
+                    if (sent) 'password': password.text,
+                  })
+              as Map;
+      if (!mounted) return;
+      if (sent) {
+        message(context, result['message']);
+        Navigator.pop(context);
+      } else {
+        setState(() {
+          sent = true;
+          notice = result['message'].toString();
+        });
+      }
+    } catch (e) {
+      if (mounted) message(context, e);
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
-  Future<Map<String, dynamic>> _readJson() async {
-    final raw = await _controller.runJavaScriptReturningResult(
-      'document.body.innerText',
-    );
-    var data = jsonDecode(raw.toString());
-    if (data is String) data = jsonDecode(data);
-    return data as Map<String, dynamic>;
+  @override
+  Widget build(BuildContext context) => FormPage(
+    title: 'Reset password',
+    children: [
+      const Text('Use the email registered with your account.'),
+      TextField(
+        controller: email,
+        keyboardType: TextInputType.emailAddress,
+        decoration: const InputDecoration(labelText: 'Registered email'),
+      ),
+      if (notice != null) Text(notice!),
+      if (sent) ...[
+        const Text(
+          'Paste the code from your reset email, or paste the complete reset link.',
+        ),
+        TextField(
+          controller: code,
+          decoration: const InputDecoration(labelText: 'Reset code or link'),
+          onChanged: (value) {
+            final uri = Uri.tryParse(value);
+            if (uri != null && uri.queryParameters['code'] != null) {
+              code.text = uri.queryParameters['code']!;
+              email.text = uri.queryParameters['email'] ?? email.text;
+            }
+          },
+        ),
+        TextField(
+          controller: password,
+          obscureText: !show,
+          decoration: InputDecoration(
+            labelText: 'New password',
+            suffixIcon: IconButton(
+              onPressed: () => setState(() => show = !show),
+              icon: Icon(show ? Icons.visibility_off : Icons.visibility),
+            ),
+          ),
+        ),
+      ],
+      FilledButton(
+        onPressed: busy ? null : submit,
+        child: Text(
+          busy
+              ? 'Please wait…'
+              : sent
+              ? 'Reset password'
+              : 'Send reset instructions',
+        ),
+      ),
+      if (sent)
+        TextButton(
+          onPressed: busy ? null : () => setState(() => sent = false),
+          child: const Text('Send another email'),
+        ),
+    ],
+  );
+}
+
+class PasswordScreen extends StatefulWidget {
+  const PasswordScreen({
+    super.key,
+    required this.api,
+    required this.onChanged,
+    this.requiredChange = false,
+  });
+  final Api api;
+  final VoidCallback onChanged;
+  final bool requiredChange;
+  @override
+  State<PasswordScreen> createState() => _PasswordScreenState();
+}
+
+class _PasswordScreenState extends State<PasswordScreen> {
+  final current = TextEditingController(),
+      password = TextEditingController(),
+      confirm = TextEditingController();
+  bool busy = false, show = false;
+  @override
+  void dispose() {
+    current.dispose();
+    password.dispose();
+    confirm.dispose();
+    super.dispose();
   }
 
-  Future<void> _switchPage({required bool portal, String? path}) async {
-    setState(() {
-      _usePortal = portal;
-      _portalPath = path;
-      _scrollToSection = portal && _target.hasFragment;
-      _items = null;
-      _overview = null;
-      _message = null;
-      _loading = true;
-      _failed = false;
-    });
-    await _open();
-  }
-
-  Future<void> _openAction(String path) async {
-    final url = widget.server.resolve(path);
-    if (url.httpOrigin == widget.server.origin &&
-        path.startsWith('/') &&
-        !path.startsWith('//')) {
-      await _switchPage(portal: true, path: path);
-    } else if (url.scheme == 'https') {
-      await _offerExternalLink(url);
+  Future<void> save() async {
+    if (password.text.length < 10 || password.text != confirm.text) {
+      message(context, 'Use at least 10 characters and matching passwords.');
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      await widget.api.changePassword(current.text, password.text);
+      if (!mounted) return;
+      widget.onChanged();
+      if (!widget.requiredChange) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) message(context, e);
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
-  Future<void> _offerExternalLink(Uri uri) async {
-    final open = await showDialog<bool>(
+  @override
+  Widget build(BuildContext context) => FormPage(
+    title: 'Change password',
+    canBack: !widget.requiredChange,
+    children: [
+      if (widget.requiredChange)
+        const Text('Choose a new password before entering your workspace.'),
+      for (final entry in [
+        (current, 'Current password'),
+        (password, 'New password'),
+        (confirm, 'Confirm new password'),
+      ])
+        TextField(
+          controller: entry.$1,
+          obscureText: !show,
+          decoration: InputDecoration(labelText: entry.$2),
+        ),
+      SwitchListTile(
+        title: const Text('Show passwords'),
+        value: show,
+        onChanged: (value) => setState(() => show = value),
+      ),
+      const Text(
+        'Use at least 10 characters with uppercase, lowercase, a number and a symbol.',
+      ),
+      FilledButton(
+        onPressed: busy ? null : save,
+        child: Text(busy ? 'Saving…' : 'Save password'),
+      ),
+    ],
+  );
+}
+
+class FormPage extends StatelessWidget {
+  const FormPage({
+    super.key,
+    required this.title,
+    required this.children,
+    this.canBack = true,
+    this.actions,
+  });
+  final String title;
+  final List<Widget> children;
+  final bool canBack;
+  final List<Widget>? actions;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(title),
+      automaticallyImplyLeading: canBack,
+      actions: actions,
+    ),
+    body: SafeArea(
+      top: false,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              for (final child in children)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: child,
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class EmployeeShell extends StatefulWidget {
+  const EmployeeShell({
+    super.key,
+    required this.api,
+    required this.onSignedOut,
+  });
+  final Api api;
+  final VoidCallback onSignedOut;
+  @override
+  State<EmployeeShell> createState() => _EmployeeShellState();
+}
+
+class _EmployeeShellState extends State<EmployeeShell> {
+  int index = 0;
+  int revision = 0;
+  Uint8List? avatar;
+  static const labels = [
+    'Overview',
+    'Tasks',
+    'Meetings',
+    'Attendance',
+    'Payroll',
+  ];
+  static const icons = [
+    Icons.dashboard_outlined,
+    Icons.assignment_outlined,
+    Icons.groups_outlined,
+    Icons.event_available_outlined,
+    Icons.receipt_long_outlined,
+  ];
+  @override
+  void initState() {
+    super.initState();
+    _avatar();
+  }
+
+  Future<void> _avatar() async {
+    try {
+      final bytes = await widget.api.avatar();
+      if (mounted) setState(() => avatar = bytes);
+    } catch (_) {}
+  }
+
+  Future<void> logout() async {
+    final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Open in browser?'),
-        content: Text(uri.host),
+        title: const Text('Sign out?'),
+        content: const Text('This ends your signed-in mobile session.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -805,359 +591,1032 @@ class _PortalPageState extends State<_PortalPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Open'),
+            child: const Text('Sign out'),
           ),
         ],
       ),
     );
-    if (open != true || !mounted) return;
-    bool launched;
+    if (yes != true) return;
     try {
-      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      launched = false;
-    }
-    if (!launched && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open the link.')));
+      await widget.api.logout();
+      widget.onSignedOut();
+    } on ApiError catch (e) {
+      if (e.unauthorized) {
+        await widget.api.clear();
+        widget.onSignedOut();
+      } else if (mounted) {
+        message(context, e);
+      }
     }
   }
 
-  void _showFailure() => setState(() {
-    _loading = false;
-    _failed = true;
-  });
+  Future<void> account(String value) async {
+    if (value == 'logout') {
+      await logout();
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(api: widget.api, onChanged: _avatar),
+      ),
+    );
+    if (mounted) _avatar();
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final profile = widget.page == EmployeePage.profile;
-    final statusOptions = widget.page == EmployeePage.tasks
-        ? const ['All', 'Open', 'In progress', 'Done', 'Cancelled']
-        : const ['All', 'Upcoming', 'In progress', 'Ended', 'Cancelled'];
-    final visibleItems = (_items ?? []).where(
-      (row) => !_isWorkList || _filter == 'All' || row.status == _filter,
-    );
-    return Stack(
-      children: [
-        Padding(
-          padding: EdgeInsets.only(bottom: _usePortal ? 60 : 0),
-          child: WebViewWidget(controller: _controller),
-        ),
-        if (_overview case final data?)
-          Positioned.fill(
-            child: ColoredBox(
-              color: _paper,
-              child: _Overview(
-                data: data,
-                onRefresh: () => _switchPage(portal: false),
-              ),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(labels[index]),
+      actions: [
+        IconButton(
+          tooltip: 'Notifications',
+          icon: const Icon(Icons.notifications_outlined),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => NotificationsScreen(api: widget.api),
             ),
           ),
-        if (_items case final items?)
-          Positioned.fill(
-            child: ColoredBox(
-              color: _paper,
-              child: ListView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: ((MediaQuery.sizeOf(context).width - 680) / 2)
-                      .clamp(16, double.infinity)
-                      .toDouble(),
-                  vertical: 16,
-                ),
-                children: [
-                  Wrap(
-                    spacing: 12,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => _switchPage(portal: false),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Refresh'),
+        ),
+        PopupMenuButton<String>(
+          tooltip: 'Account',
+          onSelected: account,
+          icon: CircleAvatar(
+            radius: 16,
+            foregroundImage: avatar == null ? null : MemoryImage(avatar!),
+            child: const Icon(Icons.person_outline, size: 20),
+          ),
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'profile', child: Text('My profile')),
+            PopupMenuItem(value: 'logout', child: Text('Sign out')),
+          ],
+        ),
+      ],
+    ),
+    body: SafeArea(
+      top: false,
+      child: KeyedSubtree(
+        key: ValueKey('$index-$revision'),
+        child: switch (index) {
+          1 => TasksScreen(api: widget.api),
+          2 => MeetingsScreen(api: widget.api),
+          3 => AttendanceScreen(api: widget.api),
+          4 => PayrollScreen(api: widget.api),
+          _ => OverviewScreen(
+            api: widget.api,
+            onOpen: (value) => setState(() => index = value),
+          ),
+        },
+      ),
+    ),
+    bottomNavigationBar: Material(
+      color: Colors.white,
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              Expanded(
+                child: Semantics(
+                  selected: i == index,
+                  button: true,
+                  label: labels[i],
+                  child: InkWell(
+                    key: ValueKey('nav-$i'),
+                    onTap: () => setState(() {
+                      index = i;
+                      revision++;
+                    }),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 2,
                       ),
-                      TextButton(
-                        onPressed: () => _switchPage(portal: true),
-                        child: Text(
-                          _isWorkList
-                              ? (widget.page == EmployeePage.tasks
-                                    ? 'Manage tasks'
-                                    : 'Meeting actions')
-                              : 'Open full page',
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (profile) ...[
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () => _switchPage(
-                        portal: true,
-                        path: '/Me/Profile#profile-settings',
-                      ),
-                      icon: const Icon(Icons.photo_camera_outlined),
-                      label: const Text('Change profile photo'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => _switchPage(
-                        portal: true,
-                        path:
-                            '/Identity/Account/ChangePassword?ReturnUrl=%2FMe%2FProfile%23profile-settings',
-                      ),
-                      icon: const Icon(Icons.lock_outline),
-                      label: const Text('Change password'),
-                    ),
-                  ],
-                  if (_isWorkList)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Wrap(
-                        spacing: 8,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (final status in statusOptions)
-                            ChoiceChip(
-                              label: Text(status),
-                              selected: _filter == status,
-                              onSelected: (_) =>
-                                  setState(() => _filter = status),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
                             ),
+                            decoration: BoxDecoration(
+                              color: i == index
+                                  ? const Color(0xffe2eaff)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Icon(
+                              icons[i],
+                              color: i == index ? blue : ink,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            labels[i],
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: i == index
+                                  ? FontWeight.w800
+                                  : FontWeight.w500,
+                              color: i == index ? blue : ink,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  if (visibleItems.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        items.isEmpty
-                            ? _message ?? 'No records to show.'
-                            : 'No records match this status.',
-                      ),
-                    ),
-                  for (final row in visibleItems)
-                    if (_isWorkList)
-                      _WorkRow(
-                        row: row,
-                        isMeeting: widget.page == EmployeePage.meetings,
-                        onAction: _openAction,
-                      )
-                    else
-                      Card(
-                        child: ListTile(
-                          leading: profile
-                              ? const CircleAvatar(
-                                  child: Icon(Icons.person_outline),
-                                )
-                              : null,
-                          title: Text(row.title),
-                          subtitle: Text(
-                            row.details.isEmpty
-                                ? row.subtitle
-                                : '${row.subtitle}\n${row.details}',
-                          ),
-                        ),
-                      ),
-                ],
+                  ),
+                ),
               ),
-            ),
-          ),
-        if (_usePortal && !_loading && !_failed)
-          Positioned(
-            right: 12,
-            bottom: 12,
-            child: FilledButton(
-              onPressed: () => _switchPage(portal: false),
-              child: const Text('Back to list'),
-            ),
-          ),
-        if (_loading)
-          const Align(
-            alignment: Alignment.topCenter,
-            child: LinearProgressIndicator(),
-          ),
-        if (_failed)
-          Positioned.fill(
-            child: ColoredBox(
-              color: _paper,
-              child: _Message(
-                icon: Icons.cloud_off_rounded,
-                title: 'Unable to load Garowe City Management System',
-                detail: 'Check your connection and try again.',
-                onRetry: () {
-                  setState(() {
-                    _failed = false;
-                    _loading = true;
-                  });
-                  _open();
-                },
-              ),
-            ),
-          ),
-      ],
-    );
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class DataView extends StatefulWidget {
+  const DataView({super.key, required this.load, required this.builder});
+  final Future<dynamic> Function() load;
+  final Widget Function(dynamic data, VoidCallback reload) builder;
+  @override
+  State<DataView> createState() => _DataViewState();
+}
+
+class _DataViewState extends State<DataView> {
+  late Future<dynamic> future = widget.load();
+  void reload() {
+    if (mounted) setState(() => future = widget.load());
   }
-}
-
-extension on Uri {
-  String? get httpOrigin =>
-      (scheme == 'https' || scheme == 'http') && host.isNotEmpty
-      ? origin
-      : null;
-}
-
-class _EmployeeRow {
-  const _EmployeeRow(
-    this.title,
-    this.subtitle,
-    this.details,
-    this.status,
-    this.actions,
-  );
-
-  factory _EmployeeRow.fromJson(Map<String, dynamic> json) => _EmployeeRow(
-    json['title'] as String,
-    json['subtitle'] as String,
-    json['details'] as String,
-    json['status'] as String?,
-    (json['actions'] as List<dynamic>? ?? [])
-        .map((item) => Map<String, String>.from(item as Map))
-        .toList(),
-  );
-
-  final String title;
-  final String subtitle;
-  final String details;
-  final String? status;
-  final List<Map<String, String>> actions;
-}
-
-class _WorkRow extends StatelessWidget {
-  const _WorkRow({
-    required this.row,
-    required this.isMeeting,
-    required this.onAction,
-  });
-
-  final _EmployeeRow row;
-  final bool isMeeting;
-  final ValueChanged<String> onAction;
 
   @override
-  Widget build(BuildContext context) {
-    final (foreground, background) = switch (row.status) {
-      'Done' => (const Color(0xff166344), const Color(0xffe2f4ea)),
-      'In progress' => (const Color(0xff744700), const Color(0xffffefcb)),
-      'Ended' ||
-      'Cancelled' => (const Color(0xff424c61), const Color(0xffedf0f6)),
-      _ => (_blue, const Color(0xffe2eaff)),
-    };
-    return Card(
-      color: Colors.white,
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: background,
-          foregroundColor: foreground,
-          child: Icon(
-            isMeeting
-                ? Icons.event_available_outlined
-                : Icons.assignment_outlined,
-            size: 20,
-          ),
-        ),
-        title: Text(
-          row.title,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              crossAxisAlignment: WrapCrossAlignment.center,
+  Widget build(BuildContext context) => FutureBuilder<dynamic>(
+    future: future,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState != ConnectionState.done) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (snapshot.hasError) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (row.status case final status?)
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: background,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          color: foreground,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                Text(row.subtitle),
+                const Icon(Icons.cloud_off_outlined, size: 40, color: blue),
+                const SizedBox(height: 12),
+                Text(snapshot.error.toString(), textAlign: TextAlign.center),
+                FilledButton(onPressed: reload, child: const Text('Try again')),
               ],
             ),
-            if (row.details.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(row.details),
+          ),
+        );
+      }
+      return widget.builder(snapshot.data, reload);
+    },
+  );
+}
+
+Widget contentList(List<Widget> children, {Future<void> Function()? refresh}) {
+  final list = LayoutBuilder(
+    builder: (context, constraints) => ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: EdgeInsets.symmetric(
+        horizontal: ((constraints.maxWidth - 680) / 2)
+            .clamp(16, double.infinity)
+            .toDouble(),
+        vertical: 16,
+      ),
+      children: [
+        for (final child in children)
+          Padding(padding: const EdgeInsets.only(bottom: 12), child: child),
+      ],
+    ),
+  );
+  return refresh == null
+      ? list
+      : RefreshIndicator(onRefresh: refresh, child: list);
+}
+
+String date(Object? value, {bool time = false}) {
+  final parsed = DateTime.tryParse(value?.toString() ?? '');
+  if (parsed == null) return '—';
+  final d = value.toString().endsWith('Z')
+      ? parsed.toUtc().add(const Duration(hours: 3))
+      : parsed;
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${d.day} ${months[d.month - 1]} ${d.year}${time ? ', ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')} EAT' : ''}';
+}
+
+String statusLabel(String value) =>
+    value == 'InProgress' ? 'In progress' : value;
+String money(dynamic value) => (value as num? ?? 0).toStringAsFixed(2);
+Widget badge(String text) => Chip(
+  label: Text(statusLabel(text), style: const TextStyle(fontSize: 12)),
+  padding: EdgeInsets.zero,
+  visualDensity: VisualDensity.compact,
+);
+
+class OverviewScreen extends StatelessWidget {
+  const OverviewScreen({super.key, required this.api, required this.onOpen});
+  final Api api;
+  final ValueChanged<int> onOpen;
+  @override
+  Widget build(BuildContext context) => DataView(
+    load: () => api.get('/api/mobile/v1/overview'),
+    builder: (data, reload) {
+      final tasks = data['tasks'] as Map?;
+      final done = tasks?['done'] as int? ?? 0,
+          open = tasks?['open'] as int? ?? 0,
+          working = tasks?['inProgress'] as int? ?? 0;
+      final total = done + open + working;
+      return contentList([
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [ink, blue]),
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Image.asset(
+                'assets/garowe-local-government.jpg',
+                width: 55,
+                height: 55,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'My dashboard',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Text(
+                'Garowe City Management System',
+                style: TextStyle(color: Colors.white70),
+              ),
             ],
-            if (row.actions.isNotEmpty)
-              Wrap(
-                spacing: 8,
+          ),
+        ),
+        if (tasks != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
                 children: [
-                  for (final action in row.actions)
-                    TextButton(
-                      onPressed: () => onAction(action['url']!),
-                      child: Text(action['label']!),
+                  SizedBox.square(
+                    dimension: 78,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CircularProgressIndicator(
+                          value: total == 0 ? 0 : done / total,
+                          backgroundColor: const Color(0xffe2eaff),
+                          strokeWidth: 7,
+                        ),
+                        Center(
+                          child: Text(
+                            '${total == 0 ? 0 : done * 100 ~/ total}%',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'My task progress',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        Text('$done of $total completed'),
+                        Text('$open open · $working in progress'),
+                        TextButton(
+                          onPressed: () => onOpen(1),
+                          child: const Text('View my tasks'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
+            ),
+          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (data['hoursThisMonth'] != null)
+              badge('${money(data['hoursThisMonth'])} work hours this month'),
+            if (data['upcomingMeetings'] != null)
+              badge('${data['upcomingMeetings']} active / upcoming meetings'),
           ],
         ),
+        OutlinedButton.icon(
+          onPressed: reload,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Refresh progress'),
+        ),
+      ], refresh: () async => reload());
+    },
+  );
+}
+
+class TasksScreen extends StatelessWidget {
+  const TasksScreen({super.key, required this.api});
+  final Api api;
+  @override
+  Widget build(BuildContext context) => DataView(
+    load: () => api.get('/api/mobile/v2/tasks'),
+    builder: (data, reload) => WorkList(
+      items: List<Map<String, dynamic>>.from(data as List),
+      isMeeting: false,
+      onOpen: (item) async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TaskScreen(api: api, task: item),
+          ),
+        );
+        reload();
+      },
+      reload: reload,
+    ),
+  );
+}
+
+class WorkList extends StatefulWidget {
+  const WorkList({
+    super.key,
+    required this.items,
+    required this.isMeeting,
+    required this.onOpen,
+    required this.reload,
+  });
+  final List<Map<String, dynamic>> items;
+  final bool isMeeting;
+  final ValueChanged<Map<String, dynamic>> onOpen;
+  final VoidCallback reload;
+  @override
+  State<WorkList> createState() => _WorkListState();
+}
+
+String meetingStatus(Map m) {
+  if (m['cancelled'] == true) return 'Cancelled';
+  final now = DateTime.now().toUtc();
+  if (m['endedUtc'] != null ||
+      DateTime.parse(m['endsUtc']).toUtc().isBefore(now)) {
+    return 'Ended';
+  }
+  return DateTime.parse(m['startsUtc']).toUtc().isAfter(now)
+      ? 'Upcoming'
+      : 'In progress';
+}
+
+class _WorkListState extends State<WorkList> {
+  String filter = 'All', search = '';
+  @override
+  Widget build(BuildContext context) {
+    final options = widget.isMeeting
+        ? ['All', 'Upcoming', 'In progress', 'Ended', 'Cancelled']
+        : ['All', 'Open', 'In progress', 'Done', 'Cancelled'];
+    final rows = widget.items.where((item) {
+      final status = widget.isMeeting
+          ? meetingStatus(item)
+          : statusLabel(item['status']);
+      return (filter == 'All' || status == filter) &&
+          '${item['title']} ${item['responsibility'] ?? ''} ${item['description'] ?? item['agenda'] ?? ''}'
+              .toLowerCase()
+              .contains(search.toLowerCase());
+    }).toList();
+    return contentList([
+      TextField(
+        decoration: const InputDecoration(
+          hintText: 'Search',
+          prefixIcon: Icon(Icons.search),
+        ),
+        onChanged: (value) => setState(() => search = value),
       ),
-    );
+      Wrap(
+        spacing: 6,
+        children: [
+          for (final option in options)
+            ChoiceChip(
+              label: Text(option),
+              selected: filter == option,
+              onSelected: (_) => setState(() => filter = option),
+            ),
+        ],
+      ),
+      if (rows.isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('No records match this selection.'),
+        ),
+      for (final item in rows)
+        Card(
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            leading: Icon(
+              widget.isMeeting
+                  ? Icons.event_outlined
+                  : Icons.assignment_outlined,
+              color: blue,
+            ),
+            title: Text(
+              item['responsibility'] ?? item['title'],
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                badge(widget.isMeeting ? meetingStatus(item) : item['status']),
+                Text(
+                  widget.isMeeting
+                      ? date(item['startsUtc'], time: true)
+                      : item['dueDate'] == null
+                      ? 'No due date'
+                      : 'Due ${date(item['dueDate'])}',
+                ),
+                if (widget.isMeeting)
+                  Text('${item['attending']} / ${item['invited']} checked in'),
+                if ((item['description'] ?? item['agenda'] ?? '')
+                    .toString()
+                    .isNotEmpty)
+                  Text(
+                    item['description'] ?? item['agenda'],
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => widget.onOpen(item),
+          ),
+        ),
+    ], refresh: () async => widget.reload());
   }
 }
 
-class _Message extends StatelessWidget {
-  const _Message({
-    required this.icon,
-    required this.title,
-    required this.detail,
-    this.onRetry,
-  });
+class TaskScreen extends StatefulWidget {
+  const TaskScreen({super.key, required this.api, required this.task});
+  final Api api;
+  final Map<String, dynamic> task;
+  @override
+  State<TaskScreen> createState() => _TaskScreenState();
+}
 
-  final IconData icon;
-  final String title;
-  final String detail;
-  final VoidCallback? onRetry;
+class _TaskScreenState extends State<TaskScreen> {
+  late String status = widget.task['status'];
+  bool busy = false;
+  Future<void> save() async {
+    setState(() => busy = true);
+    try {
+      await widget.api.post(
+        '/api/mobile/v2/tasks/${widget.task['id']}/status',
+        {'status': status},
+      );
+      if (mounted) {
+        message(context, 'Task status saved.');
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) message(context, e);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 42, color: _blue),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            Text(detail, textAlign: TextAlign.center),
-            if (onRetry != null) ...[
-              const SizedBox(height: 12),
-              FilledButton(onPressed: onRetry, child: const Text('Try again')),
-            ],
-          ],
-        ),
+  Widget build(BuildContext context) => FormPage(
+    title: 'Task details',
+    children: [
+      Text(
+        widget.task['responsibility'] ?? widget.task['title'],
+        style: Theme.of(context).textTheme.headlineSmall,
       ),
-    );
+      if (widget.task['responsibility'] != null)
+        Text('Team task · ${widget.task['title']}'),
+      Text('Due ${date(widget.task['dueDate'])}'),
+      Text(widget.task['description'] ?? ''),
+      if (status != 'Cancelled') ...[
+        DropdownButtonFormField<String>(
+          initialValue: status,
+          decoration: const InputDecoration(labelText: 'My status'),
+          items: [
+            for (final value in ['Open', 'InProgress', 'Done'])
+              DropdownMenuItem(value: value, child: Text(statusLabel(value))),
+          ],
+          onChanged: busy ? null : (value) => setState(() => status = value!),
+        ),
+        FilledButton(
+          onPressed: busy ? null : save,
+          child: Text(busy ? 'Saving…' : 'Save status'),
+        ),
+      ] else
+        const Text('This task was cancelled.'),
+    ],
+  );
+}
+
+class MeetingsScreen extends StatelessWidget {
+  const MeetingsScreen({super.key, required this.api});
+  final Api api;
+  @override
+  Widget build(BuildContext context) => DataView(
+    load: () => api.get('/api/mobile/v2/meetings'),
+    builder: (data, reload) => WorkList(
+      items: List<Map<String, dynamic>>.from(data as List),
+      isMeeting: true,
+      reload: reload,
+      onOpen: (meeting) async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MeetingScreen(api: api, id: meeting['id']),
+          ),
+        );
+        reload();
+      },
+    ),
+  );
+}
+
+class MeetingScreen extends StatelessWidget {
+  const MeetingScreen({super.key, required this.api, required this.id});
+  final Api api;
+  final int id;
+  Future<void> action(
+    BuildContext context,
+    String action,
+    VoidCallback reload,
+  ) async {
+    try {
+      await api.post('/api/mobile/v2/meetings/$id/$action', {});
+      reload();
+    } catch (e) {
+      if (context.mounted) message(context, e);
+    }
   }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Meeting details')),
+    body: DataView(
+      load: () => api.get('/api/mobile/v2/meetings/$id'),
+      builder: (data, reload) {
+        final m = data as Map<String, dynamic>;
+        final closed = ['Ended', 'Cancelled'].contains(meetingStatus(m));
+        return contentList([
+          Text(
+            m['title'],
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          badge(meetingStatus(m)),
+          Text(date(m['startsUtc'], time: true)),
+          Text(m['location'] ?? 'Online meeting'),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.how_to_reg_outlined),
+              title: Text('${m['attending']} of ${m['invited']} checked in'),
+            ),
+          ),
+          if (!closed && m['isInvited'] == true)
+            FilledButton.icon(
+              onPressed: m['checkedIn'] == true
+                  ? null
+                  : () => action(context, 'attend', reload),
+              icon: const Icon(Icons.check_circle_outline),
+              label: Text(
+                m['checkedIn'] == true
+                    ? 'Attendance recorded'
+                    : "I'm attending",
+              ),
+            ),
+          if (!closed && m['location'] == null)
+            FilledButton.icon(
+              icon: const Icon(Icons.videocam_outlined),
+              label: const Text('Join meeting'),
+              onPressed: () async {
+                if ((m['joinUrl'] as String).isNotEmpty) {
+                  final url = Uri.tryParse(m['joinUrl']);
+                  if (url?.scheme == 'https') {
+                    await launchUrl(url!, mode: LaunchMode.externalApplication);
+                  }
+                } else {
+                  if (!context.mounted) return;
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          NativeMeetingRoom(api: api, meetingId: id),
+                    ),
+                  );
+                  reload();
+                }
+              },
+            ),
+          Text('Shared agenda', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            (m['agenda'] as String).isEmpty
+                ? 'No main agenda yet.'
+                : m['agenda'],
+          ),
+          for (final item in m['agendaItems'] as List)
+            Card(
+              child: ListTile(
+                title: Text(item['title']),
+                subtitle: Text(item['notes'] ?? ''),
+              ),
+            ),
+          if (!closed)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Add agenda item'),
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AgendaScreen(api: api, id: id),
+                  ),
+                );
+                reload();
+              },
+            ),
+          Text(
+            'Published minutes',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          Text(m['publishedMinutes'] ?? 'Minutes have not been published.'),
+          if (!closed && m['isOwner'] == true)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: const Text('End meeting for everyone'),
+              onPressed: () async {
+                final yes = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('End meeting for everyone?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('End meeting'),
+                      ),
+                    ],
+                  ),
+                );
+                if (yes == true && context.mounted) {
+                  action(context, 'end', reload);
+                }
+              },
+            ),
+        ]);
+      },
+    ),
+  );
+}
+
+class AgendaScreen extends StatefulWidget {
+  const AgendaScreen({super.key, required this.api, required this.id});
+  final Api api;
+  final int id;
+  @override
+  State<AgendaScreen> createState() => _AgendaScreenState();
+}
+
+class _AgendaScreenState extends State<AgendaScreen> {
+  final title = TextEditingController(), notes = TextEditingController();
+  bool busy = false;
+  @override
+  void dispose() {
+    title.dispose();
+    notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> save() async {
+    if (title.text.trim().isEmpty) {
+      message(context, 'Enter an agenda title.');
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      await widget.api.post('/api/mobile/v2/meetings/${widget.id}/agenda', {
+        'title': title.text,
+        'notes': notes.text,
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) message(context, e);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => FormPage(
+    title: 'Add agenda item',
+    children: [
+      TextField(
+        controller: title,
+        maxLength: 160,
+        decoration: const InputDecoration(labelText: 'Title'),
+      ),
+      TextField(
+        controller: notes,
+        maxLength: 2000,
+        minLines: 4,
+        maxLines: 8,
+        decoration: const InputDecoration(labelText: 'Notes'),
+      ),
+      FilledButton(
+        onPressed: busy ? null : save,
+        child: Text(busy ? 'Saving…' : 'Add to shared agenda'),
+      ),
+    ],
+  );
+}
+
+class AttendanceScreen extends StatelessWidget {
+  const AttendanceScreen({super.key, required this.api});
+  final Api api;
+  @override
+  Widget build(BuildContext context) => DataView(
+    load: () => api.get('/api/mobile/v1/attendance'),
+    builder: (data, reload) => contentList([
+      Text('My attendance', style: Theme.of(context).textTheme.titleLarge),
+      if ((data['items'] as List).isEmpty)
+        Text(data['message'] ?? 'No attendance records yet.'),
+      for (final item in data['items'])
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.event_available_outlined, color: blue),
+            title: Text(item['title']),
+            subtitle: Text('${item['subtitle']}\n${item['details']}'),
+          ),
+        ),
+    ], refresh: () async => reload()),
+  );
+}
+
+class PayrollScreen extends StatelessWidget {
+  const PayrollScreen({super.key, required this.api});
+  final Api api;
+  @override
+  Widget build(BuildContext context) => DataView(
+    load: () => api.get('/api/mobile/v2/payroll'),
+    builder: (data, reload) => contentList([
+      Text(
+        'My published payslips',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      if ((data as List).isEmpty) const Text('No published payslips yet.'),
+      for (final pay in data)
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.receipt_long_outlined, color: blue),
+            title: Text('${date(pay['from'])} – ${date(pay['to'])}'),
+            subtitle: Text('Net pay · ${pay['currency']} ${money(pay['net'])}'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PayslipScreen(api: api, id: pay['id']),
+              ),
+            ),
+          ),
+        ),
+    ], refresh: () async => reload()),
+  );
+}
+
+class PayslipScreen extends StatelessWidget {
+  const PayslipScreen({super.key, required this.api, required this.id});
+  final Api api;
+  final int id;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Payslip')),
+    body: DataView(
+      load: () => api.get('/api/mobile/v2/payroll/$id'),
+      builder: (p, reload) => contentList([
+        Text(
+          '${date(p['from'])} – ${date(p['to'])}',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        for (final (label, key) in [
+          ('Basic salary', 'basic'),
+          ('Allowances', 'allowanceTotal'),
+          ('Overtime', 'overtime'),
+          ('Gross pay', 'gross'),
+          ('Attendance deducted', 'attendanceApplied'),
+          ('Unpaid leave', 'unpaidLeave'),
+          ('Net pay', 'net'),
+        ])
+          Card(
+            child: ListTile(
+              title: Text(label),
+              trailing: Text('${p['currency']} ${money(p[key])}'),
+            ),
+          ),
+        Text(
+          'Attendance waived · ${money((p['attendanceCalculated'] as num) - (p['attendanceApplied'] as num))}',
+        ),
+        Text('Revision ${p['revision']}'),
+      ]),
+    ),
+  );
+}
+
+class NotificationsScreen extends StatelessWidget {
+  const NotificationsScreen({super.key, required this.api});
+  final Api api;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Notifications')),
+    body: DataView(
+      load: () => api.get('/api/mobile/v2/notifications'),
+      builder: (data, reload) => contentList([
+        TextButton(
+          onPressed: () async {
+            try {
+              await api.post('/api/mobile/v2/notifications/read-all', {});
+              reload();
+            } catch (e) {
+              if (context.mounted) message(context, e);
+            }
+          },
+          child: const Text('Mark all read'),
+        ),
+        if ((data as List).isEmpty) const Text('You have no notifications.'),
+        for (final n in data)
+          Card(
+            child: ListTile(
+              leading: Icon(
+                n['readUtc'] == null
+                    ? Icons.mark_email_unread_outlined
+                    : Icons.drafts_outlined,
+                color: blue,
+              ),
+              title: Text(n['title']),
+              subtitle: Text(date(n['createdUtc'], time: true)),
+              onTap: () async {
+                try {
+                  await api.post(
+                    '/api/mobile/v2/notifications/${n['id']}/read',
+                    {},
+                  );
+                  if (!context.mounted) return;
+                  if (n['meetingId'] != null) {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            MeetingScreen(api: api, id: n['meetingId']),
+                      ),
+                    );
+                  } else if (n['taskId'] != null) {
+                    final tasks = await api.get('/api/mobile/v2/tasks') as List;
+                    final matches = tasks.where((t) => t['id'] == n['taskId']);
+                    if (matches.isNotEmpty && context.mounted) {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TaskScreen(
+                            api: api,
+                            task: Map<String, dynamic>.from(matches.first),
+                          ),
+                        ),
+                      );
+                    }
+                  }
+                  reload();
+                } catch (e) {
+                  if (context.mounted) message(context, e);
+                }
+              },
+            ),
+          ),
+      ], refresh: () async => reload()),
+    ),
+  );
+}
+
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key, required this.api, required this.onChanged});
+  final Api api;
+  final VoidCallback onChanged;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('My profile')),
+    body: DataView(
+      load: () async => [
+        await api.get('/api/mobile/v2/profile'),
+        await api.avatar(),
+      ],
+      builder: (data, reload) {
+        final profile = data[0] as Map;
+        final employee = profile['employee'] as Map?;
+        final photo = data[1] as Uint8List?;
+        return contentList([
+          Center(
+            child: CircleAvatar(
+              radius: 48,
+              foregroundImage: photo == null ? null : MemoryImage(photo),
+              child: const Icon(Icons.person_outline, size: 42),
+            ),
+          ),
+          Text(
+            employee?['fullName'] ?? api.email ?? 'My account',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          if (employee != null) ...[
+            Card(
+              child: ListTile(
+                title: Text(employee['employeeNumber']),
+                subtitle: Text(employee['status']),
+              ),
+            ),
+            Card(
+              child: ListTile(
+                title: const Text('Employment start'),
+                subtitle: Text(date(employee['hireDate'])),
+              ),
+            ),
+          ] else
+            const Text(
+              'Ask HR to link your employee record to view personal attendance and payroll.',
+            ),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.email_outlined),
+              title: Text(profile['email'] ?? ''),
+            ),
+          ),
+          if (employee != null)
+            FilledButton.icon(
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: const Text('Change profile photo'),
+              onPressed: () async {
+                try {
+                  final selected = await FilePicker.pickFiles(
+                    type: FileType.custom,
+                    allowedExtensions: ['jpg', 'jpeg', 'png'],
+                  );
+                  final path = selected?.files.single.path;
+                  if (path == null) return;
+                  await api.uploadPhoto(path);
+                  onChanged();
+                  reload();
+                } catch (e) {
+                  if (context.mounted) message(context, e);
+                }
+              },
+            ),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.lock_outline),
+            label: const Text('Change password'),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PasswordScreen(api: api, onChanged: onChanged),
+              ),
+            ),
+          ),
+        ]);
+      },
+    ),
+  );
 }

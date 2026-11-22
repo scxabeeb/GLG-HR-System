@@ -25,11 +25,17 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(o =>
     o.Password.RequiredLength = 10;
     o.Lockout.MaxFailedAccessAttempts = 5;
 }).AddEntityFrameworkStores<HrDbContext>().AddDefaultTokenProviders();
+builder.Services.AddAuthentication().AddBearerToken(NativeMobileApi.Scheme, o =>
+{
+    o.BearerTokenExpiration = TimeSpan.FromHours(8);
+});
 builder.Services.ConfigureApplicationCookie(o =>
 {
     o.LoginPath = "/Identity/Account/Login";
     o.AccessDeniedPath = "/Denied";
     o.SlidingExpiration = true;
+    o.Events.OnRedirectToLogin = c => { if (c.Request.Path.StartsWithSegments("/api/mobile")) c.Response.StatusCode = 401; else c.Response.Redirect(c.RedirectUri); return Task.CompletedTask; };
+    o.Events.OnRedirectToAccessDenied = c => { if (c.Request.Path.StartsWithSegments("/api/mobile")) c.Response.StatusCode = 403; else c.Response.Redirect(c.RedirectUri); return Task.CompletedTask; };
 });
 builder.Services.Configure<SecurityStampValidatorOptions>(o =>
 {
@@ -113,6 +119,11 @@ app.UseStaticFiles();
 app.UseWebSockets();
 app.UseRouting();
 app.UseRateLimiter();
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.StartsWithSegments("/api/mobile")) ctx.Response.Headers.CacheControl = "no-store";
+    await next();
+});
 app.UseAuthentication();
 app.UseAuthorization();
 app.Use(async (context, next) =>
@@ -122,8 +133,12 @@ app.Use(async (context, next) =>
         var users = context.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
         var signIn = context.RequestServices.GetRequiredService<SignInManager<ApplicationUser>>();
         var user = await users.GetUserAsync(context.User);
-        if (user == null || !user.IsEnabled || SupportSession.Expired(context.User, DateTimeOffset.UtcNow))
+        var native = context.Request.Path.StartsWithSegments("/api/mobile");
+        var bearer = context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase);
+        var invalidStamp = bearer && user != null && context.User.FindFirst("AspNet.Identity.SecurityStamp")?.Value != user.SecurityStamp;
+        if (user == null || !user.IsEnabled || invalidStamp || SupportSession.Expired(context.User, DateTimeOffset.UtcNow))
         {
+            if (native) { context.Response.StatusCode = 401; return; }
             await signIn.SignOutAsync();
             context.Response.Redirect("/Identity/Account/Login");
             return;
@@ -147,8 +162,15 @@ app.Use(async (context, next) =>
                 return;
             }
         }
-        else if (user.MustChangePassword && !context.Request.Path.StartsWithSegments("/Identity/Account"))
+        else if (user.MustChangePassword && !context.Request.Path.StartsWithSegments("/Identity/Account")
+            && !context.Request.Path.StartsWithSegments("/api/mobile/v2/auth"))
         {
+            if (native)
+            {
+                context.Response.StatusCode = 403;
+                await context.Response.WriteAsJsonAsync(new { message = "Change your temporary password to continue.", code = "password_change_required" });
+                return;
+            }
             var returnUrl = context.Request.PathBase.Add(context.Request.Path).ToUriComponent() + context.Request.QueryString.ToUriComponent();
             context.Response.Redirect(Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(
                 "/Identity/Account/ChangePassword", "ReturnUrl", returnUrl));
@@ -180,7 +202,8 @@ app.Use(async (context, next) =>
         app.Logger.LogWarning("Page not found: {Method} {Path}", context.Request.Method, context.Request.Path);
 });
 app.MapRazorPages();
-app.MapGet("/api/mobile/v1/{section}", MobileEmployeeApi.Read).RequireAuthorization();
+app.MapGet("/api/mobile/v1/{section}", MobileEmployeeApi.Read).RequireAuthorization(NativeMobileApi.LegacyPolicy);
+NativeMobileApi.Map(app);
 foreach (var path in new[] { "/iclock/cdata", "/iclock/cdata.aspx" })
 {
     app.MapGet(path, ZkAttendancePush.Poll).AllowAnonymous().RequireRateLimiting("attendance-push");

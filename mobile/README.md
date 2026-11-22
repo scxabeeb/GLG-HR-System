@@ -1,36 +1,32 @@
-# Garowe HR for employees
+# Garowe City native employee app
 
-Flutter app for Android, iPhone and iPad. The bottom bar has **Overview**, **Tasks**, **Meetings**, **Attendance**, and **Payroll**. Overview opens personal attendance, current salary and published payslips, and the employee profile. Tasks opens My Tasks. Meetings opens the employee meeting list; external HTTPS meeting links can open in the device browser.
+Flutter screens for Android, iPhone and iPad. The app uses authenticated ASP.NET APIs and the server's MySQL database. There are no embedded WebViews.
 
-The app starts at **Sign in**. Sign in with your employee account to open Overview, where the top account icon opens **My profile** and **Sign out**. Use **Forgot password? Reset by email** on the sign-in screen with the email saved on your account. Live delivery requires the web server’s SMTP and public reset URL configuration. The bell opens the Garowe HR inbox for task assignments, meeting invitations, payslips, and other updates. The app uses the existing Garowe HR sign-in and permission checks. Employee records stay in the HR server. The Flutter lists read live records from `GET /api/mobile/v1/{section}` using the ASP.NET Identity session in the system WebView. The server scopes results to the signed-in user and reads them from the configured MySQL database. Each section returns up to 100 records. Task and meeting rows link directly to status updates, shared agendas, and joining an available meeting. Built-in meeting rooms open in the app, and supported external meeting links open in the browser. Use **Open full page** for payslip details and notification actions.
+- Native sign-in, password visibility, email reset, mandatory password change, secure token storage and sign-out.
+- Overview, task status updates, searchable task and meeting lists, shared agenda submissions, meeting check-in, attendance, published payslips and notifications.
+- Profile image upload and native password changes.
+- Native WebRTC room: participant tiles, tap to focus, microphone/camera controls, camera switching, screen sharing, shared whiteboard, organizer mute/end and leave/rejoin. Rooms retain the server's six-participant limit. Screen capture support depends on the OS; camera/microphone permissions are requested by WebRTC. Recording and meeting-document management remain available in the web administration interface.
+- Teams and Google Meet links launch the provider's app or browser.
 
-## Run on a device
+## Server and authentication
 
-1. Use Flutter 3.38 or later. Set up Android Studio for Android or Xcode and a signing team for iPhone or iPad.
-2. Use a Garowe HR HTTPS origin that the device can reach and whose certificate the device trusts. The Mac's current loopback HTTP address on port 5189 only serves the Mac. For office use, configure a trusted HTTPS endpoint reachable from the office network or VPN. The server must include the attendance and payroll anchors in the updated employee profile.
-3. From this directory, run:
+The default server is `https://garowe-hr-production.up.railway.app`. Override with `--dart-define=GAROWE_HR_URL=https://erp.garowecity.pl.so`. Deploy the updated server before using this build. Native actions use `/api/mobile/v2`, while overview, avatar and attendance use the compatible `/api/mobile/v1` reads. V2 accepts bearer tokens only. Tokens expire after eight hours; sign in again when expired. Password change/reset, disabling an account and sign-out invalidate existing tokens. Personal attendance/payroll require an employee-linked account and a published payslip. Permissions apply server-side.
 
-   ```sh
-   flutter pub get
-   flutter devices
-   flutter run -d DEVICE_ID --dart-define=GAROWE_HR_URL=https://hr.example.org
-   ```
+Password reset email requires configured SMTP and a public reset URL. Paste the code or entire reset link from the email into the native reset screen. No password or MySQL credentials are stored in the APK.
 
-   Replace the example host with your Garowe HR origin. Sign in with an existing employee account. Attendance and payroll need a linked employee profile, and payslips appear after publication.
+Video connections between separate networks need a configured TURN service via `MeetingRooms:IceUrl`, `IceUsername` and `IceCredential`. Test calls between the actual office/mobile networks before relying on them.
 
-## Local iOS Simulator
+## Build and check
 
-With Garowe HR running on the Mac on port 5189, use a debug build:
+Use Flutter 3.38 or newer with the Android SDK, or Xcode and an Apple signing team for iOS.
 
 ```sh
-flutter run -d SIMULATOR_ID --dart-define=GAROWE_HR_URL=http://127.0.0.1:5189
-```
-
-This HTTP option is restricted to the debug build and the Mac loopback address. Physical-device deployments use the HTTPS address described above.
-
-## Checks
-
-```sh
+flutter pub get
 flutter analyze
 flutter test
+flutter build apk --release --split-per-abi
 ```
+
+The arm64 APK supports the Infinix. Release builds currently use the project's existing debug signing key for compatibility with previously installed builds; configure a protected production signing key before store distribution.
+
+For the iOS simulator and a local server, debug builds allow `--dart-define=GAROWE_HR_URL=http://127.0.0.1:5189`. Physical devices require reachable HTTPS.

@@ -119,8 +119,9 @@ public sealed class MeetingRooms
     {
         var request = context.Request;
         var origin = $"{request.Scheme}://{request.Host}";
+        var native = request.Path == "/api/mobile/v2/signal" && context.User.Identity?.IsAuthenticated == true;
         if (!context.WebSockets.IsWebSocketRequest ||
-            !string.Equals(request.Headers.Origin, origin, StringComparison.OrdinalIgnoreCase))
+            (!native && !string.Equals(request.Headers.Origin, origin, StringComparison.OrdinalIgnoreCase)))
         { context.Response.StatusCode = 400; return; }
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
