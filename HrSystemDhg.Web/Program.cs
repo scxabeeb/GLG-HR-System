@@ -173,6 +173,12 @@ app.Use(async (context, next) =>
 
     await next();
 });
+app.Use(async (context, next) =>
+{
+    await next();
+    if (context.Response.StatusCode == StatusCodes.Status404NotFound)
+        app.Logger.LogWarning("Page not found: {Method} {Path}", context.Request.Method, context.Request.Path);
+});
 app.MapRazorPages();
 app.MapGet("/api/mobile/v1/{section}", MobileEmployeeApi.Read).RequireAuthorization();
 foreach (var path in new[] { "/iclock/cdata", "/iclock/cdata.aspx" })
