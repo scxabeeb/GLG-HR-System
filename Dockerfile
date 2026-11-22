@@ -7,6 +7,5 @@ WORKDIR /app
 COPY --from=build /app .
 COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh && mkdir -p App_Data /home/app/.aspnet/DataProtection-Keys && chown -R app:app /app /home/app/.aspnet
-USER app
 ENV ASPNETCORE_HTTP_PORTS=8080
 ENTRYPOINT ["./docker-entrypoint.sh"]
