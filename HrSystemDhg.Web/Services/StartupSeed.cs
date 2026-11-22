@@ -35,6 +35,26 @@ public static class StartupSeed
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var email = config["Bootstrap:Email"];
         var password = config["Bootstrap:Password"];
+        if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
+        {
+            var existing = await users.FindByEmailAsync(email);
+            if (existing?.PasswordHash != null)
+            {
+                try { Convert.FromBase64String(existing.PasswordHash); }
+                catch (FormatException)
+                {
+                    existing.PasswordHash = users.PasswordHasher.HashPassword(existing, password);
+                    existing.MustChangePassword = true;
+                    existing.AccessFailedCount = 0;
+                    existing.LockoutEnd = null;
+                    existing.SecurityStamp = Guid.NewGuid().ToString();
+                    var repaired = await users.UpdateAsync(existing);
+                    if (!repaired.Succeeded) throw new InvalidOperationException("Could not repair the bootstrap account.");
+                    db.AuditLogs.Add(new() { Actor = existing.Id, Action = "Repaired malformed bootstrap password hash; password change required" });
+                    await db.SaveChangesAsync();
+                }
+            }
+        }
         if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password) && await users.FindByEmailAsync(email) == null)
         {
             var u = new ApplicationUser
