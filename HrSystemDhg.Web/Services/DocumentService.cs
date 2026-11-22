@@ -29,12 +29,6 @@ public class DocumentService(HrDbContext db, IWebHostEnvironment env)
         Directory.CreateDirectory(Root);
         var name = Guid.NewGuid().ToString("N") + ext;
         var path = Path.Combine(Root, name);
-        await using (var output = File.Create(path))
-        {
-            await output.WriteAsync(signature.AsMemory(0, count));
-            await input.CopyToAsync(output);
-        }
-
         var doc = new EmployeeDocument
         {
             EmployeeId = employeeId,
@@ -44,10 +38,15 @@ public class DocumentService(HrDbContext db, IWebHostEnvironment env)
             ContentType = content,
             ExpiryDate = expiry
         };
-        db.EmployeeDocuments.Add(doc);
-        db.AuditLogs.Add(new() { Actor = actor, Action = $"Uploaded {type} document for employee {employeeId}" });
         try
         {
+            await using (var output = File.Create(path))
+            {
+                await output.WriteAsync(signature.AsMemory(0, count));
+                await input.CopyToAsync(output);
+            }
+            db.EmployeeDocuments.Add(doc);
+            db.AuditLogs.Add(new() { Actor = actor, Action = $"Uploaded {type} document for employee {employeeId}" });
             await db.SaveChangesAsync();
         }
         catch

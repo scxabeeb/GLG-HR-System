@@ -123,9 +123,15 @@ public partial class DeductionRule
 
 public partial class ZkDevice
 {
+    public int? DepartmentId { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(250)] public string? Location { get; set; }
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public string Endpoint { get; set; } = "";
+    [System.ComponentModel.DataAnnotations.MaxLength(64)] public string? PushSerial { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(45)] public string? PushAddress { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(32)] public string? PushStamp { get; set; }
+    public DateTime? LastPushSeenUtc { get; set; }
     public DateTime? LastSuccess { get; set; }
     public string? LastError { get; set; }
 }

@@ -123,6 +123,7 @@ var r1 = new LeaveRequest
 await leaves.SubmitAsync(r1, "test");
 await Reject(() => leaves.SubmitAsync(new() { EmployeeId = e.Id, LeaveTypeId = paid.Id, From = r1.From, To = r1.To, Reason = "overlap" }, "test"), "overlapping leave blocked");
 db.ChangeTracker.Clear();
+await leaves.ForwardAsync(r1.Id, "test HR");
 await leaves.DecideAsync(r1.Id, "Approved", "test", "test", null, true);
 Check(await leaves.RemainingAsync(e.Id, paid.Id, 2026) == 29, "approval consumes one working day");
 var r2 = new LeaveRequest
@@ -134,6 +135,7 @@ var r2 = new LeaveRequest
     Reason = "Unpaid test"
 };
 await leaves.SubmitAsync(r2, "test");
+await leaves.ForwardAsync(r2.Id, "test HR");
 await leaves.DecideAsync(r2.Id, "Approved", "test", "test", null, true);
 await attendance.RebuildAsync(e.Id, r1.From);
 Check((await db.AttendanceDays.SingleAsync(x => x.EmployeeId == e.Id && x.Date == r1.From)).Status == "On leave", "approved leave appears in daily attendance");
@@ -159,10 +161,10 @@ await using (var fresh = new HrDbContext(options))
     Check(stored.SourceHash == await freshPayroll.HashAsync(stored), "payroll fingerprint survives a fresh request and database decimal normalization");
 }
 
-Check(line.UnpaidLeave == 440, "unpaid leave prorated once");
+Check(line.UnpaidLeave == 0, "approved leave has no payroll deduction");
 var deductions = await db.PayrollDeductions.Where(x => x.PayrollLineId == line.Id).ToListAsync();
 Check(!deductions.Any(x => x.Date == r1.From || x.Date == r2.From), "paid and unpaid leave have no attendance deduction");
-Check(deductions.Any(x => x.Date == new DateTime(2026, 10, 7) && x.Calculated == 20), "late deduction applies after grace");
+Check(deductions.Any(x => x.Date == new DateTime(2026, 10, 7) && x.Calculated == decimal.Round(20 * 2200m / 30m / 480m, 2)), "late deduction applies after grace");
 Check(line.Net == line.Gross - line.UnpaidLeave - line.AttendanceApplied, "net matches gross minus applied deductions and leave");
 await payroll.AdjustAsync(deductions[0].Id, 0, "waive test", "test");
 await payroll.DecideAsync(p.Id, "Review", "test");
@@ -178,7 +180,7 @@ await payroll.DecideAsync(p.Id, "Lock", "test");
 await payroll.PublishAsync(p.Id, "test");
 var current = await db.PayrollLines.SingleAsync(x => x.PayrollPeriodId == p.Id && x.Revision == 2);
 Check(current.AttendanceApplied == 0 && current.AttendanceCalculated > 0, "attendance can be waived while retaining calculated amounts");
-Check(current.Net == current.Gross - current.UnpaidLeave, "waiving attendance does not waive unpaid leave");
+Check(current.Net == current.Gross - current.UnpaidLeave, "approved leave stays free of deductions when attendance deductions are waived");
 var lockedNet = current.Net;
 await attendance.ImportAsync(device.Id, suffix, new(2026, 10, 9, 8, 0, 0), "test", "late arrival after lock");
 Check((await db.PayrollLines.AsNoTracking().SingleAsync(x => x.Id == current.Id)).Net == lockedNet, "late punches never mutate locked payroll");
@@ -200,6 +202,7 @@ var half = new LeaveRequest
     Reason = "Half day test"
 };
 await leaves.SubmitAsync(half, "test");
+await leaves.ForwardAsync(half.Id, "test HR");
 await leaves.DecideAsync(half.Id, "Approved", "test", "test", null, true);
 var p2 = new PayrollPeriod
 {
@@ -214,13 +217,13 @@ await payroll.CalculateAsync(p2.Id, true, "test");
 var second = await db.PayrollLines.SingleAsync(x => x.PayrollPeriodId == p2.Id);
 var partial = await db.PayrollDeductions.SingleAsync(x => x.PayrollLineId == second.Id && x.Date == half.From);
 Check(second.Basic == 3300, "payroll uses the salary effective at period end");
-Check(second.UnpaidLeave == 412.5m && partial.Calculated == 412.5m, "half-day unpaid leave and half-day absence together deduct one daily rate");
+Check(second.UnpaidLeave == 0 && partial.Calculated == 55m, "only the uncovered half-day is deducted");
 Check(!await db.PayrollDeductions.AnyAsync(x => x.PayrollLineId == second.Id && x.Date == new DateTime(2026, 10, 12)), "public holidays do not create absence deductions");
 Check((await db.AttendanceDays.SingleAsync(x => x.EmployeeId == e.Id && x.Date == half.From)).Status == "On leave (partial)", "partial leave is visible in attendance");
 await payroll.OverrideLineAsync(second.Id, 25, "Integration net override", "test");
 Check((await db.PayrollLines.SingleAsync(x => x.Id == second.Id)).Net == 25, "reasoned net override is applied before review");
 await payroll.OverrideLineAsync(second.Id, null, "Restore calculated formula", "test");
-Check((await db.PayrollLines.SingleAsync(x => x.Id == second.Id)).Net == 0, "clearing override restores the calculated net");
+Check((await db.PayrollLines.SingleAsync(x => x.Id == second.Id)).Net == Math.Max(0, second.Gross - second.AttendanceApplied - second.UnpaidLeave), "clearing override restores the calculated net");
 await Reject(() => payroll.OverrideLineAsync(current.Id, 25, "Locked override attempt", "test"), "locked payroll rejects net overrides");
 db.ChangeTracker.Clear();
 await Reject(() => leaves.SubmitAsync(new() { EmployeeId = e.Id, LeaveTypeId = paid.Id, From = new(2026, 10, 14), To = new(2026, 10, 14), StartTime = TimeSpan.FromHours(18), EndTime = TimeSpan.FromHours(20), Reason = "outside shift" }, "test"), "leave outside shift hours is rejected");
@@ -287,5 +290,7 @@ await using (var own = new HrDbContext(options, http))
     Check(await own.PayrollLines.AllAsync(x => x.EmployeeId == e.Id), "employee payroll is limited to own records");
 }
 
+await AttendancePushChecks.RunAsync(options, suffix, e.Id, Check);
+await OperationsChecks.RunAsync(options, b.Id, b2.Id, Check);
 await PasswordRecoveryChecks.RunAsync(cs,Check);
 Console.WriteLine($"{passed} checks passed, including MySQL integration.");

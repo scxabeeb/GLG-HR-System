@@ -1,0 +1,6 @@
+@model string
+<nav class="actions asset-navigation" aria-label="Asset pages">
+    <a class="button @(Model == "register" ? "" : "secondary")" aria-current="@(Model == "register" ? "page" : null)" asp-page="./Index">Asset register</a>
+    <a class="button @(Model == "create" ? "" : "secondary")" aria-current="@(Model == "create" ? "page" : null)" asp-page="./Edit">Register an asset</a>
+    <a class="button @(Model == "report" ? "" : "secondary")" aria-current="@(Model == "report" ? "page" : null)" asp-page="./Index" asp-route-report="true">Asset reports</a>
+</nav>

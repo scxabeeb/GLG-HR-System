@@ -1,0 +1,99 @@
+@page
+@using HrSystemDhg.Web.Models
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Assets.EditModel
+@{
+    ViewData["Title"] = Model.AssetId == null ? "Register an asset" : "Manage asset";
+}
+<div class="eyebrow">ASSET MANAGEMENT</div>
+<h1>@ViewData["Title"]</h1>
+<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("assets")' />
+
+<partial name="_Navigation" model='(Model.AssetId == null ? "create" : "register")' />
+@if (TempData["AssetMessage"] is string message)
+{
+    <p role="status">@message</p>
+}
+<form method="post" enctype="multipart/form-data" asp-route-id="@Model.AssetId">
+    <div asp-validation-summary="All" role="alert"></div>
+    <input type="hidden" asp-for="Input.Version" />
+    <section class="card">
+        <h2>Asset details</h2>
+        <div class="grid">
+            <label>Asset tag<input asp-for="Input.Tag" required /></label>
+            <label>Name<input asp-for="Input.Name" required /></label>
+            <label>Category<input asp-for="Input.Category" required /></label>
+            <label>Brand<input asp-for="Input.Brand" /></label>
+            <label>Model<input asp-for="Input.Model" /></label>
+            <label>Serial number<input asp-for="Input.SerialNumber" /></label>
+            <label>Condition<input asp-for="Input.Condition" placeholder="e.g. Good" /></label>
+            <label>Status
+                <select asp-for="Input.Status">
+                    @foreach (var status in Enum.GetValues<AssetStatus>())
+                    {
+                        <option value="@status">@IndexModel.Label(status)</option>
+                    }
+                </select>
+            </label>
+        </div>
+        <label>Notes<textarea asp-for="Input.Notes" rows="3"></textarea></label>
+    </section>
+    <section class="card">
+        <h2>Office and employee assignment</h2>
+        <p>Choose the asset’s branch. Add an office or department, an employee, or both. Leave the employee blank for an office asset.</p>
+        <div class="grid">
+            <label>Branch<select asp-for="Input.BranchId" asp-items="Model.Branches" required><option value="">Select a branch</option></select></label>
+            <label>Office department (optional)<select asp-for="Input.DepartmentId" asp-items="Model.Departments"><option value="">No department</option></select></label>
+            <label>Office location (optional)<input asp-for="Input.OfficeLocation" placeholder="Building, room or store" /></label>
+            <label>Assigned employee (optional)<select asp-for="Input.EmployeeId" asp-items="Model.Employees"><option value="">No employee assigned</option></select></label>
+        </div>
+    </section>
+    <section class="card">
+        <h2>Purchase, warranty and valuation</h2>
+        <div class="grid">
+            <label>Supplier<input asp-for="Input.Supplier" /></label>
+            <label>Invoice or purchase reference<input asp-for="Input.PurchaseReference" /></label>
+            <label>Purchase date<input asp-for="Input.PurchasedOn" /></label>
+            <label>Warranty expiry<input asp-for="Input.WarrantyUntil" /></label>
+            <label>Currency<input asp-for="Input.Currency" required /></label>
+            <label>Purchase cost<input asp-for="Input.PurchaseCost" type="number" min="0" step="0.01" /></label>
+            <label>Current book value<input asp-for="Input.BookValue" type="number" min="0" step="0.01" /></label>
+        </div>
+    </section>
+    <section class="card">
+        <h2>Asset photo</h2>
+        @if (Model.HasPhoto)
+        {
+            <img class="asset-photo" src="@Url.Page("./Edit", "Photo", new { id = Model.AssetId })" alt="Current asset photo" />
+            <label class="inline"><input asp-for="RemovePhoto" /> Remove current photo</label>
+        }
+        <label>@(Model.HasPhoto ? "Replace photo" : "Upload photo")<input asp-for="PhotoUpload" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+        <small>JPEG, PNG or WebP, up to 5 MB.</small>
+    </section>
+    <section class="card">
+        <label>Change note<textarea asp-for="ChangeNote" rows="2" placeholder="e.g. Returned to IT, or reported lost"></textarea></label>
+        <button type="submit">@(Model.AssetId == null ? "Register asset" : "Save changes")</button>
+        <a class="button secondary" asp-page="./Index">Back to register</a>
+    </section>
+</form>
+@if (Model.History.Count > 0)
+{
+    <section class="card table-scroll">
+        <h2>Asset history</h2>
+        <table>
+            <thead><tr><th>Date and time (EAT)</th><th>Changed by</th><th>Action</th><th>Status</th><th>Branch</th><th>Office location</th><th>Employee</th><th>Book value</th><th>Note</th></tr></thead>
+            <tbody>
+            @foreach (var row in Model.History)
+            {
+                var entry = row.Entry;
+                <tr>
+                    <td>@OperationsPolicy.Local(entry.RecordedUtc).ToString("dd MMM yyyy HH:mm")</td><td>@entry.Actor</td>
+                    <td>@entry.Action</td><td>@IndexModel.Label(entry.Status)</td><td>@row.Branch</td>
+                    <td>@entry.OfficeLocation</td><td>@(entry.EmployeeId == null ? "—" : row.Employee ?? "Employee assigned")</td>
+                    <td>@(entry.BookValue == null ? "" : $"{entry.Currency} {entry.BookValue:F2}")</td><td>@entry.Note</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </section>
+}

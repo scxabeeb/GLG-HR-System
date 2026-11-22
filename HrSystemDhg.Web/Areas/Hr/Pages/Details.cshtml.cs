@@ -1,3 +1,4 @@
+using HrSystemDhg.Web.Services;
 using HrSystemDhg.Web.Data;
 using HrSystemDhg.Web.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -108,5 +109,60 @@ public class DetailsModel(HrDbContext db) : PageModel
 
         db.EmployeeAssignments.Add(new() { EmployeeId = employeeId, BranchId = d.BranchId, DepartmentId = departmentId, SubDepartmentId = subDepartmentId, JobTitle = title, EffectiveFrom = effective });
         return await Save(employeeId, "changed assignment");
+    }
+
+    private const string EducationColumns = "Institution,Qualification,Field";
+    private const string ExperienceColumns = "Employer,Title,From,To";
+    private const string TransferColumns = "DepartmentId,SubDepartmentId,Title,Effective";
+
+    public async Task<IActionResult> OnGetSampleAsync(int employeeId, string dataset)
+    {
+        if (!await db.Employees.AnyAsync(x => x.Id == employeeId)) return NotFound();
+        return dataset switch
+        {
+            "education" => RegistrationCsv.Download("education-sample", EducationColumns, [["Example college", "Diploma", "Administration"]]),
+            "experience" => RegistrationCsv.Download("experience-sample", ExperienceColumns, [["Example employer", "Officer", BusinessClock.Today.AddYears(-2), BusinessClock.Today.AddYears(-1)]]),
+            "assignments" => RegistrationCsv.Download("assignments-sample", TransferColumns, [[1, null, "Officer", BusinessClock.Today]]),
+            _ => NotFound()
+        };
+    }
+
+    public async Task<IActionResult> OnGetExportAsync(int employeeId, string dataset)
+    {
+        if (!await db.Employees.AnyAsync(x => x.Id == employeeId)) return NotFound();
+        Response.Headers.CacheControl = "no-store";
+        switch (dataset)
+        {
+            case "education":
+                var education = await db.Educations.AsNoTracking().Where(x => x.EmployeeId == employeeId).OrderBy(x => x.Id).ToListAsync();
+                return RegistrationCsv.Download("education", EducationColumns,
+                    education.Select(x => new object?[] { x.Institution, x.Qualification, x.FieldOfStudy }));
+            case "experience":
+                var experience = await db.WorkExperiences.AsNoTracking().Where(x => x.EmployeeId == employeeId).OrderBy(x => x.From).ToListAsync();
+                return RegistrationCsv.Download("experience", ExperienceColumns,
+                    experience.Select(x => new object?[] { x.Employer, x.JobTitle, x.From, x.To }));
+            case "assignments":
+                var assignments = await db.EmployeeAssignments.AsNoTracking().Where(x => x.EmployeeId == employeeId).OrderBy(x => x.EffectiveFrom).ToListAsync();
+                return RegistrationCsv.Download("assignments", TransferColumns,
+                    assignments.Select(x => new object?[] { x.DepartmentId, x.SubDepartmentId, x.JobTitle, x.EffectiveFrom }));
+            default:
+                return NotFound();
+        }
+    }
+
+    public async Task<IActionResult> OnPostImportAsync(int employeeId, string dataset, IFormFile? upload)
+    {
+        if (!await db.Employees.AnyAsync(x => x.Id == employeeId)) return NotFound();
+        IActionResult Back() => RedirectToPage(new { employeeId });
+        return dataset switch
+        {
+            "education" => await RegistrationCsv.ImportAsync(this, db, upload, EducationColumns, row =>
+                OnPostEducationAsync(employeeId, row.Get<string>("Institution"), row.Get<string>("Qualification"), row.Optional("Field")), Back),
+            "experience" => await RegistrationCsv.ImportAsync(this, db, upload, ExperienceColumns, row =>
+                OnPostExperienceAsync(employeeId, row.Get<string>("Employer"), row.Get<string>("Title"), row.Get<DateTime>("From"), row.Get<DateTime?>("To")), Back),
+            "assignments" => await RegistrationCsv.ImportAsync(this, db, upload, TransferColumns, row =>
+                OnPostTransferAsync(employeeId, row.Get<int>("DepartmentId"), row.Get<int?>("SubDepartmentId"), row.Get<string>("Title"), row.Get<DateTime>("Effective")), Back),
+            _ => NotFound()
+        };
     }
 }

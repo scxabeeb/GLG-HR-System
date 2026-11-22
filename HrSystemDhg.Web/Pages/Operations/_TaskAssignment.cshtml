@@ -1,0 +1,45 @@
+@model (HrSystemDhg.Web.Pages.Operations.TasksModel Page, WorkTask Task, bool ShowDescription)
+@{
+    var (pageModel, task, showDescription) = Model;
+    var label = task.Responsibility ?? task.Title;
+    var assignee = pageModel.PersonName(task.AssigneeId);
+    var summaryTitle = task.TeamId.HasValue ? assignee : label;
+    var overdue = task.DueDate?.Date < HrSystemDhg.Web.Services.BusinessClock.Today && task.Status < TaskProgress.Done;
+}
+<details class="workspace-list-item task-list-entry" id="task-@task.Id">
+    <summary class="task-list-summary">
+        <span class="task-list-main">
+            <strong class="task-list-title">@summaryTitle</strong>
+            @if (task.TeamId == null) { <span class="task-visible-description"><strong>Assigned to</strong> @assignee</span> }
+            @if (showDescription && !string.IsNullOrWhiteSpace(task.Description)) {
+                <span class="task-visible-description">@task.Description</span>
+            }
+        </span>
+        <span class="badge @(task.Status == TaskProgress.Done ? "status-positive" : "")">@(task.Status == TaskProgress.InProgress ? "In progress" : task.Status.ToString())</span>
+        <small>@task.Priority priority</small>
+        <small class="task-visible-date @(overdue ? "ops-overdue" : "")">@(task.DueDate.HasValue ? task.DueDate.Value.ToString("dd MMM yyyy") : "No due date")@(overdue ? " · Overdue" : "")</small>
+        <span class="task-list-toggle">Details</span>
+    </summary>
+    <div class="task-list-details">
+        @if (task.AssigneeId == pageModel.Actor) { <p>Assigned to you</p> }
+        @if (task.AssigneeId != pageModel.Actor) { <p>Assigned to @assignee</p> }
+        @if (task.OwnerId != pageModel.Actor && pageModel.People.TryGetValue(task.OwnerId, out var creator)) { <p>Created by @creator</p> }
+        @if (task.UpdatedUtc is DateTime updated) { <p>Last updated @HrSystemDhg.Web.Services.OperationsPolicy.Local(updated).ToString("dd MMM yyyy, HH:mm") EAT</p> }
+        <div class="task-row-actions">
+        <a class="button secondary" asp-page="./TaskReport" asp-route-taskId="@task.Id">Activity history</a>
+        @if (task.SourceMeetingId is int source && pageModel.VisibleSourceMeetings.Contains(source)) {
+            <a asp-page="./MeetingDetails" asp-route-id="@source">Source meeting</a>
+        }
+        @if (task.OwnerId == pageModel.Actor) { <a class="button secondary" asp-page="./Tasks" asp-route-edit="@task.Id"> @(task.TeamId == null ? "Edit details" : "Edit assignment")</a> }
+        @if (task.OwnerId == pageModel.Actor || (task.AssigneeId == pageModel.Actor && task.Status != TaskProgress.Cancelled)) {
+            <form method="post" asp-page-handler="Progress" asp-route-id="@task.Id" asp-route-view="@pageModel.View" asp-route-filter="@pageModel.Filter" asp-route-kind="@pageModel.Kind" asp-route-search="@pageModel.Search" asp-route-priorityFilter="@pageModel.PriorityFilter" class="actions">
+                <label>Status for @label<select name="status">
+                    @foreach (var status in Enum.GetValues<TaskProgress>().Where(s => s != TaskProgress.Cancelled || task.OwnerId == pageModel.Actor)) {
+                        <option value="@status" selected="@(status == task.Status)">@(status == TaskProgress.InProgress ? "In progress" : status.ToString())</option>
+                    }
+                </select></label><button class="secondary">Update</button>
+            </form>
+        }
+    </div>
+    </div>
+</details>

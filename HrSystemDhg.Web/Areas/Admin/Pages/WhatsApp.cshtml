@@ -1,0 +1,62 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.WhatsAppModel
+@{ ViewData["Title"] = "WhatsApp and staff messages"; }
+<div class="eyebrow">ADMINISTRATION / NOTIFICATIONS</div>
+<h1>WhatsApp &amp; staff messages</h1>
+@if (TempData["WhatsAppMessage"] is string result) { <p class="notice" role="status">@result</p> }
+<form method="post" asp-page-handler="Send" class="card">
+    <h2>Send a staff message</h2>
+    <div asp-validation-summary="All" role="alert"></div>
+    <label>Employee<select name="recipientId" required>
+        <option value="">Select employee</option>
+        @foreach (var employee in Model.Recipients)
+        {
+            <option value="@employee.Id" selected="@(Request.HasFormContentType && Request.Form["recipientId"] == employee.Id)">@employee.Name · @employee.Number</option>
+        }
+    </select></label>
+    <label>Message<input name="message" maxlength="160" required value="@(Request.HasFormContentType ? Request.Form["message"].ToString() : "")" /></label>
+    @if (Model.CanSendWhatsApp)
+    {
+        <label class="inline"><input type="checkbox" name="whatsapp" value="true" /> Also send through WhatsApp</label>
+        <p>Use WhatsApp for general updates to employees who have opted in.</p>
+    }
+    else
+    {
+        <p>Staff messages go to the employee inbox. To enable WhatsApp here, set <code>WhatsApp:StaffTemplate</code> to an approved template with one positional body variable and no other variables.</p>
+    }
+    <button type="submit">Send message</button>
+</form>
+<div class="card">
+    <h2>Business sender</h2>
+    <p><strong>@(Model.Configured ? "Configured" : Model.Enabled ? "Configuration incomplete" : "Disabled")</strong>
+    @if (Model.Sender != null) { <span> · @Model.Sender</span> }</p>
+    <p>Connect the system’s Meta WhatsApp Business number and two approved templates in private server configuration. Access tokens are never shown here.</p>
+    <p>Staff opt in from their own Notifications page. The system sends generic alerts to their registered mobile number; private details stay in HR.</p>
+</div>
+<div class="card">
+    <h2>Delivery queue</h2>
+    <div class="table-scroll"><table><thead><tr><th>Status</th><th>Count</th></tr></thead><tbody>
+        @foreach (var state in Enum.GetValues<WhatsAppDelivery>().Where(s => s != WhatsAppDelivery.InAppOnly)) {
+            <tr><td>@state</td><td>@Model.Counts.GetValueOrDefault(state)</td></tr>
+        }
+    </tbody></table></div>
+    <p>Accepted means Meta accepted the request. It does not confirm delivery to the phone. An unknown outcome is not automatically retried.</p>
+</div>
+<section class="card table-scroll">
+    <h2>Recent staff messages</h2>
+    @if (Model.Recent.Count == 0) { <p>No staff messages sent yet.</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Employee account</th><th>Message</th><th>Sent (EAT)</th><th>WhatsApp status</th></tr></thead>
+            <tbody>
+            @foreach (var message in Model.Recent)
+            {
+                <tr><td>@message.Recipient</td><td>@message.Text</td>
+                    <td>@HrSystemDhg.Web.Services.OperationsPolicy.Local(message.CreatedUtc).ToString("dd MMM yyyy HH:mm")</td>
+                    <td>@(message.Status == WhatsAppDelivery.InAppOnly ? "Inbox only" : message.Status.ToString())</td></tr>
+            }
+            </tbody>
+        </table>
+    }
+</section>

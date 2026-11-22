@@ -5,6 +5,17 @@ using System.Xml.Linq;
 namespace HrSystemDhg.Web.Services;
 public static class ExportService
 {
+    public static Microsoft.AspNetCore.Mvc.FileContentResult Report(IEnumerable<string[]> rows, string name, string format)
+    {
+        var (bytes, contentType, extension) = format switch
+        {
+            "pdf" => (ReportPdf.Create(name.Replace('-', ' ') + " report", rows), "application/pdf", "pdf"),
+            "excel" => (Excel(rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
+            _ => (Csv(rows), "text/csv", "csv")
+        };
+        return new Microsoft.AspNetCore.Mvc.FileContentResult(bytes, contentType) { FileDownloadName = name + "." + extension };
+    }
+
     public static string Safe(string? value)
     {
         var s = value ?? "";

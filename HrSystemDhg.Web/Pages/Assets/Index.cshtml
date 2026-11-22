@@ -1,0 +1,109 @@
+@page
+@model HrSystemDhg.Web.Pages.Assets.IndexModel
+@{
+    ViewData["Title"] = Model.Report ? "Asset reports" : "Asset register";
+}
+<div class="eyebrow">ASSET MANAGEMENT</div>
+@if (Model.Report)
+{
+    <a class="hub-back" asp-page="/Reports/Hub">← Main reports</a>
+}
+<h1>@ViewData["Title"]</h1>
+<partial name="_Navigation" model='(Model.Report ? "report" : "register")' />
+<form method="get" class="card">
+    <h2>Filters</h2>
+    <div asp-validation-summary="All" role="alert"></div>
+    @if (Model.Report)
+    {
+        <input type="hidden" name="report" value="true" />
+    }
+    <div class="grid">
+        <label>Search<input asp-for="Search" type="search" placeholder="Asset tag, name or serial number" /></label>
+        <label>Branch<select asp-for="BranchId" asp-items="Model.Branches"><option value="">All branches</option></select></label>
+        <label>Department<select asp-for="DepartmentId" asp-items="Model.Departments"><option value="">All departments</option></select></label>
+        <label>Assignment
+            <select asp-for="Custody">
+                <option value="">All assignments</option>
+                <option value="Office">Office only</option>
+                <option value="Employee">Any employee assignment</option>
+                <option value="Both">Office and employee</option>
+            </select>
+        </label>
+        <label>Assigned employee<select asp-for="EmployeeId" asp-items="Model.Employees"><option value="">All employees</option></select></label>
+        <label>Category<select asp-for="Category" asp-items="Model.Categories"><option value="">All categories</option></select></label>
+        <label>Status
+            <select asp-for="Status">
+                <option value="">All statuses</option>
+                @foreach (var status in Enum.GetValues<AssetStatus>())
+                {
+                    <option value="@status">@IndexModel.Label(status)</option>
+                }
+            </select>
+        </label>
+    </div>
+    <div class="actions">
+        <button>Apply filters</button>
+        <a class="button secondary" asp-page="./Index" asp-route-report="@(Model.Report ? "true" : null)">Clear filters</a>
+        @if (Model.Report)
+        {
+            <button class="secondary" name="format" value="csv">Download CSV</button>
+            <button class="secondary" name="format" value="excel">Download Excel</button>
+            <button class="secondary" name="format" value="pdf">Download PDF</button>
+        }
+    </div>
+</form>
+@if (Model.Report && Model.Rows.Count > 0)
+{
+    <section class="card table-scroll">
+        <h2>Value by currency</h2>
+        <table>
+            <thead><tr><th>Currency</th><th>Assets</th><th>Purchase cost</th><th>Current book value</th></tr></thead>
+            <tbody>
+            @foreach (var group in Model.Rows.GroupBy(r => r.Asset.Currency).OrderBy(g => g.Key))
+            {
+                var purchaseCosts = group.Where(r => r.Asset.PurchaseCost.HasValue).ToList();
+                var bookValues = group.Where(r => r.Asset.BookValue.HasValue).ToList();
+                <tr>
+                    <td>@group.Key</td><td>@group.Count()</td>
+                    <td>@(purchaseCosts.Count == 0 ? "—" : $"{purchaseCosts.Sum(r => r.Asset.PurchaseCost):F2} ({purchaseCosts.Count} recorded)")</td>
+                    <td>@(bookValues.Count == 0 ? "—" : $"{bookValues.Sum(r => r.Asset.BookValue):F2} ({bookValues.Count} recorded)")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </section>
+}
+<section class="card table-scroll">
+    <h2>Inventory <small>(@Model.Rows.Count)</small></h2>
+    @if (Model.Rows.Count == 0)
+    {
+        <p>No assets match these filters.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr><th scope="col">Asset</th><th scope="col">Category</th><th scope="col">Serial number</th>
+                    <th scope="col">Branch / office</th><th scope="col">Assignment</th><th scope="col">Employee</th><th scope="col">Status</th>
+                    <th scope="col">Condition</th><th scope="col">Book value</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var row in Model.Rows)
+            {
+                var asset = row.Asset;
+                <tr>
+                    <td>
+                        <a asp-page="./Edit" asp-route-id="@asset.Id">@asset.Tag · @asset.Name</a>
+                        @if (row.HasPhoto) { <span class="badge">Photo</span> }
+                    </td>
+                    <td>@asset.Category</td><td>@asset.SerialNumber</td>
+                    <td>@string.Join(" / ", new[] { row.Branch, row.Department, asset.OfficeLocation }.Where(x => !string.IsNullOrEmpty(x)))</td>
+                    <td>@IndexModel.Assignment(asset)</td><td>@(asset.EmployeeId == null ? "—" : row.Employee ?? "Employee assigned")</td>
+                    <td><span class="badge">@IndexModel.Label(asset.Status)</span></td><td>@asset.Condition</td>
+                    <td>@(asset.BookValue == null ? "—" : $"{asset.Currency} {asset.BookValue:F2}")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</section>

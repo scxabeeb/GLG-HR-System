@@ -1,0 +1,117 @@
+@page
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.TaskReportModel
+@{ ViewData["Title"] = "Task progress report"; }
+<div class="eyebrow">OPERATIONS / REPORTING</div>
+<a class="hub-back" asp-page="/Reports/Hub">← Main reports</a>
+<h1>Task progress report</h1>
+<p>Track assignment status and see who made changes. Times are shown in Mogadishu time.</p>
+<p><a asp-page="./Tasks">Back to Task Manager</a></p>
+@if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+@if (Model.TeamTitle != null) {
+    <h2>Team task: @Model.TeamTitle</h2>
+    @if (Model.TeamBrief != null) { <p class="ops-description">@Model.TeamBrief</p> }
+    @if (Model.TeamMembers.Count > 0) { <p><strong>Assigned team:</strong> @string.Join(", ", Model.TeamMembers)</p> }
+    else { <p>Only your own assignments are shown here.</p> }
+    <partial name="_TeamTaskProgress" model="((Model.Totals.GetValueOrDefault(TaskProgress.Done), Model.Totals.Values.Sum() - Model.Totals.GetValueOrDefault(TaskProgress.Cancelled)), Model.IsAdmin || Model.CanAddSubtask)" />
+    <p><a asp-page="./TaskReport">View the full report</a></p>
+} else if (Model.TaskTitle != null) {
+    <h2>@Model.TaskTitle</h2>
+    <p><a asp-page="./TaskReport">View the full report</a></p>
+} else {
+    <form method="get" class="card actions">
+        <label>Assignments<select asp-for="Scope">
+            <option value="related">Assigned to me or created by me</option><option value="mine">Assigned to me</option><option value="created">Created by me</option>
+            @if (Model.IsAdmin) { <option value="all">All assignments</option> }
+        </select></label>
+        <label>Status<select asp-for="Status" asp-items="Html.GetEnumSelectList<TaskProgress>()"><option value="">All statuses</option></select></label>
+        <button>Apply filters</button>
+        <a asp-page-handler="Csv" asp-route-scope="@Model.Scope" asp-route-status="@Model.Status">Export task progress CSV</a>
+        <a asp-page-handler="Csv" asp-route-format="excel" asp-route-scope="@Model.Scope" asp-route-status="@Model.Status">Export task progress Excel</a>
+        <a asp-page-handler="Csv" asp-route-format="pdf" asp-route-scope="@Model.Scope" asp-route-status="@Model.Status">Export task progress PDF</a>
+    </form>
+}
+@if (Model.CanAddSubtask) {
+    <form method="post" asp-page-handler="AddSubtask" asp-route-teamId="@Model.TeamId" class="card" id="subtask-form">
+        <h2>Add subtasks to @Model.TeamTitle</h2>
+        <p>Choose one or more employees from this team for each subtask. Each assignee updates their own progress.</p>
+        <div asp-validation-summary="All"></div>
+        <div id="subtask-drafts">
+        @for (var i = 0; i < Model.Drafts.Count; i++) {
+            <fieldset class="subtask-draft">
+                <legend data-subtask-number>Subtask @(i + 1)</legend>
+                <div class="grid">
+                    <label>Responsibility<textarea asp-for="Drafts[i].Responsibility" rows="2" maxlength="1000" required></textarea></label>
+                    <label>Due date<input asp-for="Drafts[i].DueDate" type="date" /></label>
+                    <label>Priority<select asp-for="Drafts[i].Priority" asp-items="Html.GetEnumSelectList<TaskPriority>()"></select></label>
+                </div>
+                <fieldset>
+                    <legend>Assign employees</legend>
+                    <div class="checkbox-list ops-participants">
+                    @foreach (var person in Model.EligibleAssignees) {
+                        <label><input type="checkbox" name="Drafts[@i].Assignees" value="@person.Key" checked="@Model.Drafts[i].Assignees.Contains(person.Key)" /> @person.Value</label>
+                    }
+                    </div>
+                    <span asp-validation-for="Drafts[i].Assignees"></span>
+                </fieldset>
+                <label>Details<textarea asp-for="Drafts[i].Details" maxlength="2500" rows="2"></textarea></label>
+                <button type="button" class="secondary" data-remove-subtask hidden>Remove draft</button>
+            </fieldset>
+        }
+        </div>
+        <div class="actions">
+            <button type="button" class="secondary" id="add-subtask-draft" hidden>+ Add another subtask</button>
+            <button>Save subtasks</button>
+        </div>
+        <p id="subtask-draft-status" role="status"></p>
+    </form>
+}
+
+<div class="grid">
+    @foreach (var status in Enum.GetValues<TaskProgress>()) {
+        <article class="card"><h2>@TaskReportModel.Label(status)</h2><strong>@Model.Totals.GetValueOrDefault(status)</strong></article>
+    }
+</div>
+<div class="card table-scroll">
+    <h2>@(Model.TeamId.HasValue ? "Subtasks and responsibilities" : "Current progress")</h2>
+    @if (Model.Tasks.Count == 0) { <p>No matching assignments.</p> }
+    else {
+        <table><thead><tr><th scope="col">@(Model.TeamId.HasValue ? "Subtask" : "Task")</th><th scope="col">Assignee</th>@if (!Model.TeamId.HasValue) { <th scope="col">Responsibility</th> }<th scope="col">Due date</th><th scope="col">Status</th><th scope="col">Last updated (EAT)</th></tr></thead>
+        <tbody>
+        @foreach (var group in Model.Tasks.GroupBy(t => Model.TeamId.HasValue ? t.SubtaskId ?? -t.Id : -t.Id)) {
+            var first = group.First();
+            foreach (var task in group) {
+                <tr>
+                @if (task.Id == first.Id) {
+                    <td rowspan="@group.Count()" class="ops-description">@(Model.TeamId.HasValue ? task.Responsibility ?? task.Title : task.Title)</td>
+                }
+                <td><a asp-page="./TaskReport" asp-route-taskId="@task.Id">@Model.People.GetValueOrDefault(task.AssigneeId, "Account unavailable")</a></td>
+                @if (!Model.TeamId.HasValue) { <td class="ops-description">@(task.Responsibility ?? "—")</td> }
+                <td>@(task.DueDate?.ToString("dd MMM yyyy") ?? "—")</td><td>@TaskReportModel.Label(task.Status)</td>
+                <td>@(task.UpdatedUtc is DateTime utc ? OperationsPolicy.Local(utc).ToString("dd MMM yyyy, HH:mm") : "—")</td></tr>
+            }
+        }
+        </tbody></table>
+        <p>Showing up to 100 assignments. The totals above cover all statuses in the selected scope.</p>
+    }
+</div>
+<div class="card table-scroll">
+    <h2>Recent changes</h2>
+    <p>History records changes made after this feature was enabled.</p>
+    @if (Model.Activity.Count == 0) { <p>No recorded changes for this selection.</p> }
+    else {
+        <table><thead><tr><th scope="col">When (EAT)</th><th scope="col">Task</th><th scope="col">Changed by</th><th scope="col">Change</th></tr></thead>
+        <tbody>@foreach (var entry in Model.Activity) {
+            <tr><td>@OperationsPolicy.Local(entry.RecordedUtc).ToString("dd MMM yyyy, HH:mm")</td>
+            <td><a asp-page="./TaskReport" asp-route-taskId="@entry.TaskId">@(Model.TeamId.HasValue ? entry.Task.Responsibility ?? entry.Task.Title : entry.Task.Title)</a></td>
+            <td>@Model.People.GetValueOrDefault(entry.ActorId, "Account unavailable")</td>
+            <td>@entry.Action
+            @if (entry.PreviousStatus is { } from && entry.NewStatus is { } to) { <span> · @TaskReportModel.Label(from) → @TaskReportModel.Label(to)</span> }
+            @if (entry.ChangedFields != null) { <span> · @entry.ChangedFields</span> }
+            </td></tr>
+        }</tbody></table>
+        <p>Showing up to 100 recent changes.</p>
+    }
+</div>
+
+@section Scripts { <script src="~/js/subtask-drafts.js" asp-append-version="true" defer></script> }

@@ -1,6 +1,138 @@
 @page
 @model HrSystemDhg.Web.Pages.Reports.IndexModel
-@{ViewData["Title"]="Reports & exports";}
-<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Reports & exports</h1>
-<div asp-validation-summary="All"></div>
-<p>@TempData["Message"]</p>@if(Model.PeriodId!=null){<form method="post" asp-page-handler="Publish"><input type="hidden" name="id" value="@Model.PeriodId"/><button>Publish locked payslips</button></form>}<p>Filter by organization and date. Export the selected report as CSV or Excel (.xlsx), or print to PDF.</p><form method="get" class="card"><div class="grid"><label>Report<select asp-for="Report"><option value="Employees">Employees</option><option value="Hires">New hires / leavers</option><option value="Attendance">Attendance</option><option value="Leave">Leave register</option><option value="Balances">Leave balances</option><option value="Payroll">Payroll register</option><option value="Deductions">Deductions applied / waived</option><option value="Bank">Bank payment list</option></select></label><label>From<input asp-for="From" type="date"/></label><label>To<input asp-for="To" type="date"/></label><label>Branch<select asp-for="BranchId"><option value="">All authorized branches</option>@foreach(var b in Model.Branches){<option value="@b.Id">@b.Name</option>}</select></label><label>Department<select asp-for="DepartmentId"><option value="">All</option>@foreach(var d in Model.Departments){<option value="@d.Id">@d.Name</option>}</select></label><label>Sub-department<select asp-for="SubDepartmentId"><option value="">All</option>@foreach(var d in Model.SubDepartments){<option value="@d.Id">@d.Name</option>}</select></label><label>Payroll period<select asp-for="PeriodId"><option value="">Select period</option>@foreach(var p in Model.Periods){<option value="@p.Id">@p.From.ToString("MMM yyyy") · @p.Status</option>}</select></label></div><button>View report</button> <button name="format" value="csv">Download CSV</button> <button name="format" value="excel">Download Excel (.xlsx)</button> <button type="button" onclick="window.print()">Print / PDF</button></form><div class="card table-scroll"><h2>@Model.Report</h2><table>@for(var i=0;i<Model.Rows.Count;i++){<tr>@foreach(var cell in Model.Rows[i]){@if(i==0){<th>@cell</th>}else{<td>@cell</td>}}</tr>}</table></div>
+@{
+    ViewData["Title"] = "Reports & exports";
+    (string Key, string Label)[] reports = [
+        ("Employees", "Employees"), ("Attendance", "Attendance"), ("Salary", "Salary"),
+        ("Payroll", "Payroll"), ("Hires", "Hires and leavers"), ("Leave", "Leave register"),
+        ("Balances", "Leave balances"), ("Deductions", "Deductions"), ("Bank", "Bank payments")
+    ];
+    var title = reports.FirstOrDefault(r => r.Key == Model.Report).Label ?? "Report";
+}
+<div class="eyebrow">GAROWE HR WORKSPACE</div>
+<a class="hub-back" asp-page="./Hub">← Main reports</a>
+<h1>Reports &amp; exports</h1>
+<nav class="actions" aria-label="Reports">
+    @foreach (var report in reports)
+    {
+        if (report.Key == "Salary" && !Model.CanViewSalary) { continue; }
+        var active = Model.Report == report.Key;
+        <a class="button @(active ? "" : "secondary")" aria-current="@(active ? "page" : null)"
+           asp-page="./Index" asp-route-report="@report.Key">@report.Label</a>
+    }
+</nav>
+
+@if (TempData["Message"] is string message)
+{
+    <p role="status">@message</p>
+}
+
+<form method="get" class="card">
+    <h2>@title filters</h2>
+    <div asp-validation-summary="All"></div>
+    <input type="hidden" name="Report" value="@Model.Report" />
+    <div class="grid">
+        @if (Model.UsesDates)
+        {
+            <label>From<input asp-for="From" type="date" required /></label>
+            <label>To<input asp-for="To" type="date" required /></label>
+        }
+        @if (Model.IsPayrollReport)
+        {
+            <label>Payroll period
+                <select asp-for="PeriodId" required>
+                    <option value="">Select a period</option>
+                    @foreach (var period in Model.Periods)
+                    {
+                        <option value="@period.Id">@period.From.ToString("dd MMM yyyy") – @period.To.ToString("dd MMM yyyy") · @period.Status</option>
+                    }
+                </select>
+            </label>
+        }
+        <label>Employee
+            <select asp-for="EmployeeId">
+                <option value="">All employees</option>
+                @foreach (var employee in Model.Employees)
+                {
+                    <option value="@employee.Id">@employee.FullName · @employee.EmployeeNumber</option>
+                }
+            </select>
+        </label>
+        <label>Branch
+            <select asp-for="BranchId">
+                <option value="">All branches</option>
+                @foreach (var branch in Model.Branches) { <option value="@branch.Id">@branch.Name</option> }
+            </select>
+        </label>
+        <label>Department
+            <select asp-for="DepartmentId">
+                <option value="">All departments</option>
+                @foreach (var department in Model.Departments) { <option value="@department.Id">@department.Name</option> }
+            </select>
+        </label>
+        <label>Sub-department
+            <select asp-for="SubDepartmentId">
+                <option value="">All sub-departments</option>
+                @foreach (var department in Model.SubDepartments) { <option value="@department.Id">@department.Name</option> }
+            </select>
+        </label>
+        @if (Model.Statuses.Count > 0 || Model.Status != null)
+        {
+            <label>Status
+                <select asp-for="Status">
+                    <option value="">All statuses</option>
+                    @foreach (var status in Model.Statuses.Append(Model.Status).OfType<string>().Distinct())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </label>
+        }
+    </div>
+    <div class="actions">
+        <button>Apply filters</button>
+        <a class="button secondary" asp-page="./Index" asp-route-report="@Model.Report">Clear filters</a>
+        @if (Model.Rows.Count > 1)
+        {
+            <button class="secondary" name="format" value="csv">Download CSV</button>
+            <button class="secondary" name="format" value="excel">Download Excel</button>
+            <button class="secondary" name="format" value="pdf">Download PDF</button>
+        }
+    </div>
+</form>
+
+@if (Model.IsPayrollReport && Model.CanPublish &&
+    Model.Periods.Any(p => p.Id == Model.PeriodId && p.Status is "Locked" or "Paid"))
+{
+    <form method="post" asp-page-handler="Publish" class="actions">
+        <input type="hidden" name="id" value="@Model.PeriodId" />
+        <button class="secondary">Publish locked payslips</button>
+    </form>
+}
+
+<section class="card table-scroll" aria-label="@title results">
+    <h2>@title</h2>
+    @if (Model.IsPayrollReport && Model.PeriodId == null)
+    {
+        <p>Select a payroll period and apply filters to view this report.</p>
+    }
+    else if (Model.Rows.Count <= 1)
+    {
+        <p>No records match these filters.</p>
+    }
+    else
+    {
+        <p>@(Model.Rows.Count - 1) records</p>
+        <table>
+            <thead>
+                <tr>@foreach (var cell in Model.Rows[0]) { <th scope="col">@cell</th> }</tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model.Rows.Skip(1))
+                {
+                    <tr>@foreach (var cell in row) { <td>@cell</td> }</tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>

@@ -1,0 +1,53 @@
+@page "/Reports/All"
+@using HrSystemDhg.Web.Services
+@using HrSystemDhg.Web.Data
+@inject ModuleAccess Access
+@inject HrDbContext Db
+@{
+    ViewData["Title"] = "Main reports";
+    var denied = await Access.BlockedAsync();
+    bool Show(string module) => ModuleAccess.Allows(denied, module);
+    var staff = Db.IsStaff;
+    var salaryAccess = Db.IsAdmin || User.IsInRole("HR");
+    var fleetAccess = Db.IsAdmin || User.IsInRole("Management");
+    var reports = new List<(string Title, string Detail, string Page, string? Report, string? Area)>();
+    if (staff && Show("reports"))
+    {
+        reports.AddRange([
+            ("Employees", "Employee register, hires and leavers", "/Reports/Index", "Employees", null),
+            ("Attendance", "Daily summaries, hours and lateness", "/Reports/Index", "Attendance", null),
+            ("Leave", "Leave register and balances", "/Reports/Index", "Leave", null),
+            ("Payroll", "Pay runs, deductions and payment exports", "/Reports/Index", "Payroll", null)
+        ]);
+        if (salaryAccess)
+            reports.Add(("Salary", "Salary versions and allowances", "/Reports/Index", "Salary", null));
+    }
+    if (Show("tasks"))
+        reports.Add(("Tasks", "Progress and completion by assignment", "/Operations/TaskReport", null, null));
+    if (Show("meetings"))
+        reports.Add(("Meetings", "Meeting activity and participation", "/Operations/MeetingReport", null, null));
+    if (staff && Show("assets"))
+        reports.Add(("Assets", "Inventory, custody, status and value", "/Assets/Index", "true", null));
+    if (fleetAccess && Show("fleet"))
+        reports.Add(("Fleet", "Trips, mileage, expenses and service", "/Operations/FleetReport", null, null));
+    if (Db.IsAdmin)
+        reports.Add(("Audit log", "Account, configuration and HR changes", "/Audit", null, "Admin"));
+}
+<h1>Main reports</h1>
+@if ((staff || User.IsInRole("General Secretary")) && Show("leave"))
+{
+    <p><a class="button secondary" asp-area="Hr" asp-page="/Leave" asp-route-viewMode="history">Leave register and balance reports</a></p>
+}
+<div class="hub-grid">
+    @foreach (var report in reports)
+    {
+        <a class="hub-card" asp-page="@report.Page" asp-area="@(report.Area ?? "")" asp-route-report="@report.Report">
+            <strong>@report.Title</strong>
+            <span>@report.Detail</span>
+        </a>
+    }
+</div>
+@if (reports.Count == 0)
+{
+    <p>No reports are available for your account.</p>
+}

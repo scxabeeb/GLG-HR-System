@@ -16,6 +16,8 @@ public static class StartupSeed
             "Admin",
             "Management",
             "HR",
+            "General Secretary",
+            "Chairman",
             "Employee"
         }
 

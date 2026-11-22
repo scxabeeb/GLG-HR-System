@@ -156,4 +156,45 @@ public class OrgEditModel(HrDbContext db) : PageModel
             return Page();
         }
     }
+
+    private const string CsvColumns = "Kind,Name,Code,City,Address,Timezone,ParentId,Active,RequiresSub";
+
+    public IActionResult OnGetSample()
+    {
+        return RegistrationCsv.Download("organization-units-sample", CsvColumns, [["Branch", "Example office", "EXAMPLE", "Garowe", "", "Africa/Mogadishu", null, true, false]]);
+    }
+
+    public async Task<IActionResult> OnGetExportAsync()
+    {
+        var records = await db.Branchs.AsNoTracking().OrderBy(x => x.Id).ToListAsync();
+        Response.Headers.CacheControl = "no-store";
+        var departments = await db.Departments.AsNoTracking().OrderBy(x => x.Id).ToListAsync();
+        var units = await db.SubDepartments.AsNoTracking().OrderBy(x => x.Id).ToListAsync();
+        return RegistrationCsv.Download("organization-units", CsvColumns,
+            records.Select(x => new object?[] { "Branch", x.Name, x.Code, x.City, x.Address, x.Timezone, null, x.IsActive, false })
+                .Concat(departments.Select(x => new object?[] { "Department", x.Name, x.Code, null, null, null, x.BranchId, x.IsActive, x.RequiresSubDepartment }))
+                .Concat(units.Select(x => new object?[] { "SubDepartment", x.Name, null, null, null, null, x.DepartmentId, x.IsActive, false })));
+    }
+
+    public Task<IActionResult> OnPostImportAsync(IFormFile? upload)
+    {
+        return RegistrationCsv.ImportAsync(this, db, upload, CsvColumns, async row =>
+        {
+            Id = 0;
+            Kind = row.Get<string>("Kind");
+            Name = row.Get<string>("Name");
+            Code = row.Get<string>("Code");
+            City = row.Get<string>("City");
+            Address = row.Get<string>("Address");
+            Timezone = row.Get<string>("Timezone");
+            Active = row.Get<bool>("Active");
+            RequiresSub = row.Get<bool>("RequiresSub");
+            ParentId = row.Get<int?>("ParentId") ?? 0;
+            if (Kind == "Department" && string.IsNullOrWhiteSpace(Code))
+                throw new FormatException("Enter a department code.");
+            if (Kind == "SubDepartment" && await db.SubDepartments.AnyAsync(x => x.DepartmentId == ParentId && x.Name == Name))
+                throw new FormatException("This sub-department already exists.");
+            return await OnPostAsync();
+        }, () => RedirectToPage("Organization"));
+    }
 }

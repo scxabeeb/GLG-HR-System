@@ -1,0 +1,43 @@
+@page
+@model HrSystemDhg.Web.Pages.Me.AgendaModel
+@{ ViewData["Title"] = "My agenda"; }
+<a class="hub-back" asp-page="./Profile">← My workspace</a>
+<h1>My agenda</h1>
+<p>Keep a private list of agenda items, reminders, and notes.</p>
+<form method="post" class="card">
+    <h2>@(Model.Input.Id == 0 ? "Add an item" : "Edit item")</h2>
+    <div asp-validation-summary="All" role="alert"></div>
+    <input type="hidden" asp-for="Input.Id" />
+    <div class="grid">
+        <label>Title<input asp-for="Input.Title" required maxlength="160" /></label>
+        <label>Date (optional)<input asp-for="Input.Date" /></label>
+    </div>
+    <label>Notes<textarea asp-for="Input.Notes" rows="3" maxlength="3000"></textarea></label>
+    <div class="actions">
+        <button>@(Model.Input.Id == 0 ? "Add to agenda" : "Save changes")</button>
+        @if (Model.Input.Id != 0) { <a class="button secondary" asp-page="./Agenda">Cancel</a> }
+    </div>
+</form>
+<section class="card">
+    <h2>Agenda items</h2>
+    @if (Model.Items.Count == 0) { <p>Your agenda is empty.</p> }
+    @foreach (var item in Model.Items)
+    {
+        <article class="ops-row">
+            <div>
+                <h3>@item.Title</h3>
+                <p>@item.Date?.ToString("dd MMM yyyy") <span class="badge">@(item.Completed ? "Completed" : "Open")</span></p>
+                @if (!string.IsNullOrEmpty(item.Notes)) { <p class="agenda-notes">@item.Notes</p> }
+            </div>
+            <div class="ops-actions">
+                <a asp-route-edit="@item.Id">Edit</a>
+                <form method="post" asp-page-handler="Status" asp-route-id="@item.Id" asp-route-completed="@(!item.Completed)">
+                    <button class="secondary">@(item.Completed ? "Reopen" : "Mark complete")</button>
+                </form>
+                <form method="post" asp-page-handler="Delete" asp-route-id="@item.Id">
+                    <button class="secondary">Remove</button>
+                </form>
+            </div>
+        </article>
+    }
+</section>

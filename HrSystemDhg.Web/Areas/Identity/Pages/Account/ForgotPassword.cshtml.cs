@@ -9,6 +9,7 @@ namespace HrSystemDhg.Web.Pages.Identity.Account;
 public class ForgotPasswordModel(PasswordRecoveryService recovery,IWebHostEnvironment env,IConfiguration config):PageModel
 {
  [BindProperty,Required,EmailAddress,StringLength(256)]public string Email{get;set;}="";
+ [BindProperty(SupportsGet=true)]public string? ReturnUrl{get;set;}
  public bool Submitted{get;private set;}
  public bool LocalDelivery=>env.IsDevelopment()&&string.IsNullOrWhiteSpace(config["Smtp:Host"]);
  public async Task<IActionResult> OnPostAsync(){if(!ModelState.IsValid)return Page();await recovery.RequestAsync(Email);Submitted=true;ModelState.Clear();return Page();}

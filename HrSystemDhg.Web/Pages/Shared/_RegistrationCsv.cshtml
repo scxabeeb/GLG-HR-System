@@ -1,0 +1,29 @@
+@model string
+@{
+    var dataset = ViewData["CsvDataset"] as string;
+    var employee = ViewData["CsvEmployeeId"];
+}
+<section class="card">
+    <h2>Import and export @Model</h2>
+    @if (TempData.Peek("RegistrationCsvDataset") as string == dataset && TempData["RegistrationCsvResult"] is string result)
+    {
+        <p role="status">@result</p>
+    }
+    <div class="actions">
+        <a class="button secondary" asp-page-handler="Sample" asp-route-dataset="@dataset" asp-route-employeeId="@employee">Download sample CSV</a>
+        <a class="button secondary" asp-page-handler="Export" asp-route-dataset="@dataset" asp-route-employeeId="@employee">Export data</a>
+    </div>
+    <form method="post" enctype="multipart/form-data" asp-page-handler="Import" asp-route-dataset="@dataset" asp-route-employeeId="@employee">
+        <label>CSV file <input type="file" name="upload" accept=".csv,text/csv" required /></label>
+        <p>Use the sample columns and replace the example values. Dates use YYYY-MM-DD. Upload up to 500 records per file.</p>
+        @if (Model is "employees" or "user accounts")
+        {
+            <p>Enter temporary passwords for new accounts. Exported password columns are blank.</p>
+        }
+        @if (Model is "tasks" or "meetings")
+        {
+            <p>Separate multiple account IDs with semicolons. Leave the list blank to use the form’s default.</p>
+        }
+        <button type="submit">Upload CSV</button>
+    </form>
+</section>

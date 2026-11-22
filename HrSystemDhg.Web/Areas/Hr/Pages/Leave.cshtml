@@ -1,6 +1,132 @@
 @page
+@using HrSystemDhg.Web.Services
 @model HrSystemDhg.Web.Pages.Hr.LeaveModel
-@{ViewData["Title"]="Leave approvals";}
-<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Leave approvals</h1>
-<div asp-validation-summary="All"></div>
-<p>Review working-day balances and supporting documents before deciding.</p><div class="card table-scroll"><table><tr><th>Employee</th><th>Type / dates</th><th>Reason</th><th>Status</th><th>Decision</th></tr>@foreach(var r in Model.Items){<tr><td>@Model.Names.GetValueOrDefault(r.EmployeeId)</td><td>@Model.Types.GetValueOrDefault(r.LeaveTypeId)<br/>@r.From.ToString("dd MMM yyyy") – @r.To.ToString("dd MMM yyyy")<br/>@r.StartTime – @r.EndTime @if(r.DocumentId!=null){<a href="/Files/Download?id=@r.DocumentId">Document</a>}</td><td>@r.Reason</td><td>@r.Status<br/>@r.DecisionReason</td><td>@if(r.Status is "Pending" or "Manager approved"){<form method="post"><input type="hidden" name="id" value="@r.Id"/><label>Decision reason<input name="reason"/></label><button name="decision" value="Approved">Approve</button> <button name="decision" value="Rejected">Reject</button></form>}</td></tr>}</table></div><a href="/Hr/Balances">Manage annual leave credits</a>
+@{ ViewData["Title"] = "Leave management"; }
+<h1>Leave management</h1>
+<nav class="actions" aria-label="Leave management pages">
+    @foreach (var tab in new[] { ("hr", $"HR submission ({Model.AwaitingHr})"), ("approval", $"Final approval ({Model.AwaitingDecision})"), ("history", "Request register"), ("balances", "Employee balances") })
+    {
+        <a class="button @(tab.Item1 == Model.ViewMode ? "" : "secondary")"
+           aria-current="@(tab.Item1 == Model.ViewMode ? "page" : null)"
+           asp-route-viewMode="@tab.Item1" asp-route-year="@Model.Year" asp-route-employeeId="@Model.EmployeeId" asp-route-typeId="@Model.TypeId">@tab.Item2</a>
+    }
+</nav>
+<div asp-validation-summary="All" role="alert"></div>
+@if (TempData["LeaveNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+@if (Model.CanSubmit)
+{
+    <details class="card" id="record-leave" open="@(Model.Record || (!ViewData.ModelState.IsValid && ViewContext.HttpContext.Request.Query["handler"] == "Create"))">
+        <summary><strong>Record a leave request</strong></summary>
+        <p>Select an employee to record leave on their behalf. Saved requests go to the HR submission queue.</p>
+        <form method="post" asp-page-handler="Create" enctype="multipart/form-data">
+            <div class="grid">
+                <label>Request for<select asp-for="NewRequest.EmployeeId" required>
+                    <option value="">Select employee</option>
+                    @foreach (var e in Model.Employees.Values.OrderBy(e => e.FullName))
+                    {
+                        <option value="@e.Id">@(e.Id == Model.OwnEmployeeId ? "Myself · " : "")@e.FullName · @e.EmployeeNumber</option>
+                    }
+                </select></label>
+                <label>Leave type<select asp-for="NewRequest.TypeId" required>
+                    <option value="">Select leave type</option>
+                    @foreach (var type in Model.Types.Values.OrderBy(t => t.Name))
+                    {
+                        <option value="@type.Id">@type.Name@(type.RequiresDocument ? " · Document required" : "")</option>
+                    }
+                </select></label>
+                <label>From<input asp-for="NewRequest.From" type="date" required /></label>
+                <label>To<input asp-for="NewRequest.To" type="date" required /></label>
+                <label>Start time (partial day)<input asp-for="NewRequest.Start" type="time" /></label>
+                <label>End time (partial day)<input asp-for="NewRequest.End" type="time" /></label>
+            </div>
+            <label>Reason<textarea asp-for="NewRequest.Reason" rows="2" maxlength="2000" required></textarea></label>
+            <label>Supporting document<input asp-for="NewRequest.Document" type="file" accept=".pdf,.jpg,.jpeg,.png" /></label>
+            <button>Record request</button>
+        </form>
+    </details>
+}
+<form method="get" class="card">
+    <input type="hidden" asp-for="ViewMode" />
+    <div class="grid">
+        <label>Year<input asp-for="Year" type="number" min="1900" max="9998" required /></label>
+        <label>Employee<select asp-for="EmployeeId"><option value="">All employees</option>
+            @foreach (var e in Model.Employees.Values.OrderBy(e => e.FullName)) { <option value="@e.Id">@e.FullName · @e.EmployeeNumber</option> }
+        </select></label>
+        <label>Leave type<select asp-for="TypeId"><option value="">All types</option>
+            @foreach (var type in Model.Types.Values.OrderBy(t => t.Name)) { <option value="@type.Id">@type.Name</option> }
+        </select></label>
+    </div>
+    <div class="actions">
+        <button>Apply filters</button>
+        <button class="secondary" type="submit" name="handler" value="Export">Export CSV</button>
+        @if (Model.CanSubmit && Model.OwnEmployeeId.HasValue) {
+            <a class="button secondary" asp-area="" asp-page="/Me/Profile" asp-fragment="request-leave">Request my leave</a>
+        }
+        @if (Model.CanSubmit && Model.ViewMode == "balances") { <a class="button secondary" asp-page="./Balances">Set individual credit</a> }
+    </div>
+</form>
+@if (Model.ViewMode != "balances")
+{
+<section class="card table-scroll">
+    <h2>@(Model.ViewMode == "hr" ? "Awaiting HR submission" : Model.ViewMode == "approval" ? "Awaiting final approval" : "Request register")</h2>
+    @if (Model.ViewMode == "hr") { <p>HR and Admin can submit employee requests for final approval.</p> }
+    @if (Model.ViewMode == "approval") { <p>Admin and the General Secretary can approve or reject submitted requests.</p> }
+    @if (Model.Items.Count == 0) { <p>No requests match these filters.</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Employee</th><th>Leave and dates</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>
+            @foreach (var request in Model.Items)
+            {
+                var employee = Model.Employees.GetValueOrDefault(request.EmployeeId);
+                <tr>
+                    <td><strong>@employee?.FullName</strong><br />@employee?.EmployeeNumber</td>
+                    <td>@Model.Types.GetValueOrDefault(request.LeaveTypeId)?.Name<br />@request.From.ToString("dd MMM yyyy") – @request.To.ToString("dd MMM yyyy")
+                        @if (request.StartTime.HasValue) { <br />@request.StartTime <span>–</span> @request.EndTime }
+                        @if (request.DocumentId.HasValue) { <br /><a asp-area="" asp-page="/Files/Download" asp-route-id="@request.DocumentId">Supporting document</a> }
+                    </td>
+                    <td>@request.Reason</td>
+                    <td><span class="badge">@(request.Status is "Pending" or "Manager approved" ? "Awaiting HR submission" : request.Status)</span><br />@request.DecisionReason</td>
+                    <td>
+                        @if (Model.CanSubmit && request.Status is ("Pending" or "Manager approved"))
+                        {
+                            <form method="post" asp-page-handler="Submit" asp-route-id="@request.Id" asp-route-year="@Model.Year" asp-route-viewMode="@Model.ViewMode" asp-route-employeeId="@Model.EmployeeId" asp-route-typeId="@Model.TypeId"><button>Submit for approval</button></form>
+                        }
+                        @if (Model.CanDecide && request.Status == LeaveService.Submitted)
+                        {
+                            <form method="post" asp-route-id="@request.Id" asp-route-year="@Model.Year" asp-route-viewMode="@Model.ViewMode" asp-route-employeeId="@Model.EmployeeId" asp-route-typeId="@Model.TypeId">
+                                <label>Decision reason<input name="reason" placeholder="Required to reject" /></label>
+                                <div class="actions"><button name="decision" value="Approved">Approve</button><button class="secondary" name="decision" value="Rejected">Reject</button></div>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+</section>
+}
+else
+{
+<section class="card table-scroll">
+    <h2>Employee leave balances</h2>
+    <p>Used days include approved leave on scheduled working days. Remaining days reflect entitlement or annual credits.</p>
+    @if (Model.Balances.Count == 0) { <p>No employees with leave balances for this year.</p> }
+    else
+    {
+        <table>
+            <thead><tr><th>Employee number</th><th>Employee</th><th>Leave type</th><th>Entitlement source</th><th>Approved days</th><th>Remaining days</th></tr></thead>
+            <tbody>
+            @foreach (var row in Model.Balances)
+            {
+                <tr><td>@row.Employee.EmployeeNumber</td><td>@row.Employee.FullName</td><td>@row.Type.Name</td><td>@row.Source</td>
+                    <td>@(row.Used?.ToString("0.##") ?? "Calendar required")</td>
+                    <td>@(row.Type.EnforceBalance ? row.Remaining?.ToString("0.##") ?? "Calendar required" : "Unlimited")</td></tr>
+            }
+            </tbody>
+        </table>
+    }
+</section>
+}

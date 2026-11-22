@@ -2,6 +2,10 @@
 
 A multi-role HR platform built with **ASP.NET Core 8 Razor Pages**, **Identity**, **EF Core 8**, **Pomelo**, and **MySQL 8**. The supplied Garowe emblem and its blue, red, white, and gold palette are used throughout the UI. The original specification is preserved in [REQUIREMENTS.md](REQUIREMENTS.md).
 
+## Employee mobile app
+
+The Flutter app for Android, iPhone, and iPad is in [mobile](mobile/README.md).
+
 ## Start with Docker / MySQL 8
 
 ```sh
@@ -111,3 +115,13 @@ Personal details, education, experience and salary steps have explicit Skip cont
 Finish & save employee accepts missing documents and salary; the employee is retained with a success message. Without a published salary the employee remains in onboarding and is excluded from payroll. Add a salary and finish onboarding later. Existing saved sections can be revisited from the step links.
 
 Validation: 26 unit tests plus 58 isolated MySQL checks passed, including creation of an employee/assignment/login, saving blank personal fields, skipping incomplete education, rejecting invalid marital status/future birth dates, and final save without salary. Personal selectors and Skip controls verified in the browser.
+
+## Operations
+
+The Operations menu contains the task manager, built-in meeting organizer, and fleet register. See [operations setup](docs/operations.md) for permissions, guest links, GPS device setup, and maintenance workflows.
+
+## Automatic device attendance
+
+Compatible ZKTeco terminals can push attendance to the app on the office LAN. See [attendance device setup](docs/attendance-device.md). Manual and CSV imports remain available.
+
+In **Administration → Users & permissions → Manage permissions → Module access**, an administrator can block individual modules for non-admin accounts. Clearing a block restores access already allowed by the account's role and branch scope. Blocks apply on the next request, including to direct URLs, and changes are audited. Combined dashboards and reports may also be blocked when they show data from a restricted module. Shared document downloads are disabled for accounts with Employee records, Leave management, or Employee self-service blocked. Administrator accounts retain full module access.

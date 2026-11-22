@@ -10,6 +10,8 @@ namespace HrSystemDhg.Web.Pages.Hr;
 [Authorize(Roles = "HR,Management,Admin")]
 public class AttendanceModel(HrDbContext db, AttendanceService attendance, CalendarService calendar) : PageModel
 {
+    public sealed record PunchRow(DateTime Time, string Pin, string? Employee, string? Device);
+    public List<PunchRow> TodayPunches = [];
     public List<AttendanceDay> Items = [];
     public List<Employee> Employees = [];
     public List<ZkDevice> Devices = [];
@@ -23,12 +25,36 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
 
     public async Task OnGetAsync()
     {
+        TodayPunches = await LoadTodayPunchesAsync();
         Employees = await db.Employees.ToListAsync();
         Names = Employees.ToDictionary(x => x.Id, x => x.FullName);
         Devices = await db.ZkDevices.ToListAsync();
         Items = await db.AttendanceDays.Where(x => x.Date >= From && x.Date <= To).OrderByDescending(x => x.Date).Take(500).ToListAsync();
         if (!db.Scoped)
             Unmapped = await db.ZkPunchs.Where(x => !db.Employees.Any(e => e.ZkPin == x.Pin)).Select(x => x.Pin).Distinct().ToListAsync();
+    }
+
+    public async Task<IActionResult> OnGetTodayPunchesAsync()
+    {
+        Response.Headers.CacheControl = "no-store";
+        return Partial("_TodayPunches", await LoadTodayPunchesAsync());
+    }
+
+    private Task<List<PunchRow>> LoadTodayPunchesAsync()
+    {
+        var today = BusinessClock.Today;
+        var tomorrow = today.AddDays(1);
+        var scoped = db.Scoped;
+        return (from punch in db.ZkPunchs
+                where punch.PunchTime >= today && punch.PunchTime < tomorrow
+                join employee in db.Employees on punch.Pin equals employee.ZkPin into matches
+                from employee in matches.DefaultIfEmpty()
+                where !scoped || employee != null
+                join device in db.ZkDevices on punch.DeviceId equals device.Id into terminals
+                from device in terminals.DefaultIfEmpty()
+                orderby punch.PunchTime descending, punch.Id descending
+                select new PunchRow(punch.PunchTime, punch.Pin, employee == null ? null : employee.FullName,
+                    device == null ? null : device.Name)).Take(200).ToListAsync();
     }
 
     private async Task<IActionResult> Attempt(Func<Task> work)
@@ -65,29 +91,71 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
     }
 
     public Task<IActionResult> OnPostPunchAsync(int deviceId, string pin, string timestamp, string reason) => Attempt(async () => await attendance.ImportAsync(deviceId, pin, await LocalTime(pin, timestamp), User.Identity!.Name!, reason));
+    public Task<IActionResult> OnPostPunchAllAsync(int deviceId, string reason) => Attempt(async () =>
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new InvalidOperationException("Enter a reason for the bulk punch.");
+
+        var now = BusinessClock.Now;
+        var timestamp = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerSecond));
+        var date = timestamp.Date;
+        var activeEmployees = db.Employees.Where(e => e.Status == "Active" && e.HireDate <= date &&
+            (e.TerminationDate == null || e.TerminationDate >= date));
+        var pins = await activeEmployees.Where(e => e.ZkPin != null && e.ZkPin != "")
+            .OrderBy(e => e.Id).Select(e => e.ZkPin!).ToListAsync();
+        if (pins.Count == 0)
+            throw new InvalidOperationException("There are no active employees with a terminal User ID to punch.");
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        foreach (var pin in pins)
+            await attendance.ImportAsync(deviceId, pin, timestamp, User.Identity!.Name!, reason.Trim());
+        await transaction.CommitAsync();
+
+        var skipped = await activeEmployees.CountAsync(e => e.ZkPin == null || e.ZkPin == "");
+        TempData["BulkPunchNotice"] = $"Processed punches for {pins.Count} employees at {timestamp:HH:mm:ss} Mogadishu time."
+            + (skipped > 0 ? $" Skipped {skipped} without a terminal User ID." : "");
+    });
+
+    private const string PunchColumns = "DeviceId,Pin,Timestamp";
+
+    public IActionResult OnGetSample() =>
+        RegistrationCsv.Download("attendance-punches-sample", PunchColumns, [[1, "101", BusinessClock.Today.AddHours(8)]]);
+
+    public async Task<IActionResult> OnGetExportAsync()
+    {
+        if (!ModelState.IsValid || To < From || (To - From).TotalDays > 366 || To.Date == DateTime.MaxValue.Date)
+            return BadRequest("Choose a valid range of up to 367 days.");
+        var end = To.Date.AddDays(1);
+        var scoped = db.Scoped;
+        var punches = await db.ZkPunchs.AsNoTracking().Where(p => p.PunchTime >= From.Date && p.PunchTime < end &&
+            (!scoped || db.Employees.Any(e => e.ZkPin == p.Pin))).OrderBy(p => p.PunchTime).ThenBy(p => p.Id).ToListAsync();
+        Response.Headers.CacheControl = "no-store";
+        return RegistrationCsv.Download("attendance-punches", PunchColumns,
+            punches.Select(p => new object?[] { p.DeviceId, p.Pin, p.PunchTime }));
+    }
+
     public Task<IActionResult> OnPostCsvAsync(IFormFile upload, string reason) => Attempt(async () =>
     {
-        if (upload == null || upload.Length > 2 * 1024 * 1024 || string.IsNullOrWhiteSpace(reason))
-            throw new InvalidOperationException("Upload a CSV up to 2 MB and provide a reason.");
-        using var reader = new StreamReader(upload.OpenReadStream());
-        if ((await reader.ReadLineAsync())?.Trim() != "DeviceId,Pin,Timestamp")
-            throw new FormatException("CSV header must be DeviceId,Pin,Timestamp");
-        await using var tx = await db.Database.BeginTransactionAsync();
-        int count = 0;
-        while (await reader.ReadLineAsync()is string line)
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new InvalidOperationException("Provide an import reason.");
+        await RegistrationCsv.ImportAsync(this, db, upload, PunchColumns, async row =>
         {
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
-            var cells = line.Split(',');
-            if (cells.Length != 3 || !int.TryParse(cells[0], out var device))
-                throw new FormatException("Invalid CSV row " + (count + 2));
-            await attendance.ImportAsync(device, cells[1].Trim(), await LocalTime(cells[1].Trim(), cells[2].Trim()), User.Identity!.Name!, reason);
-            if (++count > 20000)
-                throw new FormatException("Maximum 20,000 punches per import.");
-        }
-
-        await tx.CommitAsync();
+            var pin = row.Get<string>("Pin");
+            if (string.IsNullOrWhiteSpace(pin))
+                throw new FormatException("Enter a terminal PIN.");
+            try
+            {
+                await attendance.ImportAsync(row.Get<int>("DeviceId"), pin, await LocalTime(pin, row.Get<string>("Timestamp")),
+                    User.Identity!.Name!, reason);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new FormatException(ex.Message, ex);
+            }
+            return RedirectToPage();
+        }, maxRecords: 20000);
     });
+
     public Task<IActionResult> OnPostCorrectAsync(int employeeId, DateTime date, DateTime first, DateTime last, string reason) => Attempt(async () =>
     {
         if (string.IsNullOrWhiteSpace(reason) || first >= last || (last - first).TotalHours > 24)

@@ -7,6 +7,9 @@ using HrSystemDhg.Web.Models;
 namespace HrSystemDhg.Web.Pages.Identity.Account;
 public class ChangePasswordModel(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn) : PageModel
 {
+    [BindProperty(SupportsGet = true)]
+    public string? ReturnUrl { get; set; }
+
     [BindProperty]
     public string Current { get; set; } = "";
 
@@ -30,6 +33,6 @@ public class ChangePasswordModel(UserManager<ApplicationUser> users, SignInManag
         user.MustChangePassword = false;
         await users.UpdateAsync(user);
         await signIn.RefreshSignInAsync(user);
-        return Redirect("/");
+        return LocalRedirect(Url.IsLocalUrl(ReturnUrl) ? ReturnUrl! : "/");
     }
 }

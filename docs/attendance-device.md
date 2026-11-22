@@ -1,0 +1,25 @@
+# Connect a ZKTeco terminal
+
+This application supports the attendance-log subset of ZKTeco ADMS / Attendance PUSH. The [manufacturer’s FAQ](https://www.zkteco.com/en/faq.html) explains that ADMS depends on the model and firmware. The terminal must have **COMM → ADMS** or **Cloud Server Setting** with a server address and port. If the menu is missing, get the model number from the rear label and confirm the supported SDK with the vendor before changing firmware or buying anything. This app does not include a TCP/4370 pull driver.
+
+## Setup on the office network
+
+1. Connect the HR host and terminal to the same trusted office network. Give the terminal a stable private IPv4 address (for example, use a DHCP reservation). On the terminal, note that address and the serial number from System Information or the back label.
+2. Sign in as Admin and open **Administration → Attendance devices**. Add the terminal if needed, then enter its serial and private IP under **Save ADMS pairing**.
+3. The usual local app is listening only at `127.0.0.1:5189`. To accept the terminal, add a dedicated listener on the HR host’s **actual office interface**. From the project directory, substituting your server address:
+
+   ```sh
+   ASPNETCORE_ENVIRONMENT=Development AttendancePush__ListenerPort=5190 dotnet run --project HrSystemDhg.Web --no-launch-profile --urls 'http://127.0.0.1:5189;http://192.168.1.20:5190'
+   ```
+
+   The dedicated port serves only device endpoints; staff pages stay on the original listener. This example is for local setup only. For ongoing office use, deploy the app with production settings, a firewall that permits terminal traffic only from the configured terminal IP, and HTTPS for staff access. Legacy ADMS traffic is plaintext and IP/serial pairing is not cryptographic authentication; do not port-forward these routes or expose them to the internet. Connect the terminal directly on the private LAN; proxy forwarding is not used as proof of the terminal's source address.
+4. On the terminal, set its Cloud Server address to the **HR host’s office IP** (not the terminal IP or `127.0.0.1`), the server port to **5190**, and select ADMS / Attendance PUSH if the menu offers a protocol choice. Use the correct date and local office time. On models with domain mode, use the format specified by the vendor.
+5. Make a test punch. **Attendance devices** shows last contact and last successful upload. Under **People & attendance → Attendance & imports**, check the employee and date. If the punch is in the **Unmapped PIN queue**, map the device user ID to the employee. A valid work assignment and working-hours rule are needed to produce a daily summary.
+
+The app accepts tab-delimited attendance rows and only stores the user ID and local punch timestamp. It does not accept enrollment data, fingerprint templates, photos, or access-control logs. Repeated uploads are deduplicated; unmapped punches are preserved. A batch acknowledgement is sent only after the database commits. Compatibility must still be verified with a test punch from the physical terminal; this is not a full implementation of the vendor SDK.
+
+## Multiple departments and locations
+
+Register each physical terminal separately in Administration → Attendance devices. Save its department and office location, then pair its unique serial number and stable source address. Each terminal retains its own contact status, upload status, error, command queue and source device ID on every punch. The department label organizes devices. Employee assignments and effective work rules determine attendance calculations.
+
+Use the same unique employee PIN on every terminal where that employee punches. All terminals send to the central HR device listener. Offices on separate networks need private routed connectivity, such as a site-to-site VPN, to that listener. Configure distinct routed source addresses for the terminals and pair the addresses observed by the server. Test each office with a real punch and verify its source machine in the attendance register.

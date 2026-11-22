@@ -23,6 +23,9 @@ public class CorrectionsModel(HrDbContext db) : PageModel
         if (status is not ("Resolved" or "Rejected") || string.IsNullOrWhiteSpace(resolution))
             return BadRequest();
         var c = await db.CorrectionRequests.SingleAsync(x => x.Id == id);
+        if (c.Status != status || c.Resolution != resolution)
+            await OperationsNotices.AddEmployeeUpdatesAsync(db, [c.EmployeeId], OperationsNoticeKind.AttendanceCorrectionDecided,
+                $"{status} · {c.AttendanceDate:dd MMM yyyy}");
         c.Status = status;
         c.Resolution = resolution;
         db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Correction {id}: {status}; {resolution}" });

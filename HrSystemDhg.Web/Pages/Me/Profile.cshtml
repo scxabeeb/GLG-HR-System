@@ -1,19 +1,42 @@
 @page
 @model HrSystemDhg.Web.Pages.Me.ProfileModel
-@{ViewData["Title"]="My workspace";}
-<div class="eyebrow">GAROWE HR WORKSPACE</div>
-<h1>My workspace</h1>
+@{ViewData["Title"]="My workspace"; var canRecordLeave = User.IsInRole("HR") || User.IsInRole("Admin");}
+<div class="civic-hero">
+    <div><div class="eyebrow">EMPLOYEE SERVICES</div><h1>My workspace</h1><p>@(Model.Employee != null ? $"Welcome, {Model.Employee.FullName}." : "View your employee profile and HR services.")</p></div>
+    <div class="civic-date"><small>OFFICE DATE · EAT</small><strong>@HrSystemDhg.Web.Services.BusinessClock.Today.ToString("dddd, dd MMMM yyyy")</strong></div>
+</div>
+<div class="actions">
+    <a class="button secondary" asp-page="./Agenda">My agenda</a>
+    @if (canRecordLeave && Model.Employee != null) {
+        <a class="button secondary" asp-area="Hr" asp-page="/Leave" asp-route-record="true" asp-fragment="record-leave">Record leave for an employee</a>
+    }
+</div>
 <div asp-validation-summary="All">
 </div>
-@if(Model.Employee==null){<div class="card">
-<p>Your account has no employee profile. An administrator can link an employee account.</p>
-</div>}else{<p>Welcome, @Model.Employee.FullName.</p>
+@if(Model.Employee==null){<div class="card" id="request-leave">
+    @if (canRecordLeave) {
+        <h2>Employee leave requests</h2>
+        <p>Open Leave Management to record a request for an employee.</p>
+        <a class="button" asp-area="Hr" asp-page="/Leave" asp-route-record="true" asp-fragment="record-leave">Record leave for an employee</a>
+    } else {
+        <p>Your account has no employee profile. An administrator can link an employee account.</p>
+    }
+</div>}else{
 <div class="grid">
-<div class="card">
+<div class="card" id="profile-settings">
 @if(Model.PhotoId!=null){<img class="employee-photo" src="/Files/Download?id=@Model.PhotoId&inline=true" alt="My employee photo"/>}<h2>@Model.Employee.FullName</h2>
 <p>@Model.Employee.EmployeeNumber · @Model.Employee.WorkEmail</p>
 <span class="badge">@Model.Employee.Status</span>
 <p>Hire date: @Model.Employee.HireDate.ToString("dd MMM yyyy")</p>
+<section>
+    <h3>Profile settings</h3>
+    @if (TempData["ProfileNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+    <form method="post" asp-page-handler="Photo" enctype="multipart/form-data">
+        <label>Profile photo <input name="photo" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required /></label>
+        <button>Update photo</button>
+        <a class="button secondary" asp-area="Identity" asp-page="/Account/ChangePassword" asp-route-returnUrl="/Me/Profile#profile-settings">Change password</a>
+    </form>
+</section>
 </div>
 <div class="card">
 <h2>Current salary</h2>@if(Model.Salary!=null){<strong>@Model.Salary.Currency @((Model.Salary.Basic+Model.Salary.Housing+Model.Salary.Transport+Model.Salary.Allowances).ToString("N2"))</strong>
@@ -26,12 +49,13 @@
 @if(Model.Types.Any(t=>t.Name==b.Key&&!t.EnforceBalance)){<p>No balance limit</p>}else{<p>@b.Value.ToString("N2") days remaining</p>}
 </div>}</div>
 </div>
-<div class="card">
+<div class="card" id="request-leave">
 <h2>Request leave</h2>
+<p>HR or Admin submits your request for final approval. Admin or the General Secretary then makes a decision.</p>
 <p>Optional start/end times are for a single partial day. Weekends and public holidays do not consume balance.</p>
 <form method="post" enctype="multipart/form-data">
 <div class="grid">
-<label>Leave type<select asp-for="LeaveTypeId">@foreach(var t in Model.Types){<option value="@t.Id">@t.Name (@(t.IsPaid?"Paid":"Unpaid"))</option>}</select>
+<label>Leave type<select asp-for="LeaveTypeId">@foreach(var t in Model.Types){<option value="@t.Id">@t.Name</option>}</select>
 </label>
 <label>From<input asp-for="From" type="date"/>
 </label>
@@ -68,7 +92,7 @@
 </div>
 </div>
 <div class="card">
-<h2>Attendance calendar</h2>
+<h2 id="attendance">Attendance calendar</h2>
 <form method="get" class="inline">
 <label>Month<input asp-for="Month" type="month"/>
 </label>
@@ -84,7 +108,7 @@
 <summary>Raw punches</summary>@foreach(var punch in Model.Punches){<p>@punch.PunchTime.ToString("dd MMM yyyy HH:mm:ss") · device @punch.DeviceId</p>}</details>
 </div>
 <div class="card">
-<h2>Published payslips</h2>@foreach(var l in Model.Pay){<p>
+<h2 id="payroll">Published payslips</h2>@foreach(var l in Model.Pay){<p>
 <a href="/Me/Payslip?id=@l.Id">@Model.Periods.GetValueOrDefault(l.PayrollPeriodId) · @l.Currency @l.Net.ToString("N2") · revision @l.Revision</a>
 </p>}</div>
 <div class="card">

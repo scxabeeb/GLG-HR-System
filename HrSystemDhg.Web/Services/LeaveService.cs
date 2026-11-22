@@ -3,19 +3,37 @@ using HrSystemDhg.Web.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace HrSystemDhg.Web.Services;
-public class LeaveService(HrDbContext db, CalendarService calendar)
+public class LeaveService(HrDbContext db, CalendarService calendar, DocumentService? documents = null)
 {
-    public async Task<decimal> RemainingAsync(int employeeId, int typeId, int year, DateTime? asOf = null)
+    public const string Submitted = "Submitted by HR";
+
+    public async Task<(decimal Used, decimal Remaining)> BalanceAsync(int employeeId, int typeId, int year, DateTime? asOf = null)
     {
         var type = await db.LeaveTypes.SingleAsync(x => x.Id == typeId);
         var credit = await db.LeaveBalances.SingleOrDefaultAsync(x => x.EmployeeId == employeeId && x.LeaveTypeId == typeId && x.Year == year);
         decimal allowance = credit?.Days ?? type.AnnualDays;
         if (type.AccrueMonthly && credit == null)
-            allowance = type.AnnualDays * Math.Min(12, (asOf ?? BusinessClock.Today).Year > year ? 12 : (asOf ?? BusinessClock.Today).Month) / 12;
+            allowance = type.AnnualDays * ((asOf ?? BusinessClock.Today).Year > year ? 12 : (asOf ?? BusinessClock.Today).Year < year ? 0 : (asOf ?? BusinessClock.Today).Month) / 12;
         decimal used = 0;
         foreach (var r in await db.LeaveRequests.Where(x => x.EmployeeId == employeeId && x.LeaveTypeId == typeId && x.Status == "Approved" && x.From.Year <= year && x.To.Year >= year).ToListAsync())
             used += await calendar.LeaveDaysAsync(r, year);
-        return decimal.Round(allowance - used, 2);
+        return (decimal.Round(used, 2), decimal.Round(allowance - used, 2));
+    }
+
+    public async Task<decimal> RemainingAsync(int employeeId, int typeId, int year, DateTime? asOf = null) =>
+        (await BalanceAsync(employeeId, typeId, year, asOf)).Remaining;
+
+    public async Task ForwardAsync(int id, string actor)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        var request = await db.LeaveRequests.SingleOrDefaultAsync(x => x.Id == id);
+        if (request == null || request.Status is not ("Pending" or "Manager approved"))
+            throw new InvalidOperationException("Select a leave request waiting for HR submission.");
+        await ValidateAsync(request);
+        request.Status = Submitted;
+        db.AuditLogs.Add(new() { Actor = actor, Action = $"HR submitted leave {id} for final approval" });
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
     }
 
     public async Task ValidateAsync(LeaveRequest r, bool approval = false)
@@ -54,15 +72,30 @@ public class LeaveService(HrDbContext db, CalendarService calendar)
             }
     }
 
-    public async Task SubmitAsync(LeaveRequest r, string actor)
+    public async Task SubmitAsync(LeaveRequest r, string actor, IFormFile? upload = null)
     {
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-        await ValidateAsync(r);
-        r.Status = "Pending";
-        db.LeaveRequests.Add(r);
-        db.AuditLogs.Add(new() { Actor = actor, Action = $"Submitted leave for employee {r.EmployeeId}" });
-        await db.SaveChangesAsync();
-        await tx.CommitAsync();
+        string? uploadedPath = null;
+        try
+        {
+            if (upload != null && documents != null)
+            {
+                r.DocumentId = await documents.StoreAsync(r.EmployeeId, upload, "Leave supporting document", null, actor);
+                var document = await db.EmployeeDocuments.FindAsync(r.DocumentId.Value);
+                if (document != null) uploadedPath = Path.Combine(documents.Root, document.StoragePath);
+            }
+            await ValidateAsync(r);
+            r.Status = "Pending";
+            db.LeaveRequests.Add(r);
+            db.AuditLogs.Add(new() { Actor = actor, Action = $"Recorded leave request for employee {r.EmployeeId}" });
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            if (uploadedPath != null) File.Delete(uploadedPath);
+            throw;
+        }
     }
 
     public async Task DecideAsync(int id, string decision, string reason, string actor, int? approverEmployeeId, bool management)
@@ -70,35 +103,29 @@ public class LeaveService(HrDbContext db, CalendarService calendar)
         if (decision is not ("Approved" or "Rejected"))
             throw new InvalidOperationException("Invalid decision.");
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-        var r = await db.LeaveRequests.SingleAsync(x => x.Id == id);
-        if (r.Status is not ("Pending" or "Manager approved"))
-            throw new InvalidOperationException("Request already decided.");
-        var setting = await db.Settings.FirstOrDefaultAsync() ?? new();
-        var e = await db.Employees.SingleAsync(x => x.Id == r.EmployeeId);
+        var r = await db.LeaveRequests.SingleOrDefaultAsync(x => x.Id == id)
+            ?? throw new InvalidOperationException("Leave request is unavailable.");
+        if (!management || r.Status != Submitted)
+            throw new InvalidOperationException("HR must submit the request before final approval.");
         if (decision == "Approved")
-        {
             await ValidateAsync(r, true);
-            if (setting.ManagerApproval && !management && r.Status == "Pending")
-            {
-                if (e.ManagerId != approverEmployeeId)
-                    throw new InvalidOperationException("The reporting manager must approve first.");
-                r.Status = "Manager approved";
-            }
-            else
-                r.Status = "Approved";
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(reason))
-                throw new InvalidOperationException("A rejection reason is required.");
-            r.Status = "Rejected";
-        }
+        else if (string.IsNullOrWhiteSpace(reason))
+            throw new InvalidOperationException("A rejection reason is required.");
+        r.Status = decision;
 
         r.DecisionReason = reason;
         r.DecidedBy = actor;
         r.DecidedAt = DateTime.UtcNow;
+        await OperationsNotices.AddEmployeeUpdatesAsync(db, [r.EmployeeId], OperationsNoticeKind.LeaveDecided,
+            $"{r.Status} · {r.From:dd MMM yyyy} to {r.To:dd MMM yyyy}");
         db.AuditLogs.Add(new() { Actor = actor, Action = $"Leave {id}: {r.Status}; {reason}" });
         await db.SaveChangesAsync();
+        if (r.Status == "Approved")
+        {
+            var attendance = new AttendanceService(db, calendar);
+            for (var date = r.From.Date; date <= r.To.Date && date <= BusinessClock.Today; date = date.AddDays(1))
+                await attendance.RebuildAsync(r.EmployeeId, date);
+        }
         await tx.CommitAsync();
     }
 }

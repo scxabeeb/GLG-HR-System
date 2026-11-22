@@ -1,0 +1,53 @@
+@page
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.MeetingReportModel
+@{ ViewData["Title"] = "Meeting reports"; }
+<div class="eyebrow">MEETINGS / REPORTING</div>
+<a class="hub-back" asp-page="/Reports/Hub">← Main reports</a>
+<h1>Meeting reports</h1>
+<p>Review meeting schedules, status, and the number of invited employees. Invitations are counted separately from attendance.</p>
+<partial name="_MeetingNavigation" model='("reports")' />
+<form method="get" class="card">
+    <h2>Reporting period</h2>
+    <div asp-validation-summary="All"></div>
+    <div class="grid">
+        <label>From<input asp-for="From" type="date" /></label>
+        <label>To<input asp-for="To" type="date" /></label>
+        <label>Meetings<select asp-for="Scope">
+            <option value="mine">My meetings</option>
+            <option value="organized">Organized by me</option>
+            @if (Model.IsAdmin) { <option value="all">All meetings</option> }
+        </select></label>
+        <label>Status<select asp-for="Status"><option value="">All statuses</option><option>Upcoming</option><option>In progress</option><option>Past</option><option>Cancelled</option></select></label>
+    </div>
+    <div class="actions">
+        <button>Apply filters</button>
+        <a asp-page-handler="Csv" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")"
+            asp-route-scope="@Model.Scope" asp-route-status="@Model.Status">Export meeting CSV</a>
+        <a asp-page-handler="Csv" asp-route-format="excel" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")"
+            asp-route-scope="@Model.Scope" asp-route-status="@Model.Status">Export meeting Excel</a>
+        <a asp-page-handler="Csv" asp-route-format="pdf" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")"
+            asp-route-scope="@Model.Scope" asp-route-status="@Model.Status">Export meeting PDF</a>
+    </div>
+</form>
+<div class="grid civic-metrics">
+    @foreach (var status in new[] { "Upcoming", "In progress", "Past", "Cancelled" }) {
+        <div class="card stat">@status<strong>@Model.Totals.GetValueOrDefault(status)</strong></div>
+    }
+</div>
+<div class="card table-scroll">
+    <h2>Meeting activity</h2>
+    @if (Model.Items.Count == 0) { <p>No meetings match these filters.</p> }
+    else {
+        <table><thead><tr><th scope="col">Meeting</th><th scope="col">Start (EAT)</th><th scope="col">End (EAT)</th><th scope="col">Status</th><th scope="col">Invited employees</th></tr></thead>
+            <tbody>@foreach (var item in Model.Items) {
+                <tr><td>
+                    @if (item.CanOpen) { <a asp-page="./MeetingDetails" asp-route-id="@item.Id">@item.Title</a> }
+                    else { @item.Title }
+                </td><td>@OperationsPolicy.Local(item.Starts).ToString("dd MMM yyyy, HH:mm")</td>
+                    <td>@OperationsPolicy.Local(item.Ends).ToString("dd MMM yyyy, HH:mm")</td><td>@item.Status</td><td>@item.Invitees</td></tr>
+            }</tbody>
+        </table>
+        <p>Showing up to 150 meetings. Totals cover all statuses in the selected period and scope.</p>
+    }
+</div>

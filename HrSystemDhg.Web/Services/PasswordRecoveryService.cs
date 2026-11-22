@@ -15,9 +15,13 @@ public class PasswordRecoveryService(UserManager<ApplicationUser> users,HrDbCont
  {
   var user=await users.FindByEmailAsync(email.Trim());if(user==null||!user.IsEnabled||string.IsNullOrWhiteSpace(user.Email))return;
   var token=await users.GeneratePasswordResetTokenAsync(user);
-  var origin=config["PasswordReset:PublicOrigin"]??(env.IsDevelopment()?"http://127.0.0.1:5189":throw new InvalidOperationException("Configure PasswordReset:PublicOrigin."));
-  var link=BuildLink(origin,user.Email,token,env.IsDevelopment());
-  try{await delivery.SendAsync(user.Email,link);}catch(Exception e)when(e is System.Net.Mail.SmtpException or InvalidOperationException or IOException){logger.LogWarning("Password-reset delivery unavailable ({FailureType}).",e.GetType().Name);}
+  try
+  {
+   var origin=config["PasswordReset:PublicOrigin"]??(env.IsDevelopment()?"http://127.0.0.1:5189":throw new InvalidOperationException("Configure PasswordReset:PublicOrigin."));
+   var link=BuildLink(origin,user.Email,token,env.IsDevelopment());
+   await delivery.SendAsync(user.Email,link);
+  }
+  catch(Exception e)when(e is System.Net.Mail.SmtpException or InvalidOperationException or IOException){logger.LogWarning("Password-reset delivery unavailable ({FailureType}).",e.GetType().Name);}
  }
  public async Task<IdentityResult> ResetAsync(string email,string code,string password)
  {

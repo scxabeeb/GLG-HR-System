@@ -1,6 +1,128 @@
 @page
 @model HrSystemDhg.Web.Pages.Admin.DevicesModel
-@{ViewData["Title"]="Attendance devices";}
-<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Attendance devices</h1>
-<div asp-validation-summary="All"></div>
-<p>Manual import mode is enabled. Register device identifiers to preserve source attribution.</p><form method="post" class="card"><label>Device name<input name="name" required/></label><label>Reference / location<input name="endpoint"/></label><button>Add device</button></form><div class="card"><table><tr><th>ID</th><th>Device</th><th>Reference</th></tr>@foreach(var d in Model.Items){<tr><td>@d.Id</td><td>@d.Name</td><td>@d.Endpoint</td></tr>}</table></div>
+@using HrSystemDhg.Web.Services
+@{ ViewData["Title"] = "Attendance devices"; }
+<div class="eyebrow">ADMINISTRATION / ATTENDANCE</div>
+<h1>Attendance devices</h1>
+<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("attendance devices")' />
+
+<p>Register one terminal for each department or location. All paired terminals upload into the shared attendance register. Use a unique employee PIN consistently on every terminal.</p>
+<p>Pair a compatible ZKTeco ADMS terminal for automatic punches, or register a device for manual and CSV imports.</p>
+@if (TempData["DeviceNotice"] is string message) { <p class="notice" role="status">@message</p> }
+<section class="card">
+    <h2>Registered devices <span class="badge">@Model.Items.Count</span></h2>
+    @if (Model.Items.Count == 0) { <p>No devices registered yet. Add a terminal below.</p> }
+    else
+    {
+        <div class="table-scroll">
+            <table>
+                <thead><tr><th>Device</th><th>Department</th><th>Office / location</th><th>Serial number</th><th>IP address</th><th>Status</th><th>Last contact (EAT)</th><th>Last upload (EAT)</th><th>Error</th><th>Actions</th></tr></thead>
+                <tbody>
+                @foreach (var registered in Model.Items.OrderBy(d => d.Name))
+                {
+                    var department = Model.Departments.FirstOrDefault(d => d.Id == registered.DepartmentId);
+                    var paired = registered.PushSerial != null;
+                    var recent = registered.LastPushSeenUtc >= DateTime.UtcNow.AddMinutes(-5);
+                    <tr>
+                        <td><strong>@registered.Name</strong><br /><small>#@registered.Id · @registered.Endpoint</small></td>
+                        <td>@(department?.Name ?? "Shared / no department")</td>
+                        <td>@(registered.Location ?? "—")</td>
+                        <td>@(registered.PushSerial ?? "—")</td>
+                        <td>@(registered.PushAddress ?? "—")</td>
+                        <td><span class="badge">@(paired ? recent ? "Recent contact" : registered.LastPushSeenUtc == null ? "Waiting for terminal" : "No recent contact" : "Manual / CSV")</span></td>
+                        <td>@(registered.LastPushSeenUtc is DateTime contact ? OperationsPolicy.Local(contact).ToString("dd MMM yyyy, HH:mm") : "—")</td>
+                        <td>@(registered.LastSuccess is DateTime uploaded ? OperationsPolicy.Local(uploaded).ToString("dd MMM yyyy, HH:mm") : "—")</td>
+                        <td>@(registered.LastError ?? "—")</td>
+                        <td><a href="#device-@registered.Id">Manage device</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <p><small>Recent contact means the terminal contacted the system within the last five minutes. Refresh to update.</small></p>
+    }
+</section>
+<form method="post" class="card">
+    <h2>Register a terminal</h2>
+    <div class="grid"><label>Device name<input name="name" required /></label><label>Reference / location<input name="endpoint" /></label></div>
+    <button>Add device</button>
+</form>
+<div class="card">
+    <h2>Automatic attendance setup</h2>
+    <ol>
+        <li>Connect the terminal to the office network. Record its serial number and private IP address.</li>
+        <li>Under the terminal below, enter those details and save pairing.</li>
+        <li>On the terminal, open COMM → ADMS or Cloud Server. Enter the HR server’s office IP and dedicated device port (5190 in the setup guide). Use the server’s LAN address, not 127.0.0.1.</li>
+        <li>Make a test punch. Check the last upload here and the result in <a asp-area="Hr" asp-page="/Attendance">Attendance</a>. Map the terminal’s user ID if it appears in the unmapped PIN queue.</li>
+    </ol>
+    <p>A physical terminal cannot reach the localhost server. Start the dedicated device listener on the HR host’s office interface first.</p>
+</div>
+@foreach (var device in Model.Items)
+{
+    <article class="card" id="device-@device.Id">
+        <h2>@device.Name <span class="badge">#@device.Id</span></h2>
+        <p>@device.Endpoint · @(device.PushSerial == null ? "Manual / CSV" : "Paired for ADMS")</p>
+        <form method="post" asp-page-handler="Location" asp-route-id="@device.Id">
+            <div class="grid">
+                <label>Department<select name="departmentId"><option value="">Shared / no department</option>
+                    @foreach (var department in Model.Departments) {
+                        <option value="@department.Id" selected="@(department.Id == device.DepartmentId)">@department.Name · #@department.Id</option>
+                    }
+                </select></label>
+                <label>Office / location<input name="location" value="@device.Location" maxlength="250" /></label>
+            </div>
+            <button class="secondary">Save department and location</button>
+        </form>
+        @if (device.PushSerial != null)
+        {
+            <p>Last contact: @(device.LastPushSeenUtc is DateTime seen ? OperationsPolicy.Local(seen).ToString("dd MMM yyyy, HH:mm") + " EAT" : "Waiting for terminal")<br />
+            Last upload: @(device.LastSuccess is DateTime upload ? OperationsPolicy.Local(upload).ToString("dd MMM yyyy, HH:mm") + " EAT" : "No punches received")</p>
+            @if (device.LastError != null) { <p class="notice">@device.LastError</p> }
+        }
+        <form method="post" asp-page-handler="Push" asp-route-id="@device.Id">
+            <div class="grid">
+                <label>Terminal serial number<input name="serial" value="@device.PushSerial" maxlength="64" required /></label>
+                <label>Terminal IP address<input name="address" value="@device.PushAddress" placeholder="192.168.1.50" required /></label>
+            </div>
+            <button>Save ADMS pairing</button>
+            @if (device.PushSerial != null) { <button class="secondary" name="disable" value="true" formnovalidate>Disable automatic sync</button> }
+        </form>
+        @if (device.PushSerial != null)
+        {
+            <form method="post" asp-page-handler="Employee" asp-route-id="@device.Id">
+                <h3>Employee sync and fingerprint enrollment</h3>
+                <p>Assign a unique ZKTeco PIN when registering the employee in HR. Send the profile to create or update a normal user on the terminal. Confirm the PIN belongs to that employee on the terminal before sending.</p>
+                <div class="grid">
+                    <label>Employee
+                        <select name="employeeId" required>
+                            <option value="">Select an employee</option>
+                            @foreach (var employee in Model.Employees)
+                            {
+                                <option value="@employee.Id">@employee.FullName · PIN @employee.ZkPin</option>
+                            }
+                        </select>
+                    </label>
+                    <label>Fingerprint slot
+                        <select name="fingerSlot">
+                            @for (var slot = 0; slot < 10; slot++) { <option value="@slot">@(slot + 1)</option> }
+                        </select>
+                    </label>
+                </div>
+                <button name="operation" value="sync">Send employee to terminal</button>
+                <button name="operation" value="enroll" class="secondary">Start fingerprint enrollment</button>
+                <p>Wait for the profile to be acknowledged before enrolling a new terminal user. Have the employee stand at the reader and follow its prompts.</p>
+            </form>
+            <h3>Recent terminal commands</h3>
+            @foreach (var command in Model.Commands.Where(c => c.DeviceId == device.Id))
+            {
+                var status = command.Result switch {
+                    0 => "Terminal acknowledged success",
+                    int code => $"Terminal returned {code}",
+                    _ when command.ExpiresUtc <= DateTime.UtcNow => command.SentUtc == null ? "Expired before sending" : "No terminal acknowledgement",
+                    _ => command.SentUtc == null ? "Queued" : "Sent · awaiting terminal"
+                };
+                <p>@(command.FingerSlot == null ? "Employee sync" : "Fingerprint enrollment") · PIN @command.Pin · @status</p>
+            }
+        }
+    </article>
+}

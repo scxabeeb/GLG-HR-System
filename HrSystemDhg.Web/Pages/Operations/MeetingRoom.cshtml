@@ -1,0 +1,71 @@
+@page
+@model HrSystemDhg.Web.Pages.Operations.MeetingRoomModel
+@using HrSystemDhg.Web.Services
+@{ Layout = null; }
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>@Model.Meeting.Title · Garowe HR meeting</title>
+<link rel="stylesheet" href="~/css/meeting-room.css" asp-append-version="true" /></head>
+<body>
+<main>
+    <header class="room-heading">
+    <p class="brand-label"><span class="brand-mark" aria-hidden="true">G</span> GAROWE HR <span> / </span> MEETING ROOM</p>
+    <h1>@Model.Meeting.Title</h1>
+    <p class="meeting-time">@OperationsPolicy.Local(Model.Meeting.StartsUtc).ToString("dd MMM yyyy, HH:mm") – @OperationsPolicy.Local(Model.Meeting.EndsUtc).ToString("dd MMM yyyy, HH:mm") EAT</p>
+    </header>
+    @if (Model.Ended) {
+        <div class="room-lobby"><h2>Meeting ended</h2><p>The organizer ended this meeting for everyone.</p></div>
+    } else if (!Model.Open) {
+        <p>The room opens ten minutes before the scheduled start. Reload this page when it’s time to join.</p>
+    } else {
+        <div id="meeting-room" data-icons="@Url.Content("~/images/meeting-icons.svg")" data-ticket="@Model.Ticket" data-ice="@Model.Ice" data-signal="@Url.Content("~/operations/meeting-signal")">
+            <p class="room-recording-note">The organizer may record this meeting. A recording indicator appears while recording is active.</p>
+            <p id="room-recording-indicator" class="room-recording-indicator" role="status" hidden>● Recording in progress</p>
+            @if (Model.CanRecord) {
+                <form id="room-recording-upload" method="post" asp-page="./MeetingRecordings" asp-page-handler="Save" asp-route-meetingId="@Model.Meeting.Id" hidden></form>
+                <p id="room-recording-status" role="status"></p>
+                <a id="room-recording-fallback" hidden download>Download unsaved recording</a>
+                <p><a asp-page="./MeetingRecordings" asp-route-meetingId="@Model.Meeting.Id" target="_blank" rel="noopener">Saved recordings for this meeting</a></p>
+            }
+            <form id="join-room" class="room-lobby">
+                <h2 id="room-lobby-title">Ready to join?</h2>
+                <p>Choose how you want to enter the meeting.</p>
+                <label>Display name<input id="room-name" maxlength="50" required autocomplete="nickname" /></label>
+                <label class="room-choice"><input id="room-media" type="checkbox" checked /> Join with camera and microphone</label><button>Join room</button>
+            </form>
+            <p id="room-status" role="status" aria-live="polite">Up to six people can join this room.</p>
+            <div id="room-ended" class="room-lobby" tabindex="-1" hidden>
+                <h2>Meeting ended</h2>
+                <p>The organizer ended this meeting for everyone.</p>
+            </div>
+            <div id="room-stage" hidden>
+                <div class="stage-heading"><h2>Participants</h2><span id="room-count"></span></div>
+                <div id="room-video" aria-label="Meeting participants"></div>
+            </div>
+            <div id="room-controls" role="toolbar" aria-label="Meeting controls" hidden>
+                <button id="room-mute" type="button" aria-pressed="false"><svg aria-hidden="true"><use href="@Url.Content("~/images/meeting-icons.svg")#mic" /></svg><span>Mute microphone</span></button>
+                <button id="room-camera" type="button" aria-pressed="false"><svg aria-hidden="true"><use href="@Url.Content("~/images/meeting-icons.svg")#camera" /></svg><span>Turn camera off</span></button>
+                <button id="room-share-screen" type="button" aria-pressed="false"><svg aria-hidden="true"><use href="@Url.Content("~/images/meeting-icons.svg")#share" /></svg><span>Share screen</span></button>
+                <button id="room-board-toggle" type="button" aria-expanded="false" aria-controls="room-board"><svg aria-hidden="true"><use href="@Url.Content("~/images/meeting-icons.svg")#board" /></svg><span>Whiteboard</span></button>
+                @if (Model.CanRecord) { <button id="room-mute-all" type="button"><svg aria-hidden="true"><use href="@Url.Content("~/images/meeting-icons.svg")#mute-all" /></svg><span>Mute other participants</span></button> }
+                @if (Model.CanRecord) { <button id="room-record" type="button" aria-pressed="false"><svg aria-hidden="true"><use href="@Url.Content("~/images/meeting-icons.svg")#record" /></svg><span>Start recording</span></button> }
+                <div class="room-exit">
+                    <button id="room-leave" type="button"><svg aria-hidden="true"><use href="@Url.Content("~/images/meeting-icons.svg")#leave" /></svg><span>Leave</span></button>
+                    @if (Model.CanRecord) { <button id="room-end-all" type="button"><svg aria-hidden="true"><use href="@Url.Content("~/images/meeting-icons.svg")#end-all" /></svg><span>End for everyone</span></button> }
+                </div>
+            </div>
+            <section id="room-board" hidden aria-labelledby="room-board-title">
+                <h2 id="room-board-title">Shared whiteboard</h2>
+                <p id="room-board-help">Draw with a mouse, touch, or pen. The board is shared while the room is occupied.</p>
+                <p id="room-board-status" role="status"></p>
+                @if (Model.CanRecord) { <button id="room-board-clear" type="button">Clear whiteboard for everyone</button> }
+                <canvas id="room-board-canvas" width="1000" height="560" aria-label="Shared drawing area" aria-describedby="room-board-help"></canvas>
+            </section>
+        </div>
+    }
+</main>
+<script src="~/js/meeting-recording.js" asp-append-version="true" defer></script>
+<script src="~/js/meeting-whiteboard.js" asp-append-version="true" defer></script>
+<script src="~/js/meeting-room.js" asp-append-version="true" defer></script>
+</body></html>

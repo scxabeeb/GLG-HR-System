@@ -1,0 +1,15 @@
+@model string
+@inject HrSystemDhg.Web.Data.HrDbContext Db
+
+<nav class="actions" aria-label="Meeting pages">
+    <a class="button @(Model == "mine" ? "" : "secondary")" aria-current="@(Model == "mine" ? "page" : null)"
+       asp-page="./Meetings">My meetings</a>
+    @if (Db.IsStaff) {
+        <a class="button @(Model == "manage" ? "" : "secondary")" aria-current="@(Model == "manage" ? "page" : null)"
+           asp-page="./Meetings" asp-route-mode="manage">Manage meetings</a>
+    }
+    <a class="button @(Model == "reports" ? "" : "secondary")" aria-current="@(Model == "reports" ? "page" : null)"
+       asp-page="./MeetingReport">Meeting reports</a>
+    <a class="button @(Model == "recordings" ? "" : "secondary")" aria-current="@(Model == "recordings" ? "page" : null)"
+       asp-page="./MeetingRecordings">Saved recordings</a>
+</nav>

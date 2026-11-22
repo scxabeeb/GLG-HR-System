@@ -1,0 +1,80 @@
+@page
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.FleetReportModel
+@{ ViewData["Title"] = "Fleet reports & expenses"; }
+<div class="eyebrow">OPERATIONS / FLEET REPORTING</div><a class="hub-back" asp-page="/Reports/Hub">← Main reports</a>
+<h1>Fleet reports & expenses</h1>
+<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("fleet expenses")' />
+
+<p>Review trips, kilometres travelled, operating costs and upcoming renewals.</p>
+<div class="actions"><a class="button secondary" asp-page="./Fleet">Vehicle register</a><a class="button secondary" asp-page="./FleetTrips">Fleet trips</a></div>
+@if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+<div asp-validation-summary="All"></div>
+<form class="card" method="get">
+    <h2>Reporting period</h2>
+    <div class="grid">
+        <label>From<input asp-for="From" type="date" /></label>
+        <label>To<input asp-for="To" type="date" /></label>
+        <label>Vehicle<select asp-for="VehicleId"><option value="">All vehicles in scope</option>
+        @foreach (var vehicle in Model.Vehicles) { <option value="@vehicle.Id">@vehicle.Plate · @vehicle.Name</option> }
+        </select></label>
+    </div>
+    <div class="actions">
+        <button>Apply filters</button>
+        <a asp-page-handler="Csv" asp-route-report="trips" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")" asp-route-vehicleId="@Model.VehicleId">Export trips CSV</a>
+        <a asp-page-handler="Csv" asp-route-format="excel" asp-route-report="trips" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")" asp-route-vehicleId="@Model.VehicleId">Export trips Excel</a>
+        <a asp-page-handler="Csv" asp-route-format="pdf" asp-route-report="trips" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")" asp-route-vehicleId="@Model.VehicleId">Export trips PDF</a>
+        <a asp-page-handler="Csv" asp-route-report="expenses" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")" asp-route-vehicleId="@Model.VehicleId">Export expenses CSV</a>
+        <a asp-page-handler="Csv" asp-route-format="excel" asp-route-report="expenses" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")" asp-route-vehicleId="@Model.VehicleId">Export expenses Excel</a>
+        <a asp-page-handler="Csv" asp-route-format="pdf" asp-route-report="expenses" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")" asp-route-vehicleId="@Model.VehicleId">Export expenses PDF</a>
+    </div>
+</form>
+<div class="grid">
+    <div class="card"><h2>Trips</h2><p><strong>@Model.TripCounts.Values.Sum()</strong> scheduled in period</p><p>@Model.TripCounts.GetValueOrDefault(FleetTripState.Completed) completed · @Model.TripCounts.GetValueOrDefault(FleetTripState.Requested) requested · @Model.TripCounts.GetValueOrDefault(FleetTripState.InProgress) in progress</p></div>
+    <div class="card"><h2>Distance and fuel</h2><p><strong>@Model.Km.ToString("N0") km</strong> from completed trips</p><p>@Model.Litres.ToString("N2") litres logged</p></div>
+    <div class="card"><h2>Operating cost</h2>
+        @if (Model.CostTotals.Count == 0) { <p>No expenses recorded for this period.</p> }
+        @foreach (var cost in Model.CostTotals) { <p><strong>@cost.Total.ToString("N2") @cost.Currency</strong></p> }
+    </div>
+</div>
+<form method="post" asp-page-handler="Expense" asp-route-from="@Model.From?.ToString("yyyy-MM-dd")" asp-route-to="@Model.To?.ToString("yyyy-MM-dd")" asp-route-vehicleId="@Model.VehicleId" class="card">
+    <h2>Log fuel or another expense</h2>
+    <div class="grid">
+        <label>Vehicle<select asp-for="Expense.VehicleId" required><option value="">Select vehicle</option>
+        @foreach (var vehicle in Model.Vehicles) { <option value="@vehicle.Id">@vehicle.Plate</option> }
+        </select></label>
+        <label>Date<input asp-for="Expense.Date" type="date" required /></label>
+        <label>Category<select asp-for="Expense.Type" asp-items="Html.GetEnumSelectList<FleetCostType>()"></select></label>
+        <label>Amount<input asp-for="Expense.Amount" type="number" min="0.01" step="0.01" required /></label>
+        <label>Currency (three letters)<input asp-for="Expense.Currency" maxlength="3" pattern="[A-Za-z]{3}" required /></label>
+        <label>Litres (fuel only)<input asp-for="Expense.Litres" type="number" min="0.01" step="0.01" /></label>
+    </div>
+    <label>Receipt reference or note<input asp-for="Expense.Reference" maxlength="250" /></label>
+    <button>Save expense</button>
+</form>
+<div class="card table-scroll">
+    <h2>Trip activity</h2>
+    @if (Model.Trips.Count == 0) { <p>No trips in this period.</p> }
+    else {
+        <table><thead><tr><th>Destination</th><th>Vehicle</th><th>Planned start (EAT)</th><th>Status</th><th>Distance</th></tr></thead>
+            <tbody>@foreach (var trip in Model.Trips) { <tr><td>@trip.Destination</td><td>@(trip.Vehicle?.Plate ?? "Unassigned")</td><td>@OperationsPolicy.Local(trip.StartsUtc).ToString("dd MMM yyyy, HH:mm")</td><td>@trip.Status</td><td>@(trip.EndKm.HasValue ? $"{trip.EndKm - trip.StartKm} km" : "—")</td></tr> }</tbody>
+        </table>
+    }
+</div>
+<div class="card table-scroll">
+    <h2>Expense register</h2>
+    @if (Model.Expenses.Count == 0) { <p>No expenses in this period.</p> }
+    else {
+        <table><thead><tr><th>Date</th><th>Vehicle</th><th>Category</th><th>Amount</th><th>Fuel litres</th><th>Reference</th></tr></thead>
+        <tbody>@foreach (var expense in Model.Expenses) { <tr><td>@expense.Date.ToString("dd MMM yyyy")</td><td>@expense.Vehicle.Plate</td><td>@expense.Type</td><td>@expense.Amount.ToString("N2") @expense.Currency</td><td>@expense.Litres?.ToString("N2")</td><td>@expense.Reference</td></tr> }</tbody></table>
+    }
+</div>
+<div class="card">
+    <h2>Due or overdue in the next 30 days</h2>
+    @{ var renewals = Model.Vehicles.Where(v => v.Status != VehicleState.Retired && (!Model.VehicleId.HasValue || v.Id == Model.VehicleId))
+        .SelectMany(v => new[] { (v.Plate, "Registration", v.RegistrationExpires), (v.Plate, "Insurance", v.InsuranceExpires), (v.Plate, "Inspection", v.InspectionDue) })
+        .Where(x => x.Item3 <= Model.RenewalCutoff).OrderBy(x => x.Item3).ToList(); }
+    @if (renewals.Count == 0 && Model.PendingService.Count == 0) { <p>No upcoming or overdue entries have been recorded.</p> }
+    @foreach (var item in renewals) { <p>@item.Plate · @item.Item2 · @item.Item3?.ToString("dd MMM yyyy")</p> }
+    @foreach (var item in Model.PendingService) { <p>@Model.Vehicles.FirstOrDefault(v => v.Id == item.VehicleId)?.Plate · @item.Description · @item.ServiceDate.ToString("dd MMM yyyy")</p> }
+</div>

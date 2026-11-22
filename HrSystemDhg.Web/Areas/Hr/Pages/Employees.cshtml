@@ -1,5 +1,128 @@
 @page
 @model HrSystemDhg.Web.Pages.Hr.EmployeesModel
-@{ViewData["Title"]="Employee directory";}
-<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Employee directory</h1>
-<p>The people behind your organization.</p><a class="button" href="/Hr/Register">+ Register employee</a><div class="card"><table><tr><th>Employee</th><th>Number</th><th>Email</th><th>Status</th></tr>@foreach(var e in Model.Items){<tr><td><a href="/Hr/Details?employeeId=@e.Id">@e.FullName</a></td><td>@e.EmployeeNumber</td><td>@e.WorkEmail</td><td><span class="badge">@(e.RegistrationComplete?e.Status:"Onboarding")</span></td></tr>}</table>@if(!Model.Items.Any()){<p>No employees yet. Register your first team member.</p>}</div>
+@using HrSystemDhg.Web.Services
+@{ ViewData["Title"] = "Employee directory"; }
+<div class="eyebrow">GAROWE HR WORKSPACE</div>
+<h1>Employee directory</h1>
+<div class="actions"><a class="button" asp-page="./Register">Register employee</a></div>
+@if (TempData["TerminalNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+<div class="card table-scroll employee-directory">
+    @if (Model.Items.Count == 0) { <p>No employees yet. Register your first team member.</p> }
+    else
+    {
+        <table>
+            <thead><tr>
+                <th scope="col">Employee</th>
+                <th scope="col">Employee number</th>
+                <th scope="col">Job title</th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+            </tr></thead>
+            <tbody>
+            @foreach (var employee in Model.Items)
+            {
+                var assignment = Model.Assignments.GetValueOrDefault(employee.Id);
+                var expanded = Model.ExpandedEmployeeId == employee.Id;
+                <tr id="employee-@employee.Id">
+                    <th scope="row"><a asp-page="./Details" asp-route-employeeId="@employee.Id">@employee.FullName</a></th>
+                    <td>@employee.EmployeeNumber</td>
+                    <td>@(assignment?.JobTitle ?? employee.EmploymentType)</td>
+                    <td><span class="badge">@(employee.RegistrationComplete ? employee.Status : "Onboarding")</span></td>
+                    <td><a class="button secondary" asp-page="./Employees"
+                           asp-route-expandedEmployeeId="@(expanded ? (int?)null : employee.Id)"
+                           asp-fragment="@($"employee-{employee.Id}")" aria-expanded="@expanded.ToString().ToLowerInvariant()">
+                        @(expanded ? "Hide details" : "Details")
+                    </a></td>
+                </tr>
+                @if (expanded)
+                {
+                    <tr class="employee-directory-expanded"><td colspan="5">
+                        @{ var photo = Model.Documents[employee.Id].FirstOrDefault(d => d.Type == "Photo"); }
+                        <header class="employee-overview">
+                            @if (photo != null)
+                            {
+                                <img class="employee-photo" src="@Url.Page("/Files/Download", new { area = "", id = photo.Id, inline = true })" alt="" />
+                            }
+                            <div>
+                                <h2>@employee.FullName</h2>
+                                <p>@employee.EmployeeNumber · @(assignment?.JobTitle ?? employee.EmploymentType)</p>
+                                <span class="badge">@(employee.RegistrationComplete ? employee.Status : "Onboarding")</span>
+                            </div>
+                            <div class="actions">
+                                <a class="button" asp-page="./Details" asp-route-employeeId="@employee.Id">Open full record</a>
+                                @if (!employee.RegistrationComplete)
+                                {
+                                    <a class="button secondary" asp-page="./Onboarding" asp-route-employeeId="@employee.Id" asp-route-step="2">Resume onboarding</a>
+                                }
+                            </div>
+                        </header>
+                        <div class="employee-directory-details employee-detail-grid">
+                            <section>
+                                <h3>Work and contact</h3>
+                                <dl class="employee-facts">
+                                    <dt>Work email</dt><dd>@employee.WorkEmail</dd>
+                                    <dt>Phone</dt><dd>@(string.IsNullOrWhiteSpace(employee.Phone) ? "—" : employee.Phone)</dd>
+                                    <dt>Branch</dt><dd>@(assignment?.Branch ?? "—")</dd>
+                                    <dt>Department</dt><dd>@(assignment?.Department ?? "—")</dd>
+                                    <dt>Employment type</dt><dd>@employee.EmploymentType</dd>
+                                    <dt>Hire date</dt><dd>@employee.HireDate.ToString("dd MMM yyyy")</dd>
+                                    @if (employee.TerminationDate is DateTime end) { <dt>End date</dt><dd>@end.ToString("dd MMM yyyy")</dd> }
+                                </dl>
+                                <details class="employee-private">
+                                    <summary>Personal and emergency information</summary>
+                                    <dl class="employee-facts">
+                                        @foreach (var fact in new (string Label, string? Value)[] {
+                                            ("Nationality", employee.Nationality), ("Gender", employee.Gender),
+                                            ("Date of birth", employee.DateOfBirth?.ToString("dd MMM yyyy")),
+                                            ("National ID", employee.NationalId), ("Marital status", employee.MaritalStatus),
+                                            ("Dependents", employee.Dependents.ToString()), ("Personal email", employee.PersonalEmail),
+                                            ("Address", employee.Address), ("Emergency contact", employee.EmergencyContact),
+                                            ("Relationship", employee.EmergencyRelation), ("Emergency phone", employee.EmergencyPhone)
+                                        })
+                                        {
+                                            <dt>@fact.Label</dt><dd>@(string.IsNullOrWhiteSpace(fact.Value) ? "—" : fact.Value)</dd>
+                                        }
+                                    </dl>
+                                </details>
+                            </section>
+                            <section>
+                                <h3>Documents</h3>
+                                @if (!Model.Documents[employee.Id].Any()) { <span>No documents</span> }
+                                @foreach (var document in Model.Documents[employee.Id])
+                                {
+                                    <p class="employee-document">
+                                        <strong>@document.Type</strong><br />@document.OriginalName<br />
+                                        <a asp-area="" asp-page="/Files/Download" asp-route-id="@document.Id" asp-route-inline="true" target="_blank" rel="noopener">View</a>
+                                        · <a asp-area="" asp-page="/Files/Download" asp-route-id="@document.Id">Download</a>
+                                    </p>
+                                }
+                            </section>
+                            <section>
+                                <h3>Attendance terminal</h3>
+                                <p>Terminal User ID @(employee.ZkPin ?? "Unassigned")</p>
+                                @if (Model.Terminals.Count > 0 && ZkEmployeeCommands.ValidPin(employee.ZkPin))
+                                {
+                                    <form method="post" asp-page-handler="Terminal" asp-route-employeeId="@employee.Id">
+                                        <label>Terminal<select name="terminalId" required>
+                                            @foreach (var terminal in Model.Terminals) { <option value="@terminal.Id">@terminal.Name</option> }
+                                        </select></label>
+                                        <label>Fingerprint slot<select name="fingerSlot">
+                                            @for (var slot = 0; slot < 10; slot++) { <option value="@slot">@(slot + 1)</option> }
+                                        </select></label>
+                                        <button name="operation" value="sync" class="secondary" title="Confirm that this PIN belongs to the employee on the terminal">Send employee</button>
+                                        <button name="operation" value="enroll">Enroll fingerprint</button>
+                                    </form>
+                                    @foreach (var command in Model.Commands[employee.ZkPin!])
+                                    {
+                                        <p>@Model.Terminals.FirstOrDefault(d => d.Id == command.DeviceId)?.Name · @(command.FingerSlot.HasValue ? "Fingerprint" : "Profile") · @HrSystemDhg.Web.Pages.Hr.EmployeesModel.Status(command)</p>
+                                    }
+                                }
+                            </section>
+                        </div>
+                    </td></tr>
+                }
+            }
+            </tbody>
+        </table>
+    }
+</div>

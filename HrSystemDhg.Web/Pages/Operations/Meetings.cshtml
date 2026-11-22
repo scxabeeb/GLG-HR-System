@@ -1,0 +1,126 @@
+@page
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.MeetingsModel
+@{ ViewData["Title"] = "Meeting organizer"; }
+<div class="eyebrow">OPERATIONS / COLLABORATION</div>
+<h1>@(Model.Managing ? "Manage meetings" : "My meetings")</h1>
+@if (Model.CanOrganize)
+{
+    <partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='( "meetings" )' />
+}
+
+<p>@(Model.Managing ? "Schedule, reschedule, and cancel meetings you organize." : "Open meetings you organized or were invited to join.") Times are in Mogadishu time.</p>
+<partial name="_MeetingNavigation" model='(Model.Managing ? "manage" : "mine")' />
+@if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+@if (Model.Managing) {
+<form method="post" asp-page-handler="Save" class="card">
+    <h2>@(Model.Input.Id == 0 ? "Schedule a meeting" : "Edit meeting")</h2>
+    <p>Schedule an in-person meeting at a location, or use a Garowe video room.</p>
+    <div asp-validation-summary="All"></div>
+    <input asp-for="Input.Id" type="hidden" />
+    <div class="grid">
+        <label>Meeting title<input asp-for="Input.Title" required maxlength="160" /></label>
+        <label>Start<input asp-for="Input.Starts" type="datetime-local" required /></label>
+        <label>End<input asp-for="Input.Ends" type="datetime-local" required /></label>
+    </div>
+    <div class="grid">
+        <label>Meeting format<select asp-for="Input.InPerson"><option value="false">Online · Garowe room</option><option value="true">In person · local venue</option></select></label>
+        <label>Location (required for in-person meetings)<input asp-for="Input.Location" maxlength="250" placeholder="Municipal office, Room 2" /></label>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Input.JoinUrl)) {
+        <label>Existing external join link (clear it to switch to a Garowe room)<input asp-for="Input.JoinUrl" type="url" maxlength="2048" /></label>
+    }
+    @if (Model.People.Count > 0) {
+        <fieldset><legend>Invite employee accounts</legend><div class="checkbox-list ops-participants">
+        @foreach (var person in Model.People) { <label><input type="checkbox" name="Input.Guests" value="@person.Key" checked="@Model.Input.Guests.Contains(person.Key)" /> @person.Value</label> }
+        </div></fieldset>
+    }
+    <label>Agenda<textarea asp-for="Input.Agenda" rows="3" maxlength="2500"></textarea></label>
+    <button>Save meeting</button> @if (Model.Input.Id != 0) { <a asp-page="./Meetings" asp-route-mode="manage">Cancel edit</a> }
+</form>
+}
+<div class="actions" aria-label="Meeting schedule filters">
+    <a class="button @(Model.Period == "upcoming" ? "" : "secondary")" asp-page="./Meetings" asp-route-mode="@Model.Mode" asp-route-period="upcoming">Upcoming &amp; in progress</a>
+    <a class="button @(Model.Period == "past" ? "" : "secondary")" asp-page="./Meetings" asp-route-mode="@Model.Mode" asp-route-period="past">Past &amp; cancelled</a>
+    <a class="button @(Model.Period == null ? "" : "secondary")" asp-page="./Meetings" asp-route-mode="@Model.Mode">All meetings</a>
+</div>
+<div class="card meeting-list workspace-list">
+    <header class="workspace-list-heading"><h2>@(Model.Managing ? "Meetings you organize" : "Your meetings")</h2><small>@Model.Items.Count shown</small></header>
+    @if (Model.Items.Count == 0) { <p>No meetings match this view.</p> }
+    @foreach (var meeting in Model.Items) {
+        var now = DateTime.UtcNow;
+        var builtIn = meeting.Location == null && meeting.JoinUrl.Length == 0;
+        var upcoming = !meeting.Cancelled && meeting.EndedUtc == null && meeting.EndsUtc > now;
+        var owner = meeting.OwnerId == Model.Actor;
+        var status = meeting.Cancelled ? "Cancelled" : meeting.EndedUtc != null ? "Ended" : meeting.EndsUtc <= now ? "Past" : meeting.StartsUtc <= now ? "In progress" : "Scheduled";
+        var shareUrl = upcoming && owner ? (builtIn ? Model.GuestLink(meeting) : OperationsPolicy.IsJoinUrl(meeting.JoinUrl) ? meeting.JoinUrl : null) : null;
+        var start = OperationsPolicy.Local(meeting.StartsUtc);
+        var end = OperationsPolicy.Local(meeting.EndsUtc);
+        <article class="meeting-entry workspace-list-item" id="meeting-@meeting.Id">
+            <div class="meeting-list-row">
+                <div class="meeting-list-identity">
+                    <h3><a asp-page="./MeetingDetails" asp-route-id="@meeting.Id">@meeting.Title</a></h3>
+                    <small>@(meeting.Location ?? (builtIn ? "Garowe video room" : "External video meeting"))</small>
+                    <small>@meeting.Participants.Count(p => p.AttendedUtc != null) / @meeting.Participants.Count employees checked in</small>
+                </div>
+                <div class="meeting-list-schedule">
+                    <strong>@start.ToString("ddd, dd MMM yyyy")</strong>
+                    <small>@start.ToString("HH:mm") – @(start.Date == end.Date ? end.ToString("HH:mm") : end.ToString("dd MMM, HH:mm")) EAT</small>
+                </div>
+                <span class="badge meeting-state @(status == "In progress" ? "meeting-live" : upcoming ? "" : "meeting-closed")">@status</span>
+                <div class="meeting-entry-actions">
+                    @if (upcoming && meeting.Participants.Any(p => p.UserId == Model.Actor)) {
+                        <a class="button secondary" asp-page="./MeetingDetails" asp-route-id="@meeting.Id" asp-fragment="meeting-attendance">@(meeting.Participants.Any(p => p.UserId == Model.Actor && p.AttendedUtc != null) ? "Attendance recorded" : "I'm attending")</a>
+                    }
+                    @if (upcoming && builtIn) {
+                        <a class="button" asp-page="./MeetingRoom" asp-route-id="@meeting.Id">Open meeting room</a>
+                    } else if (upcoming && OperationsPolicy.IsJoinUrl(meeting.JoinUrl)) {
+                        <a class="button" href="@meeting.JoinUrl" target="_blank" rel="noopener noreferrer">Join video meeting</a>
+                    }
+                    @if (Model.CanOrganize && owner && status == "In progress")
+                    {
+                        <form method="post" asp-page-handler="End" asp-route-id="@meeting.Id"
+                              asp-route-mode="@Model.Mode" asp-route-period="@Model.Period"
+                              onsubmit="return confirm('End this meeting in Garowe HR?')">
+                            <button class="danger">End meeting</button>
+                        </form>
+                    }
+                </div>
+            </div>
+            <details class="meeting-list-details">
+                <summary>Details</summary>
+                <p>@meeting.Participants.Count invited · @(owner ? "Organizer" : "Participant")</p>
+                @if (meeting.Agenda.Length > 0) { <p class="ops-description meeting-agenda">@meeting.Agenda</p> }
+                <div class="meeting-entry-actions">
+                    @if (upcoming && meeting.Participants.Any(p => p.UserId == Model.Actor)) {
+                        <a class="button secondary" asp-page="./MeetingDetails" asp-route-id="@meeting.Id" asp-fragment="meeting-attendance">@(meeting.Participants.Any(p => p.UserId == Model.Actor && p.AttendedUtc != null) ? "Attendance recorded" : "I'm attending")</a>
+                    }
+                    <a class="button secondary" asp-page="./MeetingDetails" asp-route-id="@meeting.Id">Agenda &amp; minutes</a>
+                    @if (Model.CanOrganize && owner && !meeting.Cancelled && meeting.EndedUtc == null) {
+                        <a class="button secondary" asp-page="./Meetings" asp-route-edit="@meeting.Id" asp-route-mode="manage">Edit meeting</a>
+                        <form method="post" asp-page-handler="Cancel" asp-route-id="@meeting.Id"><button class="secondary">Cancel meeting</button></form>
+                    }
+                </div>
+            @if (shareUrl != null) {
+                <details class="meeting-share">
+                    <summary>Share guest link</summary>
+                    <div class="meeting-share-panel">
+                        <label for="guest-link-@meeting.Id">Guest join link</label>
+                        <div class="meeting-link-row">
+                            <input id="guest-link-@meeting.Id" type="url" readonly value="@shareUrl" spellcheck="false" />
+                            <button type="button" class="secondary" data-copy-meeting>Copy link</button>
+                        </div>
+                        <p class="meeting-copy-status" role="status" aria-live="polite"></p>
+                        @if (builtIn) {
+                            <p class="meeting-share-help">Anyone with this link can join during the meeting. Share it only with intended guests.</p>
+                            @if (!Request.IsHttps) { <p class="meeting-share-help">This local address is for testing. Outside guests need a reachable HTTPS address.</p> }
+                        } else { <p class="meeting-share-help">Guests join through the meeting provider’s lobby.</p> }
+                    </div>
+                </details>
+            }
+            </details>
+        </article>
+    }
+</div>
+
+@section Scripts { <script src="~/js/meeting-share.js" asp-append-version="true" defer></script> }

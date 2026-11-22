@@ -1,0 +1,102 @@
+@page
+@using System.Globalization
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.FleetModel
+@{ ViewData["Title"] = "Vehicle fleet"; }
+<div class="eyebrow">OPERATIONS / TRANSPORT</div>
+<h1>Vehicle fleet</h1>
+<div class="grid">
+<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("vehicles")' />
+
+<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("vehicle service")'
+         view-data='new ViewDataDictionary(ViewData) { ["CsvDataset"] = "service" }' />
+</div>
+<div class="actions"><a class="button secondary" asp-page="./FleetTrips">Fleet trips</a><a class="button secondary" asp-page="./FleetReport">Fleet reports & expenses</a></div><p>Manage vehicles, driver assignments, maintenance, and GPS reporting.</p>
+@if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+<div class="card table-scroll">
+    <div class="user-heading"><h2>Fleet register</h2><a class="button secondary" asp-page="./Fleet">Add vehicle</a></div>
+    @if (Model.Vehicles.Count == 0) { <p>No vehicles registered. Add your first vehicle below.</p> }
+    else {
+    <table><thead><tr><th>Registration</th><th>Vehicle</th><th>Status</th><th>Odometer</th><th>GPS</th></tr></thead><tbody>
+        @foreach (var vehicle in Model.Vehicles) {
+            <tr><td><a asp-page="./Fleet" asp-route-vehicle="@vehicle.Id">@vehicle.Plate</a></td><td>@vehicle.Name</td><td>@vehicle.Status</td><td>@vehicle.OdometerKm.ToString("N0") km</td><td>@(vehicle.TrackerKeyHash == null ? "Not configured" : "Key issued")</td></tr>
+        }
+    </tbody></table>
+    }
+</div>
+<form method="post" asp-page-handler="Save" class="card">
+    <h2>@(Model.Selected == null ? "Add vehicle" : $"Edit {Model.Selected.Plate}")</h2>
+    <div asp-validation-summary="All"></div>
+    @if (Model.Branches.Count == 0) { <p>Configure an active branch before adding a vehicle.</p> }
+    <input asp-for="Input.Id" type="hidden" />
+    <div class="grid">
+        <label>Registration / plate<input asp-for="Input.Plate" maxlength="32" required /></label>
+        <label>Vehicle name / model<input asp-for="Input.Name" maxlength="120" required /></label>
+        <label>Branch<select asp-for="Input.BranchId" required><option value="">Choose a branch</option>
+            @foreach (var branch in Model.Branches) { <option value="@branch.Key">@branch.Value</option> }
+        </select></label>
+        <label>Driver<select asp-for="Input.DriverId"><option value="">Unassigned</option>
+            @foreach (var driver in Model.Drivers) { <option value="@driver.Key">@driver.Value</option> }
+        </select></label>
+        <label>Odometer (km)<input asp-for="Input.OdometerKm" type="number" min="0" max="9999999" required /></label>
+        <label>Registration expires<input asp-for="Input.RegistrationExpires" type="date" /></label>
+        <label>Insurance expires<input asp-for="Input.InsuranceExpires" type="date" /></label>
+        <label>Inspection due<input asp-for="Input.InspectionDue" type="date" /></label>
+        <label>Status<select asp-for="Input.Status" asp-items="Html.GetEnumSelectList<VehicleState>()"></select></label>
+    </div>
+    <button>Save vehicle</button>
+</form>
+@if (Model.Selected is { } selected) {
+<div class="card">
+    <h2>GPS tracking · @selected.Plate</h2>
+    <p>Position updates appear here when your tracker or gateway sends a GPS fix.</p>
+    @if (TempData["FleetTrackerVehicle"] is int keyVehicle && keyVehicle == selected.Id && TempData["FleetTrackerKey"] is string key) {
+        <label>Tracker key (shown once)<input value="@key" readonly autocomplete="off" spellcheck="false" /></label>
+    }
+    <div class="actions" id="fleet-watch" data-url="@Url.Page("./Fleet", "Latest", new { id = selected.Id })">
+        <button type="button" class="secondary" aria-pressed="false">Watch latest position</button>
+        <span role="status"></span>
+        <a class="button secondary" hidden target="_blank" rel="noopener noreferrer">Open latest fix on map</a>
+    </div>
+    <p>Device endpoint: <code>/api/fleet/@selected.Id/positions</code></p>
+    <div class="actions">
+        @if (selected.Status != VehicleState.Retired) {
+            <form method="post" asp-page-handler="Tracker" asp-route-id="@selected.Id"><button>@(selected.TrackerKeyHash == null ? "Issue tracker key" : "Rotate tracker key")</button></form>
+        }
+        @if (selected.TrackerKeyHash != null) {
+            <form method="post" asp-page-handler="Tracker" asp-route-id="@selected.Id" asp-route-revoke="true"><button class="secondary">Revoke tracker key</button></form>
+        }
+        <a asp-page="./Fleet" asp-route-vehicle="@selected.Id">Refresh positions</a>
+    </div>
+    @if (Model.Positions.FirstOrDefault() is { } latest) {
+        var latitude = latest.Latitude.ToString("0.######", CultureInfo.InvariantCulture);
+        var longitude = latest.Longitude.ToString("0.######", CultureInfo.InvariantCulture);
+        var map = $"https://www.openstreetmap.org/?mlat={latitude}&mlon={longitude}#map=16/{latitude}/{longitude}";
+        <h3>Last reported location</h3>
+        <p>@latitude, @longitude · @OperationsPolicy.Local(latest.RecordedUtc).ToString("dd MMM yyyy, HH:mm:ss") EAT
+        @if (latest.RecordedUtc < DateTime.UtcNow.AddMinutes(-15)) { <span class="badge">Older than 15 minutes</span> }
+        </p>
+        <a class="button secondary" href="@map" target="_blank" rel="noopener noreferrer">Open location on map</a>
+        <div class="table-scroll"><table><thead><tr><th>Recorded (EAT)</th><th>Latitude</th><th>Longitude</th><th>Speed</th></tr></thead><tbody>
+        @foreach (var position in Model.Positions) { <tr><td>@OperationsPolicy.Local(position.RecordedUtc).ToString("dd MMM, HH:mm:ss")</td><td>@position.Latitude.ToString("0.######")</td><td>@position.Longitude.ToString("0.######")</td><td>@(position.SpeedKph.HasValue ? $"{position.SpeedKph:0.#} km/h" : "—")</td></tr> }
+        </tbody></table></div>
+    } else { <p>No GPS positions have been received.</p> }
+</div>
+<div class="card">
+    <h2>Maintenance history</h2>
+    <form method="post" asp-page-handler="Service" asp-route-id="@selected.Id">
+        <div class="grid"><label>Service date<input asp-for="Service.Date" type="date" required /></label><label>Service description<input asp-for="Service.Description" required maxlength="500" /></label></div>
+        <button>Schedule service</button>
+    </form>
+    <div class="ops-list">
+    @foreach (var entry in Model.Services) {
+        <article class="ops-row">
+            <div><h3>@entry.Description</h3><p>@entry.ServiceDate.ToString("dd MMM yyyy") · @(entry.Completed ? "Completed" : entry.ServiceDate.Date < BusinessClock.Today ? "Overdue" : "Scheduled")</p></div>
+            <form method="post" asp-page-handler="ServiceStatus" asp-route-id="@selected.Id" asp-route-entryId="@entry.Id" asp-route-completed="@(!entry.Completed)"><button class="secondary">@(entry.Completed ? "Reopen" : "Mark completed")</button></form>
+        </article>
+    }
+    </div>
+</div>
+}
+
+@section Scripts { <script src="~/js/fleet-watch.js" asp-append-version="true" defer></script> }

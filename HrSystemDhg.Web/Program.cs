@@ -2,6 +2,7 @@ using HrSystemDhg.Web.Data;
 using HrSystemDhg.Web.Models;
 using HrSystemDhg.Web.Services;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.RateLimiting;
 if (EF.IsDesignTime)
     return;
 var builder = WebApplication.CreateBuilder(args);
+ReportPdf.ConfigureFonts();
 if (builder.Environment.IsDevelopment())
 {
     builder.Configuration.AddJsonFile("App_Data/local-settings.json", optional: true, reloadOnChange: true);
@@ -17,6 +19,7 @@ if (builder.Environment.IsDevelopment())
 
 var cs = builder.Configuration.GetConnectionString("DefaultConnection") ?? "Server=localhost;Database=hr_system_dhg;User=hr_app;Password=;";
 builder.Services.AddDbContext<HrDbContext>(o => o.UseMySql(cs, new MySqlServerVersion(new Version(8, 0, 0))));
+builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys")));
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(o =>
 {
     o.Password.RequiredLength = 10;
@@ -64,6 +67,22 @@ builder.Services.AddScoped<LeaveService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<PayrollService>();
 builder.Services.AddScoped<AttendanceService>();
+builder.Services.AddScoped<OperationsNotices>();
+builder.Services.AddScoped<ModuleAccess>();
+builder.Services.AddHttpClient("whatsapp", client => client.Timeout = TimeSpan.FromSeconds(12))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHostedService<WhatsAppWorker>();
+builder.Services.AddRateLimiter(options => options.AddPolicy("fleet-gps", context =>
+    RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 180, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
+builder.Services.AddSingleton<RoomLinks>();
+builder.Services.AddSingleton<MeetingRooms>();
+builder.Services.AddRateLimiter(options => options.AddPolicy("meeting-join", context =>
+    RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 40, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
+builder.Services.AddRateLimiter(options => options.AddPolicy("attendance-push", context =>
+    RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));
 var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
@@ -71,9 +90,27 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+var pushPort = builder.Configuration.GetValue<int?>("AttendancePush:ListenerPort");
+if (pushPort is > 0 and <= 65535)
+{
+    app.Use(async (context, next) =>
+    {
+        var path = context.Request.Path.Value;
+        var isDeviceRoute = path != null && new[] { "/iclock/cdata", "/iclock/cdata.aspx", "/iclock/getrequest", "/iclock/getrequest.aspx", "/iclock/devicecmd", "/iclock/devicecmd.aspx" }
+            .Contains(path, StringComparer.OrdinalIgnoreCase);
+        if ((context.Connection.LocalPort == pushPort) != isDeviceRoute)
+        {
+            context.Response.StatusCode = 404;
+            return;
+        }
+        await next();
+    });
+}
+
 if (builder.Configuration.GetValue<bool>("Security:RequireHttps"))
-    app.UseHttpsRedirection();
+    app.UseWhen(context => context.Connection.LocalPort != pushPort, branch => branch.UseHttpsRedirection());
 app.UseStaticFiles();
+app.UseWebSockets();
 app.UseRouting();
 app.UseRateLimiter();
 app.UseAuthentication();
@@ -112,7 +149,24 @@ app.Use(async (context, next) =>
         }
         else if (user.MustChangePassword && !context.Request.Path.StartsWithSegments("/Identity/Account"))
         {
-            context.Response.Redirect("/Identity/Account/ChangePassword");
+            var returnUrl = context.Request.PathBase.Add(context.Request.Path).ToUriComponent() + context.Request.QueryString.ToUriComponent();
+            context.Response.Redirect(Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(
+                "/Identity/Account/ChangePassword", "ReturnUrl", returnUrl));
+            return;
+        }
+    }
+
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var area = context.GetRouteValue("area")?.ToString();
+        var page = context.GetRouteValue("page")?.ToString();
+        var module = ModuleAccess.ForRoute(area, page);
+        if (module != null && !ModuleAccess.Allows(await context.RequestServices.GetRequiredService<ModuleAccess>().BlockedAsync(), module))
+        {
+            if (module == "overview" && HttpMethods.IsGet(context.Request.Method))
+                context.Response.Redirect("/Operations/Notifications");
+            else
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
     }
@@ -120,6 +174,21 @@ app.Use(async (context, next) =>
     await next();
 });
 app.MapRazorPages();
+app.MapGet("/api/mobile/v1/{section}", MobileEmployeeApi.Read).RequireAuthorization();
+foreach (var path in new[] { "/iclock/cdata", "/iclock/cdata.aspx" })
+{
+    app.MapGet(path, ZkAttendancePush.Poll).AllowAnonymous().RequireRateLimiting("attendance-push");
+    app.MapPost(path, ZkAttendancePush.Upload).AllowAnonymous().RequireRateLimiting("attendance-push");
+}
+foreach (var path in new[] { "/iclock/getrequest", "/iclock/getrequest.aspx" })
+    app.MapGet(path, ZkAttendancePush.NextCommand).AllowAnonymous().RequireRateLimiting("attendance-push");
+foreach (var path in new[] { "/iclock/devicecmd", "/iclock/devicecmd.aspx" })
+    app.MapPost(path, ZkAttendancePush.CommandResult).AllowAnonymous().RequireRateLimiting("attendance-push");
+
+app.MapGet("/operations/meeting-signal", (HttpContext context, MeetingRooms rooms, HrDbContext db, RoomLinks links) =>
+    rooms.Handle(context, db, links)).AllowAnonymous().RequireRateLimiting("meeting-join");
+app.MapPost("/api/fleet/{vehicleId:int}/positions", FleetTelemetry.Receive)
+    .AllowAnonymous().RequireRateLimiting("fleet-gps");
 if (args.Contains("--migrate"))
 {
     using var scope = app.Services.CreateScope();

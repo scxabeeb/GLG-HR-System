@@ -3,13 +3,21 @@ using HrSystemDhg.Web.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace HrSystemDhg.Web.Services;
+public sealed class MissingWorkRuleException(int employeeId, DateTime date, EmployeeAssignment assignment)
+    : InvalidOperationException("Configure an effective work rule first.")
+{
+    public int EmployeeId { get; } = employeeId;
+    public DateTime Date { get; } = date;
+    public EmployeeAssignment Assignment { get; } = assignment;
+}
+
 public class CalendarService(HrDbContext db)
 {
     public async Task<EmployeeAssignment> AssignmentAsync(int employeeId, DateTime date) => await db.EmployeeAssignments.Where(x => x.EmployeeId == employeeId && x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date)).OrderByDescending(x => x.EffectiveFrom).FirstOrDefaultAsync() ?? throw new InvalidOperationException("No effective assignment for employee " + employeeId);
     public async Task<WorkRule> RuleAsync(int employeeId, DateTime date)
     {
         var a = await AssignmentAsync(employeeId, date);
-        return await db.WorkRules.Where(x => x.EffectiveFrom <= date && (x.BranchId == null || x.BranchId == a.BranchId) && (x.DepartmentId == null || x.DepartmentId == a.DepartmentId) && (x.ShiftId == null || x.ShiftId == a.ShiftId)).OrderByDescending(x => x.ShiftId != null).ThenByDescending(x => x.DepartmentId != null).ThenByDescending(x => x.BranchId != null).ThenByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).FirstOrDefaultAsync() ?? throw new InvalidOperationException("Configure an effective work rule first.");
+        return await db.WorkRules.Where(x => x.EffectiveFrom <= date && (x.BranchId == null || x.BranchId == a.BranchId) && (x.DepartmentId == null || x.DepartmentId == a.DepartmentId) && (x.ShiftId == null || x.ShiftId == a.ShiftId)).OrderByDescending(x => x.ShiftId != null).ThenByDescending(x => x.DepartmentId != null).ThenByDescending(x => x.BranchId != null).ThenByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).FirstOrDefaultAsync() ?? throw new MissingWorkRuleException(employeeId, date, a);
     }
 
     public static bool Weekday(WorkRule rule, DateTime date) => rule.WorkingWeekdays.Split(',').Contains(((int)date.DayOfWeek).ToString());

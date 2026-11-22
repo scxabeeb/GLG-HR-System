@@ -42,4 +42,39 @@ public class LeaveTypesModel(HrDbContext db) : PageModel
         await db.SaveChangesAsync();
         return RedirectToPage();
     }
+
+    private const string CsvColumns = "Name,AnnualDays,IsPaid,EnforceBalance,AccrueMonthly,RequiresDocument,MinDays,MaxDays,GenderRestriction,EmploymentRestriction";
+
+    public IActionResult OnGetSample()
+    {
+        return RegistrationCsv.Download("leave-types-sample", CsvColumns, [["Example leave", 10, true, true, false, false, 1, 10, null, null]]);
+    }
+
+    public async Task<IActionResult> OnGetExportAsync()
+    {
+        var records = await db.LeaveTypes.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
+        Response.Headers.CacheControl = "no-store";
+        return RegistrationCsv.Download("leave-types", CsvColumns, records.Select(x => new object?[] { x.Name, x.AnnualDays, x.IsPaid, x.EnforceBalance, x.AccrueMonthly, x.RequiresDocument, x.MinDays, x.MaxDays, x.GenderRestriction, x.EmploymentRestriction }));
+    }
+
+    public Task<IActionResult> OnPostImportAsync(IFormFile? upload)
+    {
+        return RegistrationCsv.ImportAsync(this, db, upload, CsvColumns, async row =>
+        {
+            Input = new LeaveType();
+            Input.Name = row.Get<string>("Name");
+            Input.AnnualDays = row.Get<decimal>("AnnualDays");
+            Input.IsPaid = row.Get<bool>("IsPaid");
+            Input.EnforceBalance = row.Get<bool>("EnforceBalance");
+            Input.AccrueMonthly = row.Get<bool>("AccrueMonthly");
+            Input.RequiresDocument = row.Get<bool>("RequiresDocument");
+            Input.MinDays = row.Get<int>("MinDays");
+            Input.MaxDays = row.Get<int>("MaxDays");
+            Input.GenderRestriction = row.Optional("GenderRestriction");
+            Input.EmploymentRestriction = row.Optional("EmploymentRestriction");
+            if (await db.LeaveTypes.AnyAsync(x => x.Name == Input.Name))
+                throw new FormatException("A leave type with this name already exists.");
+            return await OnPostAsync();
+        });
+    }
 }

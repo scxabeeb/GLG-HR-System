@@ -1,0 +1,17 @@
+@model List<HrSystemDhg.Web.Pages.Hr.AttendanceModel.PunchRow>
+@if (Model.Count == 0)
+{
+    <p>No punches received for today yet.</p>
+}
+else
+{
+    <table class="workspace-table">
+        <thead><tr><th scope="col">Time</th><th scope="col">Employee</th><th scope="col">Terminal User ID</th><th scope="col">Device</th></tr></thead>
+        <tbody>
+        @foreach (var punch in Model)
+        {
+            <tr><td>@punch.Time.ToString("HH:mm:ss")</td><td>@if (punch.Employee == null) { <span class="badge status-warning">Unmapped</span> } else { <strong>@punch.Employee</strong> }</td><td>@punch.Pin</td><td>@(punch.Device ?? "Unknown device")</td></tr>
+        }
+        </tbody>
+    </table>
+}

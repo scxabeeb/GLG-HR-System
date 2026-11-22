@@ -31,6 +31,19 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
     [BindProperty(SupportsGet = true)]
     public int? PeriodId { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public int? EmployeeId { get; set; }
+
+    [BindProperty(SupportsGet = true)]
+    public string? Status { get; set; }
+
+    public bool IsPayrollReport => Report is "Payroll" or "Deductions" or "Bank";
+    public bool UsesDates => Report is "Hires" or "Attendance" or "Salary" or "Leave" or "Balances";
+    public bool CanViewSalary => User.IsInRole("HR") || User.IsInRole("Admin");
+    public bool CanPublish => User.IsInRole("Management") || User.IsInRole("Admin");
+    public List<Employee> Employees { get; private set; } = [];
+    public List<string> Statuses { get; private set; } = [];
+
     public List<Branch> Branches = [];
     public List<Department> Departments = [];
     public List<SubDepartment> SubDepartments = [];
@@ -41,24 +54,76 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
         Branches = await db.Branchs.ToListAsync();
         Departments = await db.Departments.ToListAsync();
         SubDepartments = await db.SubDepartments.ToListAsync();
-        Periods = await db.PayrollPeriods.OrderByDescending(x => x.From).ToListAsync();
-        if (From > To || (To - From).TotalDays > 3660)
-            return BadRequest();
-        var employees = await db.Employees.ToDictionaryAsync(x => x.Id);
-        var org = await db.EmployeeAssignments.Where(x => x.EffectiveFrom <= To && (x.EffectiveTo == null || x.EffectiveTo >= To)).ToListAsync();
-        var ids = employees.Keys.Where(id => org.Any(a => a.EmployeeId == id && (BranchId == null || a.BranchId == BranchId) && (DepartmentId == null || a.DepartmentId == DepartmentId) && (SubDepartmentId == null || a.SubDepartmentId == SubDepartmentId))).ToList();
+        if (Report == "Salary" && !CanViewSalary)
+            return Forbid();
+        if (IsPayrollReport)
+            Periods = await db.PayrollPeriods.OrderByDescending(x => x.From).ToListAsync();
+        Employees = await db.Employees.AsNoTracking().OrderBy(x => x.FullName).ThenBy(x => x.EmployeeNumber).ToListAsync();
+        if (UsesDates && (From > To || (To - From).TotalDays > 3660))
+            ModelState.AddModelError("", "Choose a valid date range of up to ten years.");
+        if (!ModelState.IsValid)
+            return format == null ? Page() : BadRequest();
+
+        var employees = Employees.ToDictionary(x => x.Id);
+        var eligible = db.Employees.AsNoTracking();
+        var organizationDate = UsesDates ? To : BusinessClock.Today;
+        var org = db.EmployeeAssignments.AsNoTracking().Where(x => x.EffectiveFrom <= organizationDate
+            && (x.EffectiveTo == null || x.EffectiveTo >= organizationDate)
+            && (BranchId == null || x.BranchId == BranchId)
+            && (DepartmentId == null || x.DepartmentId == DepartmentId)
+            && (SubDepartmentId == null || x.SubDepartmentId == SubDepartmentId));
+        if (BranchId != null || DepartmentId != null || SubDepartmentId != null)
+            eligible = eligible.Where(x => org.Any(a => a.EmployeeId == x.Id));
+        var ids = IsPayrollReport ? [] : await eligible.Where(x => EmployeeId == null || x.Id == EmployeeId)
+            .Select(x => x.Id).ToListAsync();
         string Name(int id) => employees.GetValueOrDefault(id)?.FullName ?? "";
         if (Report is "Employees" or "Hires")
         {
-            Rows.Add(["Number", "Name", "Email", "Hire date", "Termination date", "Status"]);
-            foreach (var e in employees.Values.Where(x => ids.Contains(x.Id) && (Report != "Hires" || x.HireDate >= From && x.HireDate <= To || x.TerminationDate >= From && x.TerminationDate <= To)))
-                Rows.Add([e.EmployeeNumber, e.FullName, e.WorkEmail, e.HireDate.ToString("yyyy-MM-dd"), e.TerminationDate?.ToString("yyyy-MM-dd") ?? "", e.Status]);
+            var assignments = (await org.Where(x => ids.Contains(x.EmployeeId))
+                .OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).ToListAsync())
+                .GroupBy(x => x.EmployeeId).ToDictionary(x => x.Key, x => x.First());
+            var branches = Branches.ToDictionary(x => x.Id, x => x.Name);
+            var departments = Departments.ToDictionary(x => x.Id, x => x.Name);
+            var subDepartments = SubDepartments.ToDictionary(x => x.Id, x => x.Name);
+            Rows.Add(["Number", "Name", "Email", "Job title", "Branch", "Department", "Sub-department",
+                "Hire date", "Termination date", "Status"]);
+            Statuses = Employees.Select(x => x.Status).Distinct().OrderBy(x => x).ToList();
+            foreach (var e in Employees.Where(x => ids.Contains(x.Id)
+                && (Status == null || x.Status == Status)
+                && (Report != "Hires" || x.HireDate >= From && x.HireDate <= To || x.TerminationDate >= From && x.TerminationDate <= To)))
+            {
+                var assignment = assignments.GetValueOrDefault(e.Id);
+                Rows.Add([e.EmployeeNumber, e.FullName, e.WorkEmail, assignment?.JobTitle ?? "",
+                    branches.GetValueOrDefault(assignment?.BranchId ?? 0) ?? "",
+                    departments.GetValueOrDefault(assignment?.DepartmentId ?? 0) ?? "",
+                    subDepartments.GetValueOrDefault(assignment?.SubDepartmentId ?? 0) ?? "",
+                    e.HireDate.ToString("yyyy-MM-dd"), e.TerminationDate?.ToString("yyyy-MM-dd") ?? "", e.Status]);
+            }
         }
         else if (Report == "Attendance")
         {
+            var days = db.AttendanceDays.AsNoTracking().Where(x => ids.Contains(x.EmployeeId) && x.Date >= From && x.Date <= To);
+            Statuses = await days.Select(x => x.Status).Distinct().OrderBy(x => x).ToListAsync();
             Rows.Add(["Employee", "Date", "In", "Out", "Hours", "Late minutes", "Status"]);
-            foreach (var a in await db.AttendanceDays.Where(x => ids.Contains(x.EmployeeId) && x.Date >= From && x.Date <= To).OrderBy(x => x.Date).ToListAsync())
+            foreach (var a in await days.Where(x => Status == null || x.Status == Status)
+                .OrderByDescending(x => x.Date).ThenBy(x => x.EmployeeId).ToListAsync())
                 Rows.Add([Name(a.EmployeeId), a.Date.ToString("yyyy-MM-dd"), a.FirstIn?.ToString("HH:mm") ?? "", a.LastOut?.ToString("HH:mm") ?? "", a.WorkedHours.ToString("F2"), a.LateMinutes.ToString(), a.Status]);
+        }
+        else if (Report == "Salary")
+        {
+            Statuses = ["Published", "Draft"];
+            Rows.Add(["Employee number", "Employee", "Effective from", "Effective to", "Status",
+                "Currency", "Basic", "Housing", "Transport", "Other allowances", "Total"]);
+            var salaries = await db.SalaryVersions.AsNoTracking()
+                .Where(x => ids.Contains(x.EmployeeId) && x.EffectiveFrom <= To && (x.EffectiveTo == null || x.EffectiveTo >= From)
+                    && (Status == null || (x.IsDraft ? "Draft" : "Published") == Status))
+                .OrderByDescending(x => x.EffectiveFrom).ThenBy(x => x.EmployeeId).ToListAsync();
+            foreach (var s in salaries)
+                Rows.Add([employees[s.EmployeeId].EmployeeNumber, Name(s.EmployeeId),
+                    s.EffectiveFrom.ToString("yyyy-MM-dd"), s.EffectiveTo?.ToString("yyyy-MM-dd") ?? "",
+                    s.IsDraft ? "Draft" : "Published", s.Currency, s.Basic.ToString("F2"), s.Housing.ToString("F2"),
+                    s.Transport.ToString("F2"), s.Allowances.ToString("F2"),
+                    (s.Basic + s.Housing + s.Transport + s.Allowances).ToString("F2")]);
         }
         else if (Report == "Leave")
         {
@@ -73,18 +138,21 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
                 foreach(var type in await db.LeaveTypes.ToListAsync())
                     Rows.Add([e.FullName,type.Name,From.Year.ToString(),type.EnforceBalance?(await leaves.RemainingAsync(e.Id,type.Id,From.Year)).ToString("F2"):"Unlimited"]);
         }
-        else if (Report is "Payroll" or "Deductions" or "Bank")
+        else if (IsPayrollReport)
         {
             if (PeriodId == null)
             {
-                ModelState.AddModelError("", "Select a payroll period.");
-                return Page();
+                return format == null ? Page() : BadRequest("Select a payroll period.");
             }
 
             var period = await db.PayrollPeriods.SingleOrDefaultAsync(x => x.Id == PeriodId);
             if (period == null)
                 return NotFound();
-            var lines = await db.PayrollLines.Where(x => x.PayrollPeriodId == PeriodId && x.Revision == period.Revision && (BranchId == null || x.BranchId == BranchId) && (DepartmentId == null || x.DepartmentId == DepartmentId) && (SubDepartmentId == null || x.SubDepartmentId == SubDepartmentId)).ToListAsync();
+            var lines = await db.PayrollLines.Where(x => x.PayrollPeriodId == PeriodId && x.Revision == period.Revision
+                && (EmployeeId == null || x.EmployeeId == EmployeeId)
+                && (BranchId == null || x.BranchId == BranchId) && (DepartmentId == null || x.DepartmentId == DepartmentId)
+                && (SubDepartmentId == null || x.SubDepartmentId == SubDepartmentId))
+                .OrderBy(x => x.EmployeeId).ToListAsync();
             if (Report == "Bank")
             {
                 var settings = await db.Settings.FirstOrDefaultAsync() ?? new();
@@ -118,8 +186,12 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
             return BadRequest();
         if (format != null)
         {
+            if (format is not ("pdf" or "excel" or "csv")) return BadRequest();
+            Response.Headers.CacheControl = "no-store";
             db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = "Exported " + Report + " report" });
             await db.SaveChangesAsync();
+            if (format == "pdf")
+                return File(ReportPdf.Create(Report + " report", Rows), "application/pdf", Report + ".pdf");
             if (format == "csv")
                 return File(ExportService.Csv(Rows), "text/csv", Report + ".csv");
             if (format == "excel")
@@ -132,6 +204,9 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
 
     public async Task<IActionResult> OnPostPublishAsync(int id, [FromServices] PayrollService payroll)
     {
+        if (!CanPublish)
+            return Forbid();
+
         try
         {
             await payroll.PublishAsync(id, User.Identity!.Name!);

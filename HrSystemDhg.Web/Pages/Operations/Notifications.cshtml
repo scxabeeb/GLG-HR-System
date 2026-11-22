@@ -1,0 +1,56 @@
+@page
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.NotificationsModel
+@{ ViewData["Title"] = "Notifications"; }
+<div class="eyebrow">OPERATIONS / MY INBOX</div>
+<h1>Notifications</h1>
+<p>See assignments, invitations, and updates sent to your HR account.</p>
+@if (TempData["OperationsNotice"] is string message) { <p class="notice" role="status">@message</p> }
+<div class="card">
+    <div class="user-heading"><h2>My inbox</h2>
+    @if (Model.Items.Any(n => n.ReadUtc == null)) {
+        <form method="post" asp-page-handler="ReadAll"><button class="secondary">Mark all as read</button></form>
+    }
+    </div>
+    @if (Model.Items.Count == 0) { <p>No notifications yet.</p> }
+    @foreach (var notice in Model.Items) {
+        <article class="ops-row">
+            <div><h3>@NotificationsModel.Label(notice.Kind) · @notice.Title</h3>
+            <p>@OperationsPolicy.Local(notice.CreatedUtc).ToString("dd MMM yyyy, HH:mm") EAT
+            @if (notice.ReadUtc == null) { <span class="badge">Unread</span> }
+            @if (notice.Progress is { } progress) { <span class="badge">@(progress == TaskProgress.InProgress ? "In progress" : progress.ToString())</span> }</p>
+            </div>
+            <div class="ops-actions">
+                @if (notice.Kind == OperationsNoticeKind.TeamAssigned)
+                {
+                    <a asp-page="./Tasks" asp-route-view="related">View team tasks</a>
+                }
+                @if (Model.CanOpenWorkspace && notice.Kind is (OperationsNoticeKind.LeaveDecided or OperationsNoticeKind.PayslipPublished or OperationsNoticeKind.AttendanceCorrectionDecided))
+                {
+                    <a asp-page="/Me/Profile">My workspace</a>
+                }
+                @if (notice.TaskId.HasValue) { <a asp-page="./Tasks" asp-route-view="related" asp-fragment="@($"task-{notice.TaskId}")">View task</a> }
+                @if (notice.MeetingId is int meetingId) {
+                    @if (Model.JoinableRooms.Contains(meetingId)) { <a class="button" asp-page="./MeetingRoom" asp-route-id="@meetingId">Join meeting</a> }
+                    <a asp-page="./MeetingDetails" asp-route-id="@meetingId">View agenda &amp; minutes</a>
+                }
+                @if (notice.FleetTripId is int tripId) { <a asp-page="./FleetTrips" asp-route-mine="true" asp-fragment="@($"trip-{tripId}")">View trip</a> }
+                @if (notice.ReadUtc == null) {
+                    <form method="post" asp-page-handler="Read" asp-route-id="@notice.Id"><button class="secondary">Mark read</button></form>
+                }
+            </div>
+        </article>
+    }
+</div>
+<div class="card">
+    <h2>WhatsApp alerts</h2>
+    <p>Get an alert at your registered mobile number for new task assignments and meeting invitations. Details stay in your HR inbox.</p>
+    <p>System sender: @(Model.Connected ? "Configured" : "Not connected") · Your preference: @(Model.OptedIn ? "On" : "Off")</p>
+    @if (Model.RegisteredNumber == null) { <p>Ask HR to record your mobile number in international format, such as a number starting with +252.</p> }
+    else {
+        <p>Registered number: @Model.RegisteredNumber</p>
+        <form method="post" asp-page-handler="WhatsApp" asp-route-enable="@(!Model.OptedIn)">
+            <button class="secondary">@(Model.OptedIn ? "Turn WhatsApp alerts off" : "Opt in to WhatsApp alerts")</button>
+        </form>
+    }
+</div>

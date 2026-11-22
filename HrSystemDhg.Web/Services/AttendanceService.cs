@@ -13,7 +13,17 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
         var punches = await db.ZkPunchs.Where(x => x.Pin == e.ZkPin && x.PunchTime >= window.Start.AddHours(-3) && x.PunchTime <= window.End.AddHours(4)).OrderBy(x => x.PunchTime).ToListAsync();
         var day = await db.AttendanceDays.SingleOrDefaultAsync(x => x.EmployeeId == employeeId && x.Date == date.Date);
         if (day?.IsCorrected == true)
+        {
+            if (!await calendar.HolidayAsync(employeeId, date) && CalendarService.Weekday(rule, date) &&
+                await db.LeaveRequests.AnyAsync(r => r.EmployeeId == employeeId && r.Status == "Approved" &&
+                    r.StartTime == null && r.From <= date && r.To >= date))
+            {
+                day.Status = "On leave";
+                day.LateMinutes = day.EarlyMinutes = 0;
+                await db.SaveChangesAsync();
+            }
             return;
+        }
         if (day == null)
         {
             day = new()
@@ -78,11 +88,15 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
 
         if (e != null)
         {
-            var date = localTime.Date;
-            var rule = await calendar.RuleAsync(e.Id, date);
-            if (CalendarService.Window(rule, date.AddDays(-1)).End > date && localTime < date.AddHours(rule.StartHour - 3))
-                date = date.AddDays(-1);
-            await RebuildAsync(e.Id, date);
+            await RebuildAsync(e.Id, await WorkDateAsync(e.Id, localTime));
         }
+    }
+    public async Task<DateTime> WorkDateAsync(int employeeId, DateTime localTime)
+    {
+        var date = localTime.Date;
+        var rule = await calendar.RuleAsync(employeeId, date);
+        if (CalendarService.Window(rule, date.AddDays(-1)).End > date && localTime < date.AddHours(rule.StartHour - 3))
+            return date.AddDays(-1);
+        return date;
     }
 }

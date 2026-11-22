@@ -10,11 +10,18 @@ namespace HrSystemDhg.Web.Pages.Identity.Account;
 [AllowAnonymous]
 public class LoginModel(SignInManager<ApplicationUser> signIn, UserManager<ApplicationUser> users, HrDbContext db) : PageModel
 {
+    [BindProperty(SupportsGet = true)]
+    public string? ReturnUrl { get; set; }
+
     [BindProperty]
     public string Username { get; set; } = "";
 
     [BindProperty]
     public string Password { get; set; } = "";
+
+    public IActionResult OnGet() => User.Identity?.IsAuthenticated == true && Url.IsLocalUrl(ReturnUrl)
+        ? LocalRedirect(ReturnUrl!)
+        : Page();
 
     public async Task<IActionResult> OnPostAsync()
     {
@@ -27,7 +34,7 @@ public class LoginModel(SignInManager<ApplicationUser> signIn, UserManager<Appli
         }
 
         if (user != null && user.IsEnabled && (await signIn.PasswordSignInAsync(user, Password, false, true)).Succeeded)
-            return LocalRedirect("/");
+            return LocalRedirect(Url.IsLocalUrl(ReturnUrl) ? ReturnUrl! : "/");
         ModelState.AddModelError("", "Sign in failed. Check your details or try later.");
         return Page();
     }

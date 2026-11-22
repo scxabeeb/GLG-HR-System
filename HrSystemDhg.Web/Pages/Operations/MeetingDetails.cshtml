@@ -1,0 +1,151 @@
+@page
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.MeetingDetailsModel
+@{ ViewData["Title"] = "Meeting details"; var meeting = Model.Meeting; }
+<div class="eyebrow">MEETINGS / DETAILS</div>
+<h1>@meeting.Title</h1>
+<p>@(meeting.Cancelled ? "Cancelled · " : meeting.EndedUtc != null ? "Ended · " : "")@OperationsPolicy.Local(meeting.StartsUtc).ToString("dd MMM yyyy, HH:mm") – @OperationsPolicy.Local(meeting.EndsUtc).ToString("dd MMM yyyy, HH:mm") EAT</p>
+<p>@(meeting.Location is string location ? "In person · " + location : "Online meeting")</p>
+<partial name="_MeetingNavigation" model='("")' />
+<div class="actions">
+    @if (Model.CanEdit) { <a class="button secondary" asp-page="./Meetings" asp-route-edit="@meeting.Id" asp-route-mode="manage">Edit meeting &amp; agenda</a> }
+</div>
+@if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+<section class="card" id="meeting-attendance">
+    <h2>Meeting attendance</h2>
+    <p><strong>@Model.AttendingCount</strong> of @Model.InvitedCount invited employees checked in.</p>
+    @if (Model.MyAttendance is DateTime attended) {
+        <p class="notice">You checked in at @OperationsPolicy.Local(attended).ToString("dd MMM yyyy, HH:mm") EAT.</p>
+    } else if (Model.CanCheckIn) {
+        <form method="post" asp-page-handler="Attend" asp-route-id="@meeting.Id">
+            <button>I'm attending</button>
+        </form>
+    }
+    @if (Model.CanEdit && Model.AttendanceList.Count > 0) {
+        <div class="table-scroll"><table>
+            <thead><tr><th>Invited employee</th><th>Attendance</th></tr></thead>
+            <tbody>@foreach (var person in Model.AttendanceList) {
+                <tr><td>@person.Name</td><td>@(person.Time is DateTime time ? OperationsPolicy.Local(time).ToString("dd MMM yyyy, HH:mm") + " EAT" : "Waiting for check-in")</td></tr>
+            }</tbody>
+        </table></div>
+    }
+</section>
+<div class="card" id="meeting-agenda">
+    <h2>Shared agenda</h2>
+    <p class="ops-description">@(string.IsNullOrWhiteSpace(meeting.Agenda) ? "No agenda has been added." : meeting.Agenda)</p>
+    @if (Model.AgendaItems.Count > 0)
+    {
+        <ol>
+            @foreach (var row in Model.AgendaItems)
+            {
+                <li><strong>@row.Item.Title</strong> <small>· @row.Author</small>
+                    @if (!string.IsNullOrWhiteSpace(row.Item.Notes)) { <p class="ops-description">@row.Item.Notes</p> }
+                </li>
+            }
+        </ol>
+    }
+    @if (Model.CanAddAgendaItem)
+    {
+        <details>
+            <summary id="add-agenda-item">Add an agenda item</summary>
+            <form method="post" asp-page-handler="Agenda" asp-route-id="@meeting.Id">
+                <label>Discussion topic<input name="title" maxlength="160" required /></label>
+                <label>Notes (optional)<textarea name="notes" rows="3" maxlength="2000"></textarea></label>
+                <button>Add to shared agenda</button>
+            </form>
+        </details>
+    }
+    <details class="meeting-share">
+        <summary>Share agenda link</summary>
+        <div class="meeting-share-panel">
+            <p class="meeting-share-help">Only the organizer and invited employees can open this link after signing in.</p>
+            <label for="agenda-link">Agenda &amp; minutes link</label>
+            <div class="meeting-link-row">
+                <input id="agenda-link" type="url" readonly value="@Url.Page("./MeetingDetails", null, new { id = meeting.Id }, Request.Scheme)" />
+                <button type="button" class="secondary" data-copy-meeting>Copy link</button>
+            </div>
+            <p class="meeting-copy-status" role="status" aria-live="polite"></p>
+        </div>
+    </details>
+</div>
+<div class="card">
+    <h2>Published minutes</h2>
+    @if (meeting.MinutesPublishedUtc is DateTime published) { <p>Published @OperationsPolicy.Local(published).ToString("dd MMM yyyy, HH:mm") EAT</p> }
+    <p class="ops-description">@(meeting.PublishedMinutes ?? "No minutes have been published yet.")</p>
+</div>
+@if (Model.CanEdit) {
+    <form method="post" asp-route-id="@meeting.Id" class="card">
+        <h2>Meeting notes &amp; minutes</h2>
+        <p>Save private notes as a draft. Publish when the minutes are ready for invited employees. Draft edits do not replace the published version.</p>
+        <div asp-validation-summary="All"></div>
+        <label>Minutes draft<textarea asp-for="Notes" rows="12" maxlength="12000" placeholder="Discussion, decisions and follow-up actions…"></textarea></label>
+        <div class="actions"><button name="publish" value="false" class="secondary">Save private draft</button><button name="publish" value="true">Publish minutes</button></div>
+    </form>
+}
+<section class="card" id="meeting-documents">
+    <h2>Documents</h2>
+    @if (Model.Documents.Count == 0) { <p>No documents have been uploaded.</p> }
+    else {
+        <ul>
+            @foreach (var document in Model.Documents) {
+                <li><a asp-page-handler="Document" asp-route-id="@meeting.Id" asp-route-key="@document.Key">@document.Name</a></li>
+            }
+        </ul>
+    }
+    @if (Model.CanEdit) {
+        <form method="post" enctype="multipart/form-data" asp-page-handler="Document" asp-route-id="@meeting.Id">
+            <label>Attach a document
+                <input type="file" name="document" accept=".pdf,.docx,.xlsx,.pptx,.txt,.csv,.png,.jpg,.jpeg" required />
+            </label>
+            <p>PDF, Office documents, text, CSV, JPG, or PNG. Up to 20 MB per file.</p>
+            <button>Upload document</button>
+        </form>
+    }
+</section>
+@if (Model.CanViewRecordings) {
+    <section class="card">
+        <h2>Saved recordings</h2>
+        @if (Model.Recordings.Count == 0) { <p>No recordings have been saved for this meeting.</p> }
+        @foreach (var recording in Model.Recordings) {
+            <div>
+                <p>Saved @OperationsPolicy.Local(recording.SavedUtc).ToString("dd MMM yyyy, HH:mm") EAT</p>
+                <video class="meeting-recording-player" controls preload="none" aria-label="Recording of @meeting.Title"
+                       src="@Url.Page("./MeetingRecordings", "Video", new { meetingId = meeting.Id, file = recording.File })"></video>
+                <p><a asp-page="./MeetingRecordings" asp-page-handler="Video" asp-route-meetingId="@meeting.Id"
+                      asp-route-file="@recording.File" asp-route-download="true">Download recording</a></p>
+            </div>
+        }
+    </section>
+}
+@if (Model.CanCreateTask || Model.FollowUps.Count > 0) {
+    <div class="card" id="meeting-follow-ups">
+        <h2>Follow-up tasks</h2>
+        @if (Model.FollowUps.Count == 0) { <p>No follow-up tasks yet.</p> }
+        @foreach (var task in Model.FollowUps) {
+            <p><a asp-page="./TaskReport" asp-route-taskId="@task.Id">@task.Title</a>
+                · @Model.TaskOwners.GetValueOrDefault(task.AssigneeId, "Employee")
+                · <span class="badge">@TaskReportModel.Label(task.Status)</span>
+                @if (task.DueDate is DateTime due) { <span> · Due @due.ToString("dd MMM yyyy")</span> }
+            </p>
+        }
+        @if (Model.CanCreateTask) {
+            <form method="post" asp-page-handler="FollowUp" asp-route-id="@meeting.Id">
+                <h3>Create follow-up task</h3>
+                <p>Enter the action you want to assign. The minutes and private draft notes are not copied.</p>
+                <div asp-validation-summary="All"></div>
+                <div class="grid">
+                    <label>Action title<input asp-for="FollowUp.Title" required maxlength="160" /></label>
+                    <label>Assign to<select asp-for="FollowUp.Assignee" required>
+                        <option value="">Select an employee</option>
+                        @foreach (var person in Model.Assignees) { <option value="@person.Key">@person.Value</option> }
+                    </select></label>
+                    <label>Due date<input asp-for="FollowUp.DueDate" type="date" /></label>
+                    <label>Priority<select asp-for="FollowUp.Priority" asp-items="Html.GetEnumSelectList<TaskPriority>()"></select></label>
+                </div>
+                <label>Action details<textarea asp-for="FollowUp.Details" maxlength="2500" rows="3"></textarea></label>
+                <button>Create &amp; assign task</button>
+            </form>
+        }
+    </div>
+}
+@section Scripts { <script src="~/js/meeting-share.js" asp-append-version="true" defer></script> }

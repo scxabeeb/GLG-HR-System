@@ -1,0 +1,11 @@
+@model ((int Done, int Total) Counts, bool WholeTeam)
+@{
+    var (done, total) = Model.Counts;
+    var percent = total == 0 ? 0 : (int)(100L * done / total);
+    var label = Model.WholeTeam ? "Team progress" : "My progress on this team task";
+}
+<div class="team-task-progress">
+    <div><strong>@label</strong> <span>@percent%</span></div>
+    <progress value="@percent" max="100" aria-label="@label">@percent%</progress>
+    <small>@done of @total active assignments completed</small>
+</div>

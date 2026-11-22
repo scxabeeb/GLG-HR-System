@@ -91,15 +91,35 @@ public class ProfileModel(HrDbContext db, LeaveService leaves, DocumentService d
             return Forbid();
         try
         {
-            int? doc = null;
-            if (Upload != null)
-                doc = await documents.StoreAsync(id.Value, Upload, "Leave supporting document", null, User.Identity!.Name!);
-            await leaves.SubmitAsync(new() { EmployeeId = id.Value, LeaveTypeId = LeaveTypeId, From = From, To = To, StartTime = Start, EndTime = End, Reason = Reason, DocumentId = doc }, User.Identity!.Name!);
+            if (!await db.LeaveTypes.AnyAsync(t => t.Id == LeaveTypeId))
+                throw new InvalidOperationException("Select a leave type.");
+            await leaves.SubmitAsync(new() { EmployeeId = id.Value, LeaveTypeId = LeaveTypeId, From = From, To = To, StartTime = Start, EndTime = End, Reason = Reason }, User.Identity!.Name!, Upload);
             return RedirectToPage();
         }
         catch (InvalidOperationException e)
         {
+            db.ChangeTracker.Clear();
             ModelState.AddModelError("", e.Message);
+            await OnGetAsync();
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostPhotoAsync(IFormFile? photo)
+    {
+        var id = await OwnId();
+        if (id == null) return Forbid();
+        try
+        {
+            if (photo == null || Path.GetExtension(photo.FileName).ToLowerInvariant() is not (".jpg" or ".jpeg" or ".png"))
+                throw new InvalidOperationException("Choose a JPG or PNG image.");
+            await documents.StoreAsync(id.Value, photo, "Photo", null, User.Identity!.Name!);
+            TempData["ProfileNotice"] = "Profile photo updated.";
+            return RedirectToPage(null, null, null, "profile-settings");
+        }
+        catch (InvalidOperationException error)
+        {
+            ModelState.AddModelError("", error.Message);
             await OnGetAsync();
             return Page();
         }

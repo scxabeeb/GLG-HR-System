@@ -1,0 +1,79 @@
+@page
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.FleetTripsModel
+@{ ViewData["Title"] = "Fleet trips"; }
+<div class="eyebrow">OPERATIONS / TRANSPORT</div><h1>Fleet trips</h1>
+<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("trip requests")' />
+
+<p>Request a vehicle, review bookings, and record departure and return. Times are in Mogadishu time.</p>
+<div class="actions">
+    @if (Model.CanManage) {
+        <a class="button secondary" asp-page="./Fleet">Vehicle register</a>
+        <a class="button secondary" asp-page="./FleetReport">Fleet reports & expenses</a>
+        <a class="button secondary" asp-page="./FleetTrips">Branch trips</a>
+    }
+    <a class="button secondary" asp-page="./FleetTrips" asp-route-mine="true">My trips</a>
+</div>
+@if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+@if (Model.RequestBranches.Count > 0) {
+    <form class="card" method="post" asp-page-handler="Request" asp-route-mine="@Model.Mine">
+        <h2>Request a trip</h2><div asp-validation-summary="All"></div>
+        <div class="grid">
+            <label>Destination<input asp-for="Input.Destination" required maxlength="160" /></label>
+            <label>Branch<select asp-for="Input.BranchId" required><option value="">Select branch</option>
+                @foreach (var branch in Model.RequestBranches) { <option value="@branch.Id">@branch.Name</option> }
+            </select></label>
+            <label>Departure<input asp-for="Input.Start" type="datetime-local" required /></label>
+            <label>Expected return<input asp-for="Input.End" type="datetime-local" required /></label>
+        </div>
+        <label>Purpose<textarea asp-for="Input.Purpose" rows="2" maxlength="1000" required></textarea></label>
+        <button>Submit request</button>
+    </form>
+}
+<div class="card">
+    <form method="get" class="actions">
+        @if (Model.Mine) { <input type="hidden" name="mine" value="true" /> }
+        <label>Status<select asp-for="Status" asp-items="Html.GetEnumSelectList<FleetTripState>()"><option value="">All statuses</option></select></label><button>Filter</button>
+    </form>
+    @if (Model.Trips.Count == 0) { <p>No trips in this view.</p> }
+    @foreach (var trip in Model.Trips) {
+        var mayManage = Model.CanManage && !Model.Mine;
+        var mayDrive = Model.EmployeeId.HasValue && trip.DriverId == Model.EmployeeId;
+        var vehicle = Model.Vehicles.FirstOrDefault(v => v.Id == trip.VehicleId);
+        <article class="ops-row" id="trip-@trip.Id">
+            <div><h3>@trip.Destination <span class="badge">@(trip.Status == FleetTripState.InProgress ? "In progress" : trip.Status.ToString())</span></h3>
+                <p>@Model.BranchNames.GetValueOrDefault(trip.BranchId) · @OperationsPolicy.Local(trip.StartsUtc).ToString("dd MMM yyyy, HH:mm") – @OperationsPolicy.Local(trip.EndsUtc).ToString("dd MMM yyyy, HH:mm") EAT</p>
+                <p class="ops-description">@trip.Purpose</p>
+                @if (vehicle != null) { <p>Vehicle: @vehicle.Plate · @vehicle.Name</p> }
+                @if (trip.DriverId is int driver && Model.Drivers.TryGetValue(driver, out var driverName)) { <p>Driver: @driverName</p> }
+                @if (mayDrive) { <p><strong>You’re the assigned driver.</strong></p> }
+                @if (trip.DecisionNote != null) { <p class="ops-description">Decision note: @trip.DecisionNote</p> }
+                @if (trip.EndKm.HasValue && trip.StartKm.HasValue) { <p>Distance: @(trip.EndKm - trip.StartKm) km</p> }
+            </div>
+            <div>
+            @if (mayManage && trip.Status == FleetTripState.Requested) {
+                <form method="post" asp-page-handler="Decide" asp-route-id="@trip.Id">
+                    <label>Vehicle<select name="vehicleId" required><option value="">Select vehicle</option>
+                    @foreach (var item in Model.Vehicles.Where(v => v.BranchId == trip.BranchId)) { <option value="@item.Id">@item.Plate · @item.Name</option> }
+                    </select></label>
+                    <label>Driver<select name="driverId" required><option value="">Select driver</option>
+                    @foreach (var item in Model.Drivers) { <option value="@item.Key">@item.Value</option> }
+                    </select></label>
+                    <label>Decision note<input name="note" maxlength="500" /></label>
+                    <button name="approve" value="true">Approve & assign</button>
+                    <button class="secondary" name="approve" value="false" formnovalidate>Reject</button>
+                </form>
+            }
+            @if ((mayManage || mayDrive) && trip.Status is FleetTripState.Approved or FleetTripState.InProgress) {
+                <form method="post" asp-page-handler="Move" asp-route-id="@trip.Id" asp-route-mine="@Model.Mine">
+                    <label>Odometer reading (km)<input type="number" name="odometer" min="0" max="9999999" required /></label>
+                    <button name="action" value="@(trip.Status == FleetTripState.Approved ? "start" : "complete")">@(trip.Status == FleetTripState.Approved ? "Record departure" : "Record return")</button>
+                </form>
+            }
+            @if ((mayManage || trip.RequesterId == Model.Actor) && trip.Status is FleetTripState.Requested or FleetTripState.Approved) {
+                <form method="post" asp-page-handler="Move" asp-route-id="@trip.Id" asp-route-mine="@Model.Mine"><button class="secondary" name="action" value="cancel">Cancel trip</button></form>
+            }
+            </div>
+        </article>
+    }
+</div>

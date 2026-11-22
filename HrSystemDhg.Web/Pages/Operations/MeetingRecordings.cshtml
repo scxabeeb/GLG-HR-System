@@ -1,0 +1,20 @@
+@page
+@using HrSystemDhg.Web.Services
+@model HrSystemDhg.Web.Pages.Operations.MeetingRecordingsModel
+@{ ViewData["Title"] = "Saved recordings"; }
+<div class="eyebrow">MEETINGS / RECORDINGS</div>
+<h1>Saved recordings</h1>
+<p>Play or download recordings you saved as the meeting organizer.</p>
+<partial name="_MeetingNavigation" model='("recordings")' />
+<div class="card meeting-list">
+@if (Model.Recordings.Count == 0) { <p>No saved recordings. Open a Garowe meeting you organize, then choose <strong>Start recording</strong>.</p> }
+@foreach (var recording in Model.Recordings) {
+    <article class="meeting-entry">
+        <h3>@recording.Title</h3>
+        <p>Saved @OperationsPolicy.Local(recording.SavedUtc).ToString("dd MMM yyyy, HH:mm") EAT · @((recording.Bytes / 1048576d).ToString("0.0")) MB</p>
+        <video class="meeting-recording-player" controls preload="none" aria-label="Recording of @recording.Title"
+               src="@Url.Page("./MeetingRecordings", "Video", new { meetingId = recording.MeetingId, file = recording.File })"></video>
+        <p><a asp-page-handler="Video" asp-route-meetingId="@recording.MeetingId" asp-route-file="@recording.File" asp-route-download="true">Download recording</a></p>
+    </article>
+}
+</div>

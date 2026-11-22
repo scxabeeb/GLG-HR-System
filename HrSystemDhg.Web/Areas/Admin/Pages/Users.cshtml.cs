@@ -15,6 +15,7 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
     public string? CurrentUserId => Own;
     public List<ApplicationUser> Items = [];
     public List<Branch> Branches = [];
+    public Dictionary<string, HashSet<string>> Restricted { get; private set; } = [];
     public List<UserBranchScope> Scopes = [];
     public Dictionary<string, string> Roles = [];
     public async Task OnGetAsync()
@@ -23,6 +24,9 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         Employees = await db.Employees.Where(e => !db.Users.Any(u => u.EmployeeId == e.Id)).ToListAsync();
         Branches = await db.Branchs.ToListAsync();
         Scopes = await db.UserBranchScopes.ToListAsync();
+        var ids = Items.Select(u => u.Id).ToArray();
+        Restricted = (await db.UserModuleRestrictions.AsNoTracking().Where(r => ids.Contains(r.UserId)).ToListAsync())
+            .GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => g.Select(r => r.Module).ToHashSet());
         foreach (var u in Items)
             Roles[u.Id] = string.Join(", ", await users.GetRolesAsync(u));
     }
@@ -43,6 +47,8 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
             "Admin",
             "Management",
             "HR",
+            "General Secretary",
+            "Chairman",
             "Employee"
         }.Contains(role) || id == Own && remove && role == "Admin")
             return BadRequest();
@@ -89,19 +95,36 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         return RedirectToPage();
     }
 
+    public async Task<IActionResult> OnPostModulesAsync(string id, string[] blocked)
+    {
+        if (!ModelState.IsValid || id == Own || blocked.Any(b => !ModuleAccess.Modules.Any(m => m.Key == b)))
+            return BadRequest();
+        var user = await users.FindByIdAsync(id);
+        if (user == null) return NotFound();
+        if (await users.IsInRoleAsync(user, "Admin")) return BadRequest("Administrator accounts retain full module access.");
+        var selected = blocked.ToHashSet();
+        var previous = await db.UserModuleRestrictions.Where(r => r.UserId == id).ToListAsync();
+        db.UserModuleRestrictions.RemoveRange(previous.Where(r => !selected.Contains(r.Module)));
+        foreach (var module in selected.Except(previous.Select(r => r.Module)))
+            db.UserModuleRestrictions.Add(new() { UserId = id, Module = module });
+        await Log($"User {id}: module restrictions set to {(selected.Count == 0 ? "none" : string.Join(", ", selected.Order()))}");
+        TempData["Success"] = "Module access updated. Changes take effect on the user’s next request.";
+        return RedirectToPage(new { Search });
+    }
+
     public async Task<IActionResult> OnPostScopeAsync(string id, int[] branches)
     {
         if (id == Own)
             return BadRequest();
         if (!await db.Users.AnyAsync(x => x.Id == id) || branches.Any(b => !db.Branchs.Any(x => x.Id == b)))
             return BadRequest();
-        await using var transaction = await db.Database.BeginTransactionAsync();
+        await using var transaction = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync() : null;
         db.UserBranchScopes.RemoveRange(await db.UserBranchScopes.Where(x => x.UserId == id).ToListAsync());
         await db.SaveChangesAsync();
         foreach (var b in branches.Distinct())
             db.UserBranchScopes.Add(new() { UserId = id, BranchId = b });
         await Log("Updated branch scope for user " + id);
-        await transaction.CommitAsync();
+        if (transaction != null) await transaction.CommitAsync();
         TempData["Success"] = "Branch access updated.";
         return RedirectToPage();
     }
@@ -113,10 +136,12 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
             "Admin",
             "HR",
             "Management",
+            "General Secretary",
+            "Chairman",
             "Employee"
         }.Contains(role) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || (role != "Admin" && employeeId == null) || (employeeId != null && (!await db.Employees.AnyAsync(x => x.Id == employeeId) || await db.Users.AnyAsync(x => x.EmployeeId == employeeId))))
             return BadRequest();
-        await using var transaction = await db.Database.BeginTransactionAsync();
+        await using var transaction = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync() : null;
         var u = new ApplicationUser
         {
             UserName = email,
@@ -136,8 +161,35 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         var roleResult = await users.AddToRoleAsync(u, role);
         if (!roleResult.Succeeded) return BadRequest("Unable to assign the selected role.");
         await Log("Created staff account " + email);
-        await transaction.CommitAsync();
+        if (transaction != null) await transaction.CommitAsync();
         TempData["Success"] = "Account created. The user must change their temporary password at first sign-in.";
         return RedirectToPage();
+    }
+
+    private const string CsvColumns = "Email,Role,EmployeeId,TemporaryPassword";
+
+    public IActionResult OnGetSample()
+    {
+        return RegistrationCsv.Download("user-accounts-sample", CsvColumns, [["staff@example.com", "Employee", 1, null]]);
+    }
+
+    public async Task<IActionResult> OnGetExportAsync()
+    {
+        var records = await (from user in db.Users.AsNoTracking()
+            join membership in db.UserRoles on user.Id equals membership.UserId
+            join role in db.Roles on membership.RoleId equals role.Id
+            orderby user.Email, role.Name
+            select new { user.Email, Role = role.Name, user.EmployeeId }).ToListAsync();
+        Response.Headers.CacheControl = "no-store";
+        return RegistrationCsv.Download("user-accounts", CsvColumns, records.Select(x => new object?[] { x.Email, x.Role, x.EmployeeId, null }));
+    }
+
+    public Task<IActionResult> OnPostImportAsync(IFormFile? upload)
+    {
+        return RegistrationCsv.ImportAsync(this, db, upload, CsvColumns, async row =>
+        {
+            return await OnPostCreateAsync(row.Get<string>("Email"), row.Get<string>("TemporaryPassword"),
+                row.Get<string>("Role"), row.Get<int?>("EmployeeId"));
+        });
     }
 }

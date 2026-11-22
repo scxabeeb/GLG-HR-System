@@ -6,9 +6,11 @@ using HrSystemDhg.Web.Models;
 namespace HrSystemDhg.Web.Pages.Identity.Account;
 public class LogoutModel(SignInManager<ApplicationUser> signIn) : PageModel
 {
-    public async Task<IActionResult> OnPostAsync()
+    public async Task<IActionResult> OnPostAsync(bool mobile = false)
     {
         await signIn.SignOutAsync();
-        return RedirectToPage("Login");
+        return mobile
+            ? RedirectToPage("Login", new { returnUrl = "/api/mobile/v1/session" })
+            : RedirectToPage("Login");
     }
 }
