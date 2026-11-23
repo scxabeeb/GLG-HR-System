@@ -6,8 +6,15 @@
 <h1>Employee directory</h1>
 <div class="actions"><a class="button" asp-page="./Register">Register employee</a></div>
 @if (TempData["TerminalNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+<form method="get" class="card workspace-filters">
+<label>Search employees<input asp-for="Search" type="search" placeholder="Name, number, email or job title" /></label>
+<label>Department<select asp-for="Department"><option value="">All departments</option>@foreach(var department in Model.DepartmentOptions){<option value="@department">@department</option>}</select></label>
+<label>Status<select asp-for="StatusFilter"><option value="">All statuses</option>@foreach(var status in Model.StatusOptions){<option value="@status">@status</option>}</select></label>
+<button>Apply filters</button><a asp-page="./Employees">Clear</a>
+</form>
 <div class="card table-scroll employee-directory">
-    @if (Model.Items.Count == 0) { <p>No employees yet. Register your first team member.</p> }
+<header class="workspace-list-heading"><h2>Employees</h2><small>@Model.Items.Count of @Model.TotalEmployees employees</small></header>
+    @if (Model.Items.Count == 0) { <p>No employees match this view. Clear the filters or register an employee.</p> }
     else
     {
         <table>
@@ -29,6 +36,7 @@
                     <td>@(assignment?.JobTitle ?? employee.EmploymentType)</td>
                     <td><span class="badge">@(employee.RegistrationComplete ? employee.Status : "Onboarding")</span></td>
                     <td><a class="button secondary" asp-page="./Employees"
+                           asp-route-search="@Model.Search" asp-route-department="@Model.Department" asp-route-statusFilter="@Model.StatusFilter"
                            asp-route-expandedEmployeeId="@(expanded ? (int?)null : employee.Id)"
                            asp-fragment="@($"employee-{employee.Id}")" aria-expanded="@expanded.ToString().ToLowerInvariant()">
                         @(expanded ? "Hide details" : "Details")

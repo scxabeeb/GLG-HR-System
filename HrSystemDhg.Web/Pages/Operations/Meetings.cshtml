@@ -13,7 +13,7 @@
 <partial name="_MeetingNavigation" model='(Model.Managing ? "manage" : "mine")' />
 @if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
 @if (Model.Managing) {
-<form method="post" asp-page-handler="Save" class="card">
+<details class="card workspace-tools" open="@(Model.Input.Id != 0 || !ViewData.ModelState.IsValid)"><summary>@(Model.Input.Id == 0 ? "Schedule a meeting" : "Edit meeting")</summary><form method="post" asp-page-handler="Save" class="workspace-editor">
     <h2>@(Model.Input.Id == 0 ? "Schedule a meeting" : "Edit meeting")</h2>
     <p>Schedule an in-person meeting at a location, or use a Garowe video room.</p>
     <div asp-validation-summary="All"></div>
@@ -37,7 +37,7 @@
     }
     <label>Agenda<textarea asp-for="Input.Agenda" rows="3" maxlength="2500"></textarea></label>
     <button>Save meeting</button> @if (Model.Input.Id != 0) { <a asp-page="./Meetings" asp-route-mode="manage">Cancel edit</a> }
-</form>
+</form></details>
 }
 <div class="actions" aria-label="Meeting schedule filters">
     <a class="button @(Model.Period == "upcoming" ? "" : "secondary")" asp-page="./Meetings" asp-route-mode="@Model.Mode" asp-route-period="upcoming">Upcoming &amp; in progress</a>

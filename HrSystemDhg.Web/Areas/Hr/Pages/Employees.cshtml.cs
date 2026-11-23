@@ -15,6 +15,12 @@ public class EmployeesModel(HrDbContext db) : PageModel
 
     [BindProperty(SupportsGet = true)] public int? ExpandedEmployeeId { get; set; }
 
+    [BindProperty(SupportsGet = true)] public string? Search { get; set; }
+    [BindProperty(SupportsGet = true)] public string? Department { get; set; }
+    [BindProperty(SupportsGet = true)] public string? StatusFilter { get; set; }
+    public string[] DepartmentOptions = [];
+    public string[] StatusOptions = [];
+    public int TotalEmployees { get; set; }
     public List<Employee> Items = [];
     public List<ZkDevice> Terminals = [];
     public Dictionary<int, AssignmentRow> Assignments = [];
@@ -37,6 +43,17 @@ public class EmployeesModel(HrDbContext db) : PageModel
                                  orderby assignment.EffectiveFrom descending, assignment.Id descending
                                  select new AssignmentRow(assignment.EmployeeId, branch.Name, department.Name, assignment.JobTitle)).ToListAsync();
         Assignments = assignments.GroupBy(a => a.EmployeeId).ToDictionary(group => group.Key, group => group.First());
+
+        TotalEmployees = Items.Count;
+        DepartmentOptions = Assignments.Values.Select(a => a.Department).Distinct().Order().ToArray();
+        StatusOptions = Items.Select(e => e.RegistrationComplete ? e.Status : "Onboarding").Distinct().Order().ToArray();
+        if (!string.IsNullOrWhiteSpace(Search))
+            Items = Items.Where(e => new[] { e.FullName, e.EmployeeNumber, e.WorkEmail, e.Phone,
+                Assignments.GetValueOrDefault(e.Id)?.JobTitle }.Any(v => v?.Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase) == true)).ToList();
+        if (!string.IsNullOrWhiteSpace(Department))
+            Items = Items.Where(e => Assignments.GetValueOrDefault(e.Id)?.Department == Department).ToList();
+        if (!string.IsNullOrWhiteSpace(StatusFilter))
+            Items = Items.Where(e => (e.RegistrationComplete ? e.Status : "Onboarding") == StatusFilter).ToList();
 
         var commands = await db.ZkDeviceCommands.AsNoTracking()
             .Where(c => db.Employees.Any(e => e.ZkPin == c.Pin) &&

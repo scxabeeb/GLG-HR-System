@@ -3,8 +3,8 @@
     var dataset = ViewData["CsvDataset"] as string;
     var employee = ViewData["CsvEmployeeId"];
 }
-<section class="card">
-    <h2>Import and export @Model</h2>
+<details class="card workspace-tools" open="@(TempData.Peek("RegistrationCsvDataset") as string == dataset && TempData.Peek("RegistrationCsvResult") != null)">
+    <summary>Import &amp; export @Model <small>Sample file, download and upload</small></summary>
     @if (TempData.Peek("RegistrationCsvDataset") as string == dataset && TempData["RegistrationCsvResult"] is string result)
     {
         <p role="status">@result</p>
@@ -26,4 +26,4 @@
         }
         <button type="submit">Upload CSV</button>
     </form>
-</section>
+</details>

@@ -31,8 +31,9 @@ else
 <h1>@(Model.View == "created" ? "Manage tasks" : "Task manager")</h1>
 <partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("tasks")' />
 
-<p>Manage your work under My tasks. Use Created by me to follow the progress of tasks you assigned.</p>
+<p class="muted">Find assigned work, follow team progress, or create a task. Expand a subtask to see each employee’s responsibility.</p>
 <div class="actions">
+    <button type="button" data-open-workspace="task-editor">+ Create task</button>
     <a class="button secondary" asp-page="./TaskReport">Task progress report</a>
     <a class="button @(Model.View == "related" ? "" : "secondary")" asp-page="./Tasks" asp-route-view="related">All my work</a>
     <a class="button @(Model.View == "mine" ? "" : "secondary")" asp-page="./Tasks" asp-route-view="mine">My tasks</a>
@@ -40,7 +41,7 @@ else
     @if (Model.IsAdmin) { <a class="button @(Model.View == "all" ? "" : "secondary")" asp-page="./Tasks" asp-route-view="all">All tasks</a> }
 </div>
 @if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
-<details class="card task-create-panel" open="@(Model.Input.Id != 0 || !ViewData.ModelState.IsValid)">
+<details id="task-editor" class="card task-create-panel workspace-tools" open="@(Model.Input.Id != 0 || !ViewData.ModelState.IsValid)">
 <summary>@(Model.Input.Id == 0 ? "Create a task" : "Edit task")</summary>
 <form method="post" asp-page-handler="Save">
     <div asp-validation-summary="All"></div>
