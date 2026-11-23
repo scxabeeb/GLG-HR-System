@@ -8,7 +8,7 @@ public static class ReportPdf
 {
     public static void ConfigureFonts() => GlobalFontSettings.FontResolver = new ReportFontResolver();
 
-    public static byte[] Create(string title, IEnumerable<string[]> source)
+    public static byte[] Create(string title, IEnumerable<string[]> source, string organization = "Garowe Local Government", string systemName = "Garowe City Management System")
     {
         var rows = source.ToList();
         var document = new Document();
@@ -23,14 +23,14 @@ public static class ReportPdf
         section.PageSetup.RightMargin = Unit.FromCentimeter(1.2);
         section.PageSetup.TopMargin = Unit.FromCentimeter(1.5);
         section.PageSetup.BottomMargin = Unit.FromCentimeter(1.5);
-        var heading = section.AddParagraph("Garowe Local Government");
+        var heading = section.AddParagraph(organization);
         heading.Format.Font.Size = 17;
         heading.Format.Font.Color = Color.FromRgb(23, 69, 195);
         var subtitle = section.AddParagraph(title);
         subtitle.Format.Font.Size = 12;
         subtitle.Format.SpaceAfter = Unit.FromCentimeter(.4);
         var footer = section.Footers.Primary.AddParagraph();
-        footer.AddText("Garowe City Management System · ");
+        footer.AddText(systemName + " · ");
         footer.AddPageField();
         footer.AddText(" / ");
         footer.AddNumPagesField();

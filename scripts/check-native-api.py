@@ -161,6 +161,10 @@ try:
         req('v2/manage/reports/tasks',expected=403)
         req('v2/manage/reports/meetings',expected=403)
     print('PASS administrator reports, progress aggregation, search/status/date validation, and report access restrictions')
+    if os.environ.get('DHG_SETTINGS_BROWSER_CHECK') == '1':
+        browserenv=os.environ.copy()
+        browserenv.update({'E2E_USER':email,'E2E_PASSWORD':newpassword,'E2E_BASE':'http://127.0.0.1:5199'})
+        subprocess.run(['node',str(root/'scripts/check-settings-browser.cjs')],env=browserenv,check=True)
     token=administrator
     req('v2/auth/logout',{});req('v2/auth/me',expected=401)
     print('PASS native bearer login, mandatory password change, old-token revocation, user-scoped feeds, task update audit, invalid status rejection, missing-record authorization, logout revocation')

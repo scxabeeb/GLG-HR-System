@@ -52,6 +52,7 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
     public DbSet<PayrollDeduction> PayrollDeductions => Set<PayrollDeduction>();
     public DbSet<OvertimeApproval> OvertimeApprovals => Set<OvertimeApproval>();
     public DbSet<CorrectionRequest> CorrectionRequests => Set<CorrectionRequest>();
+    public DbSet<SavedReportView> SavedReportViews => Set<SavedReportView>();
     public DbSet<SystemSettings> Settings => Set<SystemSettings>();
     public string? ActorId => http?.HttpContext?.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     public bool EmployeeOnly => http?.HttpContext?.User.IsInRole("Employee") == true && !IsStaff &&

@@ -1,15 +1,17 @@
 @page "/Identity/Account/Login"
 @model HrSystemDhg.Web.Pages.Identity.Account.LoginModel
+@inject HrSystemDhg.Web.Services.PortalBranding Branding
+@{ var brand = await Branding.GetAsync(); }
 @{ ViewData["Title"] = "Sign in"; ViewData["AuthPage"] = true; }
 <div class="auth-page">
-    <section class="auth-story" aria-label="Garowe City Management System">
-        <a class="auth-wordmark" href="/"><img src="~/images/garowe-local-government.jpg" alt="Garowe Local Government emblem"/><span><strong>Garowe City</strong><small>MANAGEMENT SYSTEM</small></span></a>
-        <div class="auth-story-copy"><span class="auth-kicker">GAROWE LOCAL GOVERNMENT</span><h1>A connected city.<br/>A clearer way to work.</h1><p>Your people, resources and daily operations. Together in one workspace.</p>
+    <section class="auth-story" aria-label="@brand.Name">
+        <a class="auth-wordmark" href="/"><img src="@brand.LogoUrl" alt="@brand.Organization"/><span><strong>@brand.ShortName</strong><small>@brand.Subtitle</small></span></a>
+        <div class="auth-story-copy"><span class="auth-kicker">@brand.Organization</span><h1>A connected city.<br/>A clearer way to work.</h1><p>Your people, resources and daily operations. Together in one workspace.</p>
         <div class="auth-module-grid"><span>People &amp; attendance</span><span>Tasks &amp; teams</span><span>Meetings &amp; decisions</span><span>Payroll &amp; leave</span><span>Assets &amp; equipment</span><span>Fleet &amp; transport</span></div></div>
-        <div class="auth-story-footer"><span class="auth-city-mark" aria-hidden="true">G</span><span>Serving Garowe.<br/><strong>Empowering our teams.</strong></span></div>
+        <div class="auth-story-footer"><span class="auth-city-mark" aria-hidden="true">G</span><span>Serving @brand.Organization.<br/><strong>Empowering our teams.</strong></span></div>
     </section>
     <div class="auth-form-side">
-        <a class="auth-mobile-brand" href="/"><img src="~/images/garowe-local-government.jpg" alt="Garowe Local Government emblem"/><span>Garowe City<small>Management System</small></span></a>
+        <a class="auth-mobile-brand" href="/"><img src="@brand.LogoUrl" alt="@brand.Organization"/><span>@brand.ShortName<small>@brand.Subtitle</small></span></a>
         <article class="auth-card">
             <div class="eyebrow">WELCOME BACK</div><h1>Sign in to your workspace</h1><p>Enter your registered email or employee number to continue.</p>
             <form method="post">

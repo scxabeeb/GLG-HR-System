@@ -1,0 +1,25 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.ReportViewsModel
+@using HrSystemDhg.Web.Services
+@{ ViewData["Title"] = "Report designer"; }
+<h1>Report designer</h1>
+<p class="page-intro">Create named reports using existing datasets. Choose columns and default filters; existing report permissions and PDF, Excel and CSV exports apply.</p>
+@if (TempData["Notice"] is string notice) { <p class="notice" role="status">@notice</p> }
+<div class="page-workspace" data-page-workspace>
+<nav class="workspace-tabs" aria-label="Report designer views"><a href="#report-library" data-workspace-link>Saved reports</a><a href="#report-editor" data-workspace-link>Create / edit report</a><a asp-area="" asp-page="/Reports/Hub">Main reports</a></nav>
+<section id="report-library" data-workspace-panel><div class="card table-scroll"><h2>Report library</h2>
+@if (Model.Items.Count == 0) { <p>No custom reports yet. Choose Create / edit report to add one.</p> }
+else { <table><thead><tr><th>Name</th><th>Dataset</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+@foreach (var item in Model.Items) { <tr><td><strong>@item.Name</strong><br/>@item.Description</td><td>@item.Source</td><td>@(item.IsActive ? "Active" : "Disabled")</td><td><div class="actions"><a asp-page="./ReportViews" asp-route-id="@item.Id" asp-fragment="report-editor">Edit</a>@if(item.IsActive){<a asp-area="" asp-page="/Reports/Index" asp-route-savedViewId="@item.Id">Open report</a>}<form method="post" asp-page-handler="Toggle" asp-route-id="@item.Id"><button class="secondary">@(item.IsActive ? "Disable" : "Enable")</button></form></div></td></tr>}
+</tbody></table>}
+</div></section>
+<section id="report-editor" data-workspace-panel data-workspace-auto>
+<details class="card workspace-tools" open="@(Model.Input.Id != 0 || !ViewData.ModelState.IsValid)"><summary>@(Model.Input.Id == 0 ? "Create report" : "Edit report")</summary>
+@if(Model.Input.Id == 0){<form method="get" asp-page="./ReportViews" asp-fragment="report-editor" class="actions"><label>Dataset<select name="Source">@foreach(var source in ReportDefinitions.Sources.Keys){<option value="@source" selected="@(source == Model.Source)">@source</option>}</select></label><button class="secondary">Choose dataset</button></form>}
+<form method="post"><div asp-validation-summary="All" role="alert"></div><input asp-for="Input.Id" type="hidden"/><input asp-for="Input.Source" type="hidden"/>
+<h2>@Model.Source report</h2><div class="grid"><label>Report name<input asp-for="Input.Name" required maxlength="160"/></label><label>Default dates<select asp-for="Input.DateRange"><option value="ThisMonth">This month</option><option value="LastMonth">Last month</option><option value="ThisYear">This year</option></select></label></div>
+<label>Description<textarea asp-for="Input.Description" maxlength="500" rows="2"></textarea></label>
+<fieldset><legend>Columns (displayed in dataset order)</legend><div class="checkbox-list">@for(var i=0;i<ReportDefinitions.Sources[Model.Source].Length;i++){<label class="inline"><input type="checkbox" name="SelectedColumns" value="@i" checked="@Model.SelectedColumns.Contains(i)"/>@ReportDefinitions.Sources[Model.Source][i]</label>}</div></fieldset>
+<div class="grid"><label>Branch<select asp-for="Input.BranchId"><option value="">All permitted branches</option>@foreach(var branch in Model.Branches){<option value="@branch.Id">@branch.Name</option>}</select></label><label>Department<select asp-for="Input.DepartmentId"><option value="">All permitted departments</option>@foreach(var department in Model.Departments){<option value="@department.Id">@department.Name</option>}</select></label>
+@if(Model.Source is "Employees" or "Hires" or "Salary" or "Attendance" or "Leave"){<label>Default status (optional)<input asp-for="Input.Status" maxlength="80" placeholder="Exact status, e.g. Active"/></label>}</div>
+<p>Dates and filters can be adjusted when running the report. Payroll reports require choosing a saved payroll period.</p><label class="inline"><input asp-for="Input.IsActive"/> Available in Main Reports</label><div class="actions"><button>Save report</button><a asp-page="./ReportViews">Cancel</a></div></form></details></section></div>

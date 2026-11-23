@@ -125,3 +125,15 @@ The Operations menu contains the task manager, built-in meeting organizer, and f
 Compatible ZKTeco terminals can push attendance to the app on the office LAN. See [attendance device setup](docs/attendance-device.md). Manual and CSV imports remain available.
 
 In **Administration → Users & permissions → Manage permissions → Module access**, an administrator can block individual modules for non-admin accounts. Clearing a block restores access already allowed by the account's role and branch scope. Blocks apply on the next request, including to direct URLs, and changes are audited. Combined dashboards and reports may also be blocked when they show data from a restricted module. Shared document downloads are disabled for accounts with Employee records, Leave management, or Employee self-service blocked. Administrator accounts retain full module access.
+
+## Organization settings and report designer
+
+Administrators use **Main Settings → General** to change the organization name, full system name, short name and subtitle, and upload/reset the web logo (PNG/JPEG, up to 1 MB). Branding is stored in MySQL and appears on web sign-in, navigation and the browser icon. HR report PDFs use the configured organization and system names. Updating preferences preserves the uploaded logo.
+
+**HR & attendance** links to effective work/deduction rules, leave policies and device registration. **Modules & reports** links to employee onboarding, attendance corrections/PIN mapping, salary versions, payroll/waivers, leave credits, tasks, meetings, assets and fleet. Organization structure maintains branches, departments and sub-departments; deactivate obsolete units to retain historical records. Users and permissions remain administrator-controlled.
+
+**Main Settings → Modules & reports → Report designer** creates and edits named report views over Employees, Hires, Attendance, Salary, Leave, Balances, Payroll, Deductions and Bank datasets. Choose visible columns, rolling dates and default branch/department/status filters. Active definitions appear under **Main Reports → Custom reports**; disable a definition to remove it from use. Runtime filters remain adjustable; payroll datasets require a saved payroll period. Existing salary/bank and branch permissions apply to the source data, including PDF/Excel/CSV exports. This designer does not execute arbitrary SQL or alter attendance/payroll calculations. Task, meeting, asset and fleet reports remain in their respective module report pages.
+
+Database migration `BrandingAndSavedReportViews` adds branding fields and the report-definition table; existing organization names, device records and policies are retained.
+
+To include the settings browser checks in `scripts/check-native-api.py`, set `DHG_SETTINGS_BROWSER_CHECK=1`, provide a Node Playwright module via `PLAYWRIGHT_MODULE` and, optionally, a Chrome executable via `CHROME_PATH`. The runner creates synthetic credentials and a disposable database from `DHG_NATIVE_TEST_CONNECTION`; the browser check refuses non-loopback servers.

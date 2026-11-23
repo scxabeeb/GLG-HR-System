@@ -76,6 +76,7 @@ builder.Services.AddScoped<PayrollService>();
 builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<OperationsNotices>();
 builder.Services.AddScoped<ModuleAccess>();
+builder.Services.AddScoped<PortalBranding>();
 builder.Services.AddHttpClient("whatsapp", client => client.Timeout = TimeSpan.FromSeconds(12))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHostedService<WhatsAppWorker>();
@@ -202,6 +203,7 @@ app.Use(async (context, next) =>
     if (context.Response.StatusCode == StatusCodes.Status404NotFound)
         app.Logger.LogWarning("Page not found: {Method} {Path}", context.Request.Method, context.Request.Path);
 });
+PortalBranding.Map(app);
 app.MapRazorPages();
 app.MapGet("/api/mobile/v1/{section}", MobileEmployeeApi.Read).RequireAuthorization(NativeMobileApi.LegacyPolicy);
 NativeMobileApi.Map(app);

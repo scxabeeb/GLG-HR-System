@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HrSystemDhg.Web.Pages.Reports;
 [Authorize(Roles = "HR,Management,Admin")]
-public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
+public class IndexModel(HrDbContext db,LeaveService leaves,PortalBranding branding) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public string Report { get; set; } = "Employees";
@@ -37,6 +37,10 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
     [BindProperty(SupportsGet = true)]
     public string? Status { get; set; }
 
+    [BindProperty(SupportsGet = true)] public int? SavedViewId { get; set; }
+    [BindProperty(SupportsGet = true)] public bool FiltersApplied { get; set; }
+    public string? SavedViewName { get; private set; }
+    private SavedReportView? savedView;
     public bool IsPayrollReport => Report is "Payroll" or "Deductions" or "Bank";
     public bool UsesDates => Report is "Hires" or "Attendance" or "Salary" or "Leave" or "Balances";
     public bool CanViewSalary => User.IsInRole("HR") || User.IsInRole("Admin");
@@ -51,6 +55,20 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
     public List<string[]> Rows = [];
     public async Task<IActionResult> OnGetAsync(string? format)
     {
+        if (SavedViewId.HasValue)
+        {
+            savedView = await db.SavedReportViews.AsNoTracking().SingleOrDefaultAsync(v => v.Id == SavedViewId && v.IsActive);
+            if (savedView == null || !ReportDefinitions.Sources.ContainsKey(savedView.Source)) return NotFound();
+            Report = savedView.Source; SavedViewName = savedView.Name;
+            if (!FiltersApplied)
+            {
+                var today = BusinessClock.Today;
+                var month = new DateTime(today.Year, today.Month, 1);
+                From = savedView.DateRange == "ThisYear" ? new DateTime(today.Year, 1, 1) : savedView.DateRange == "LastMonth" ? month.AddMonths(-1) : month;
+                To = savedView.DateRange == "LastMonth" ? month.AddDays(-1) : today;
+                BranchId = savedView.BranchId; DepartmentId = savedView.DepartmentId; Status = savedView.Status;
+            }
+        }
         Branches = await db.Branchs.ToListAsync();
         Departments = await db.Departments.ToListAsync();
         SubDepartments = await db.SubDepartments.ToListAsync();
@@ -128,7 +146,7 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
         else if (Report == "Leave")
         {
             Rows.Add(["Employee", "From", "To", "Status", "Reason"]);
-            foreach (var r in await db.LeaveRequests.Where(x => ids.Contains(x.EmployeeId) && x.From <= To && x.To >= From).ToListAsync())
+            foreach (var r in await db.LeaveRequests.Where(x => ids.Contains(x.EmployeeId) && x.From <= To && x.To >= From && (Status == null || x.Status == Status)).ToListAsync())
                 Rows.Add([Name(r.EmployeeId), r.From.ToString("yyyy-MM-dd"), r.To.ToString("yyyy-MM-dd"), r.Status, r.Reason]);
         }
         else if(Report=="Balances")
@@ -184,6 +202,12 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
         }
         else
             return BadRequest();
+        if (savedView != null && Rows.Count > 0)
+        {
+            var columns = ReportDefinitions.ColumnIndexes(savedView.Columns).Where(i => i >= 0 && i < Rows[0].Length).ToArray();
+            if (columns.Length == 0) return BadRequest("This report has no valid columns. Ask an administrator to edit its definition.");
+            Rows = Rows.Select(row => columns.Select(i => row[i]).ToArray()).ToList();
+        }
         if (format != null)
         {
             if (format is not ("pdf" or "excel" or "csv")) return BadRequest();
@@ -191,7 +215,10 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
             db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = "Exported " + Report + " report" });
             await db.SaveChangesAsync();
             if (format == "pdf")
-                return File(ReportPdf.Create(Report + " report", Rows), "application/pdf", Report + ".pdf");
+            {
+                var brand = await branding.GetAsync();
+                return File(ReportPdf.Create(SavedViewName ?? Report + " report", Rows, brand.Organization, brand.Name), "application/pdf", Report + ".pdf");
+            }
             if (format == "csv")
                 return File(ExportService.Csv(Rows), "text/csv", Report + ".csv");
             if (format == "excel")

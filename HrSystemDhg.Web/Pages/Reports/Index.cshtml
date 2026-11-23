@@ -7,11 +7,11 @@
         ("Payroll", "Payroll"), ("Hires", "Hires and leavers"), ("Leave", "Leave register"),
         ("Balances", "Leave balances"), ("Deductions", "Deductions"), ("Bank", "Bank payments")
     ];
-    var title = reports.FirstOrDefault(r => r.Key == Model.Report).Label ?? "Report";
+    var title = Model.SavedViewName ?? reports.FirstOrDefault(r => r.Key == Model.Report).Label ?? "Report";
 }
 <div class="eyebrow">GAROWE HR WORKSPACE</div>
 <a class="hub-back" asp-page="./Hub">← Main reports</a>
-<h1>Reports &amp; exports</h1>
+<h1>@(Model.SavedViewName ?? "Reports & exports")</h1>
 <nav class="actions" aria-label="Reports">
     @foreach (var report in reports)
     {
@@ -31,6 +31,7 @@
     <h2>@title filters</h2>
     <div asp-validation-summary="All"></div>
     <input type="hidden" name="Report" value="@Model.Report" />
+    <input asp-for="SavedViewId" type="hidden"/><input type="hidden" name="FiltersApplied" value="true"/>
     <div class="grid">
         @if (Model.UsesDates)
         {
@@ -91,7 +92,7 @@
     </div>
     <div class="actions">
         <button>Apply filters</button>
-        <a class="button secondary" asp-page="./Index" asp-route-report="@Model.Report">Clear filters</a>
+        <a class="button secondary" asp-page="./Index" asp-route-report="@Model.Report" asp-route-savedViewId="@Model.SavedViewId">Clear filters</a>
         @if (Model.Rows.Count > 1)
         {
             <button class="secondary" name="format" value="csv">Download CSV</button>

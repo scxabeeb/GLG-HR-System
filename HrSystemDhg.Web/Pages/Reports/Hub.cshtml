@@ -1,6 +1,7 @@
 @page "/Reports/All"
 @using HrSystemDhg.Web.Services
 @using HrSystemDhg.Web.Data
+@using Microsoft.EntityFrameworkCore
 @inject ModuleAccess Access
 @inject HrDbContext Db
 @{
@@ -44,6 +45,7 @@
         (Id: "resources", Label: "Assets & fleet", Detail: "Inventory, custody, vehicles, expenses and maintenance.", Titles: new[] { "Assets", "Fleet" }),
         (Id: "audit", Label: "Audit", Detail: "Account, configuration and administrative changes.", Titles: new[] { "Audit log" })
     };
+    var savedReports = staff && Show("reports") ? await Db.SavedReportViews.AsNoTracking().Where(v => v.IsActive && (v.Source != "Salary" || salaryAccess)).OrderBy(v => v.Name).ToListAsync() : [];
     var leaveAccess = (staff || User.IsInRole("General Secretary")) && Show("leave");
 }
 @if (reports.Count > 0 || leaveAccess)
@@ -54,6 +56,8 @@
 {
     <a href="#reports-@group.Id" data-workspace-link>@group.Label</a>
 }
+@if(savedReports.Count > 0) { <a href="#reports-saved" data-workspace-link>Custom reports</a> }
+@if(Db.IsAdmin){ <a asp-area="Admin" asp-page="/ReportViews">Design reports</a> }
 </nav>
 @foreach (var group in groups.Where(g => reports.Any(r => g.Titles.Contains(r.Title)) || (leaveAccess && g.Id is "all" or "hr")))
 {
@@ -74,6 +78,10 @@
         </div>
     </section>
 }
+@if(savedReports.Count > 0) {
+<section id="reports-saved" data-workspace-panel><header class="hub-section-heading"><h2>Custom reports</h2><p>Saved report layouts and default filters.</p></header><div class="hub-grid focused-hub-grid">
+@foreach(var report in savedReports){<a class="hub-card" asp-page="./Index" asp-route-savedViewId="@report.Id"><strong>@report.Name</strong><span>@report.Description</span><small>@report.Source · Open report →</small></a>}
+</div></section>}
 </div>
 }
 else

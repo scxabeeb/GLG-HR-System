@@ -194,9 +194,29 @@ public class CorrectionRequest
     public string? Resolution { get; set; }
 }
 
+public class SavedReportView
+{
+    public int Id { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(160)] public string Name { get; set; } = "";
+    [System.ComponentModel.DataAnnotations.MaxLength(30)] public string Source { get; set; } = "Employees";
+    [System.ComponentModel.DataAnnotations.MaxLength(500)] public string Description { get; set; } = "";
+    [System.ComponentModel.DataAnnotations.MaxLength(200)] public string Columns { get; set; } = "";
+    [System.ComponentModel.DataAnnotations.MaxLength(20)] public string DateRange { get; set; } = "ThisMonth";
+    public int? BranchId { get; set; }
+    public int? DepartmentId { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(80)] public string? Status { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
 public class SystemSettings
 {
     public int Id { get; set; } = 1;
+    [System.ComponentModel.DataAnnotations.MaxLength(160)] public string PortalName { get; set; } = "Garowe City Management System";
+    [System.ComponentModel.DataAnnotations.MaxLength(60)] public string ShortName { get; set; } = "Garowe City";
+    [System.ComponentModel.DataAnnotations.MaxLength(80)] public string PortalSubtitle { get; set; } = "Management System";
+    public byte[]? Logo { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(30)] public string? LogoContentType { get; set; }
+    public DateTime? LogoUpdatedUtc { get; set; }
     public bool AllowFutureHires { get; set; }
     public bool ManagementBankAccess { get; set; }
     public bool ManagerApproval { get; set; }

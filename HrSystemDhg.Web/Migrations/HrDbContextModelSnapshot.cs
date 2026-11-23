@@ -1515,6 +1515,57 @@ namespace HrSystemDhg.Web.Migrations
                     b.ToTable("SalaryVersions");
                 });
 
+            modelBuilder.Entity("HrSystemDhg.Web.Models.SavedReportView", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Columns")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("DateRange")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<int?>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("varchar(160)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(80)
+                        .HasColumnType("varchar(80)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SavedReportViews");
+                });
+
             modelBuilder.Entity("HrSystemDhg.Web.Models.Shift", b =>
                 {
                     b.Property<int>("Id")
@@ -1575,11 +1626,36 @@ namespace HrSystemDhg.Web.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<byte[]>("Logo")
+                        .HasColumnType("longblob");
+
+                    b.Property<string>("LogoContentType")
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<DateTime?>("LogoUpdatedUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<bool>("ManagementBankAccess")
                         .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("ManagerApproval")
                         .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("PortalName")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("varchar(160)");
+
+                    b.Property<string>("PortalSubtitle")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("varchar(80)");
+
+                    b.Property<string>("ShortName")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("varchar(60)");
 
                     b.HasKey("Id");
 
