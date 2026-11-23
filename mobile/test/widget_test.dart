@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:garowe_hr_mobile/main.dart';
 import 'package:garowe_hr_mobile/api.dart';
+import 'package:garowe_hr_mobile/management.dart';
 
 void main() {
   test('server addresses must be HTTPS origins', () {
@@ -16,6 +17,109 @@ void main() {
     );
   });
   testWidgets(
+    'native management forms submit task and meeting assignments at 320px',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final api = _ManagerApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: civicTheme(),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Column(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => TaskEditor(api: api)),
+                    ),
+                    child: const Text('Open task'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MeetingEditor(api: api),
+                      ),
+                    ),
+                    child: const Text('Open meeting'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open task'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'Service report');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      final employeeChoice = find.widgetWithText(
+        CheckboxListTile,
+        'Employee One',
+      );
+      await Scrollable.ensureVisible(
+        tester.element(employeeChoice),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(employeeChoice);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      final saveTask = find.widgetWithText(FilledButton, 'Save assignment');
+      await Scrollable.ensureVisible(tester.element(saveTask), alignment: .5);
+      await tester.pumpAndSettle();
+      await tester.tap(saveTask);
+      await tester.pumpAndSettle();
+      expect(api.path, '/api/mobile/v2/manage/tasks');
+      expect(api.body!['assigneeIds'], ['employee']);
+      expect(api.body!['title'], 'Service report');
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Open meeting'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, 'Weekly review');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      final meetingChoice = find.widgetWithText(
+        CheckboxListTile,
+        'Employee One',
+      );
+      await Scrollable.ensureVisible(
+        tester.element(meetingChoice),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(meetingChoice);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      final saveMeeting = find.widgetWithText(
+        FilledButton,
+        'Save meeting and notify participants',
+      );
+      await Scrollable.ensureVisible(
+        tester.element(saveMeeting),
+        alignment: .5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(saveMeeting);
+      await tester.pumpAndSettle();
+      expect(api.path, '/api/mobile/v2/manage/meetings');
+      expect(api.body!['guests'], ['employee']);
+      expect(api.body!['mode'], 'BuiltIn');
+      expect(
+        DateTime.parse(
+          api.body!['ends'],
+        ).isAfter(DateTime.parse(api.body!['starts'])),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'native bottom navigation, profile and inbox work at 320 pixels',
     (tester) async {
       tester.view.physicalSize = const Size(320, 700);
@@ -24,6 +128,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         MaterialApp(
+          theme: civicTheme(),
           home: EmployeeShell(api: _FakeApi(), onSignedOut: () {}),
         ),
       );
@@ -57,6 +162,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         MaterialApp(
+          theme: civicTheme(),
           home: LoginScreen(
             api: Api(Uri.parse('https://example.com')),
             onSignedIn: () {},
@@ -87,6 +193,14 @@ class _FakeApi extends Api {
   Future<Uint8List?> avatar() async => null;
   @override
   Future<dynamic> get(String path) async {
+    if (path.contains('/manage/options')) {
+      return {
+        'people': <dynamic>[],
+        'canAssign': false,
+        'canOrganize': false,
+        'actorId': 'self',
+      };
+    }
     if (path.endsWith('/overview')) {
       return {
         'tasks': {'done': 1, 'open': 2, 'inProgress': 0},
@@ -101,5 +215,28 @@ class _FakeApi extends Api {
       return {'email': 'employee@example.com', 'employee': null};
     }
     return <dynamic>[];
+  }
+}
+
+class _ManagerApi extends Api {
+  _ManagerApi() : super(Uri.parse('https://example.com'));
+  String? path;
+  Map<String, dynamic>? body;
+  @override
+  Future<dynamic> get(String path) async => {
+    'people': [
+      {'id': 'manager', 'name': 'Organizer'},
+      {'id': 'employee', 'name': 'Employee One'},
+    ],
+    'canAssign': true,
+    'canOrganize': true,
+    'isAdmin': true,
+    'actorId': 'manager',
+  };
+  @override
+  Future<dynamic> post(String path, Map<String, dynamic> body) async {
+    this.path = path;
+    this.body = body;
+    return {'message': 'Saved'};
   }
 }

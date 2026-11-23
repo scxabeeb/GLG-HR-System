@@ -205,6 +205,7 @@ app.Use(async (context, next) =>
 app.MapRazorPages();
 app.MapGet("/api/mobile/v1/{section}", MobileEmployeeApi.Read).RequireAuthorization(NativeMobileApi.LegacyPolicy);
 NativeMobileApi.Map(app);
+NativeOperationsManagement.Map(app);
 foreach (var path in new[] { "/iclock/cdata", "/iclock/cdata.aspx" })
 {
     app.MapGet(path, ZkAttendancePush.Poll).AllowAnonymous().RequireRateLimiting("attendance-push");

@@ -75,6 +75,77 @@ try:
     token=admin
     req('v2/meetings/'+mid+'/end',{})
     req('v2/meetings/'+mid+'/room',expected=400)
+    def clone(name,ident,role=None):
+        sql("INSERT INTO "+database+".AspNetUsers (Id,UserName,NormalizedUserName,Email,NormalizedEmail,PasswordHash,SecurityStamp,ConcurrencyStamp,EmailConfirmed,PhoneNumberConfirmed,TwoFactorEnabled,LockoutEnabled,AccessFailedCount,IsEnabled,MustChangePassword) SELECT '"+ident+"','"+name+"','"+name.upper()+"','"+name+"','"+name.upper()+"',PasswordHash,SecurityStamp,ConcurrencyStamp,0,0,0,1,0,1,0 FROM "+database+".AspNetUsers WHERE Id='"+uid+"'")
+        if role:sql("INSERT INTO "+database+".AspNetUserRoles (UserId,RoleId) SELECT '"+ident+"',Id FROM "+database+".AspNetRoles WHERE Name='"+role+"'")
+        return req('v2/auth/login',{'username':name,'password':newpassword},auth=False)['accessToken']
+    administrator=token
+    organizer=clone('organizer@example.test','organizer','HR')
+    employeeToken=clone('employee@example.test','employee','Employee')
+    outsider=clone('outsider@example.test','outsider','Employee')
+    token=organizer
+    assert req('v2/manage/options?module=tasks')['canAssign']
+    taskBody={'id':0,'title':'Managed assignment','description':'Instructions','assigneeIds':['employee'],'dueDate':None,'priority':1,'responsibility':None}
+    req('v2/manage/tasks',taskBody)
+    managed=next(t for t in req('v2/tasks') if t['title']=='Managed assignment');tid=str(managed['id'])
+    assert managed['canManage']
+    token=employeeToken
+    assert not req('v2/manage/options?module=tasks')['canAssign']
+    assert not next(t for t in req('v2/tasks') if t['id']==managed['id'])['canManage']
+    req('v2/tasks/'+tid+'/status',{'status':'Done'})
+    req('v2/manage/tasks',dict(taskBody,id=managed['id']),expected=404)
+    req('v2/manage/tasks/'+tid+'/cancel',{},expected=404)
+    req('v2/manage/tasks',dict(taskBody,id=0,assigneeIds=['organizer']),expected=400)
+    req('v2/manage/teams',{'title':'Unauthorized','description':'','members':['employee']},expected=403)
+    token=outsider
+    req('v2/manage/tasks/'+tid,expected=404)
+    req('v2/tasks/'+tid+'/status',{'status':'Done'},expected=404)
+    token=organizer
+    assert req('v2/manage/tasks/'+tid)['activity'][0]['newStatus']=='Done'
+    req('v2/manage/tasks',dict(taskBody,id=managed['id'],title='Edited by organizer'))
+    token=administrator
+    assert req('v2/manage/tasks/'+tid)['canManage']
+    req('v2/manage/tasks',dict(taskBody,id=managed['id'],title='Edited by administrator'))
+    token=organizer
+    team=req('v2/manage/teams',{'title':'Native team','description':'Team brief','members':['employee','organizer']})
+    sub={'title':'Write report','description':'Prepare findings','assigneeIds':['employee'],'dueDate':None,'priority':2}
+    req('v2/manage/teams/'+str(team['id'])+'/subtasks',sub)
+    req('v2/manage/teams/'+str(team['id'])+'/subtasks',dict(sub,assigneeIds=['outsider']),expected=400)
+    teams=req('v2/manage/teams');nativeTeam=next(t for t in teams if t['id']==team['id'])
+    assert nativeTeam['subtasks'][0]['assignments'][0]['assigneeId']=='employee'
+    token=employeeToken
+    assert not next(t for t in req('v2/manage/teams') if t['id']==team['id'])['canManage']
+    req('v2/manage/teams/'+str(team['id'])+'/subtasks',sub,expected=404)
+    from datetime import datetime,timezone,timedelta
+    now=datetime.now(timezone.utc)
+    meetingBody={'id':0,'title':'Managed meeting','agenda':'Review','starts':(now-timedelta(minutes=1)).isoformat(),'ends':(now+timedelta(minutes=30)).isoformat(),'mode':'BuiltIn','location':None,'joinUrl':None,'guests':['employee']}
+    req('v2/manage/meetings',meetingBody,expected=403)
+    token=organizer
+    meetingResult=req('v2/manage/meetings',meetingBody);meetingId=str(meetingResult['id'])
+    req('v2/manage/meetings',dict(meetingBody,id=meetingResult['id'],title='Updated agenda'))
+    token=employeeToken
+    req('v2/manage/meetings',dict(meetingBody,id=meetingResult['id']),expected=404)
+    req('v2/manage/meetings/'+meetingId+'/cancel',{},expected=404)
+    req('v2/manage/meetings/'+meetingId+'/minutes',{'minutes':'Not authorized'},expected=404)
+    token=outsider
+    req('v2/meetings/'+meetingId,expected=404)
+    token=organizer
+    req('v2/manage/meetings/'+meetingId+'/minutes',{'minutes':'Published decisions'})
+    token=employeeToken
+    assert req('v2/meetings/'+meetingId)['publishedMinutes']=='Published decisions'
+    token=administrator
+    assert req('v2/meetings/'+meetingId)['isOwner']
+    assert req('v2/meetings/'+meetingId+'/room')['isOwner']
+    req('v2/meetings/'+meetingId+'/end',{})
+    req('v2/meetings/'+meetingId+'/room',expected=400)
+    token=organizer
+    future=req('v2/manage/meetings',dict(meetingBody,starts=(now+timedelta(hours=1)).isoformat(),ends=(now+timedelta(hours=2)).isoformat()))
+    token=administrator
+    req('v2/manage/meetings/'+str(future['id'])+'/cancel',{})
+    req('v2/manage/tasks/'+tid+'/cancel',{})
+    assert req('v2/manage/tasks/'+tid)['status']=='Cancelled'
+    print('PASS mobile administrator and organizer create/edit/assign/cancel, team subtasks, activity tracking, meeting minutes and room controls; participant and outsider escalation rejected')
+    token=administrator
     req('v2/auth/logout',{});req('v2/auth/me',expected=401)
     print('PASS native bearer login, mandatory password change, old-token revocation, user-scoped feeds, task update audit, invalid status rejection, missing-record authorization, logout revocation')
 finally:

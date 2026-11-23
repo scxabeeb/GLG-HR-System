@@ -60,7 +60,10 @@
     function syncMenu() {
         const open = document.body.classList.contains('nav-open');
         toggle.setAttribute('aria-expanded', String(open));
-        sidebar.inert = matchMedia('(max-width:760px)').matches && !open;
+        const mobile = matchMedia('(max-width:760px)').matches;
+        sidebar.inert = mobile && !open;
+        const main = document.getElementById('main-content');
+        if (main) main.inert = mobile && open;
     }
     window.toggleNavigation = () => {
         document.body.classList.toggle('nav-open');
@@ -81,5 +84,24 @@
         viewport.className = 'table-scroll';
         table.before(viewport);
         viewport.append(table);
+    });
+})();
+
+// Search the existing accessible module groups without changing routes or permissions.
+(() => {
+    const input = document.getElementById('nav-search');
+    const sidebar = document.getElementById('workspace-nav');
+    if (!input || !sidebar) return;
+    const roots = [...sidebar.querySelectorAll('nav > details.nav-group')];
+    const hubs = [...sidebar.querySelectorAll('.nav-hubs a')];
+    const message = document.getElementById('nav-no-results');
+    let previous;
+    input.addEventListener('input', () => {
+        const query = input.value.trim().toLowerCase();
+        if (query && !previous) previous = new Map(roots.map(group => [group, group.open]));
+        [...roots, ...hubs].forEach(item => { item.hidden = !!query && !item.textContent.toLowerCase().includes(query); });
+        if (query) roots.filter(item => !item.hidden).forEach(item => { item.open = true; });
+        else if (previous) { previous.forEach((open, group) => { group.open = open; }); previous = undefined; }
+        if (message) message.hidden = !query || [...roots, ...hubs].some(item => !item.hidden);
     });
 })();

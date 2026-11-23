@@ -25,11 +25,11 @@ public class IndexModel(HrDbContext db) : PageModel
         if (!User.IsInRole("Admin") && !User.IsInRole("HR") && !User.IsInRole("Management"))
             return RedirectToPage("/Me/Profile");
         Employees = await db.Employees.CountAsync(x => x.Status == "Active" || x.Status == "Probation");
-        Leave = await db.LeaveRequests.CountAsync(x => x.Status == "Pending" || x.Status == "Manager approved");
+        Leave = await db.LeaveRequests.CountAsync(x => x.Status == "Pending" || x.Status == "Manager approved" || x.Status == HrSystemDhg.Web.Services.LeaveService.Submitted);
         Branches = await db.Branchs.CountAsync(x => x.IsActive);
         var today = HrSystemDhg.Web.Services.BusinessClock.Today;
         Expected = await db.Employees.CountAsync(x => x.HireDate <= today && (x.TerminationDate == null || x.TerminationDate >= today));
-        Present = await db.AttendanceDays.CountAsync(x => x.Date == today && (x.Status == "Present" || x.Status == "Late" || x.Status == "On leave"));
+        Present = await db.AttendanceDays.CountAsync(x => x.Date == today && (x.Status == "Present" || x.Status == "Late" || x.Status == "Short hours" || x.Status == "On leave (partial)" || x.Status == "On leave"));
         AttendancePercent = Expected == 0 ? 0 : 100m * Present / Expected;
         var assignments = await db.EmployeeAssignments.Where(x => x.EffectiveFrom <= today && (x.EffectiveTo == null || x.EffectiveTo >= today)).ToListAsync();
         foreach (var b in await db.Branchs.ToListAsync())

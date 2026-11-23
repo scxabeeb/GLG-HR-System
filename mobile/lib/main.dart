@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
 import 'meeting_room.dart';
+import 'management.dart';
 export 'api.dart' show parseServer;
 
 const blue = Color(0xff1745c3);
@@ -19,6 +20,120 @@ void main() {
   runApp(GaroweHrApp(server: parseServer(url, allowLoopback: kDebugMode)));
 }
 
+ThemeData civicTheme() => ThemeData(
+  fontFamily: 'Roboto',
+  useMaterial3: true,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: blue,
+    surface: Colors.white,
+  ).copyWith(primary: blue, secondary: const Color(0xff9e8145)),
+  scaffoldBackgroundColor: paper,
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Colors.white,
+    foregroundColor: ink,
+    surfaceTintColor: Colors.transparent,
+    scrolledUnderElevation: 0,
+    toolbarHeight: 64,
+    titleTextStyle: TextStyle(
+      fontFamily: 'Roboto',
+      color: ink,
+      fontSize: 18,
+      fontWeight: FontWeight.w700,
+    ),
+    shape: Border(bottom: BorderSide(color: Color(0xffe7ecf4))),
+  ),
+  inputDecorationTheme: InputDecorationTheme(
+    filled: true,
+    fillColor: const Color(0xfffafbfe),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 17),
+    labelStyle: const TextStyle(
+      fontFamily: 'Roboto',
+      color: Color(0xff586983),
+      fontSize: 14,
+    ),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xffdce4ef)),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Color(0xffdce4ef)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: blue, width: 1.6),
+    ),
+  ),
+  cardTheme: CardThemeData(
+    elevation: 0,
+    color: Colors.white,
+    margin: EdgeInsets.zero,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(18),
+      side: const BorderSide(color: Color(0xffe4eaf3)),
+    ),
+  ),
+  filledButtonTheme: FilledButtonThemeData(
+    style: FilledButton.styleFrom(
+      minimumSize: const Size(64, 48),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(
+        fontFamily: 'Roboto',
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  ),
+  outlinedButtonTheme: OutlinedButtonThemeData(
+    style: OutlinedButton.styleFrom(
+      minimumSize: const Size(64, 46),
+      side: const BorderSide(color: Color(0xffcfdaec)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      textStyle: const TextStyle(
+        fontFamily: 'Roboto',
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  ),
+  textButtonTheme: TextButtonThemeData(
+    style: TextButton.styleFrom(
+      minimumSize: const Size(48, 44),
+      textStyle: const TextStyle(
+        fontFamily: 'Roboto',
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  ),
+  chipTheme: ChipThemeData(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+    side: const BorderSide(color: Color(0xffdfe6f2)),
+    selectedColor: const Color(0xffe7efff),
+    labelStyle: const TextStyle(fontFamily: 'Roboto', fontSize: 12, color: ink),
+  ),
+  popupMenuTheme: PopupMenuThemeData(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    color: Colors.white,
+    surfaceTintColor: Colors.transparent,
+  ),
+  dividerTheme: const DividerThemeData(color: Color(0xffe7ecf4), space: 28),
+  listTileTheme: const ListTileThemeData(
+    iconColor: blue,
+    titleTextStyle: TextStyle(
+      fontFamily: 'Roboto',
+      color: ink,
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+    ),
+    subtitleTextStyle: TextStyle(
+      fontFamily: 'Roboto',
+      color: Color(0xff66748c),
+      fontSize: 12,
+      height: 1.5,
+    ),
+  ),
+);
+
 class GaroweHrApp extends StatelessWidget {
   const GaroweHrApp({super.key, required this.server});
   final Uri? server;
@@ -26,27 +141,7 @@ class GaroweHrApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     title: 'Garowe City',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: blue,
-      ).copyWith(primary: blue),
-      scaffoldBackgroundColor: paper,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: paper,
-        titleTextStyle: TextStyle(
-          color: ink,
-          fontSize: 19,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      cardTheme: const CardThemeData(elevation: 0, color: Colors.white),
-      useMaterial3: true,
-    ),
+    theme: civicTheme(),
     home: server == null
         ? const Scaffold(
             body: Center(
@@ -200,97 +295,134 @@ class _LoginScreenState extends State<LoginScreen> {
     body: SafeArea(
       child: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
-            child: Form(
-              key: form,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Image.asset(
-                      'assets/garowe-local-government.jpg',
-                      width: 86,
-                      height: 86,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Garowe City',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: ink,
-                    ),
-                  ),
-                  const Text('Management System', textAlign: TextAlign.center),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Sign in',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: username,
-                    decoration: const InputDecoration(
-                      labelText: 'Email or employee number',
-                      prefixIcon: Icon(Icons.person_outline),
-                    ),
-                    autofillHints: const [AutofillHints.username],
-                    textInputAction: TextInputAction.next,
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Enter your email or employee number.'
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: password,
-                    obscureText: !show,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      suffixIcon: IconButton(
-                        tooltip: show ? 'Hide password' : 'Show password',
-                        icon: Icon(
-                          show ? Icons.visibility_off : Icons.visibility,
-                        ),
-                        onPressed: () => setState(() => show = !show),
-                      ),
-                    ),
-                    autofillHints: const [AutofillHints.password],
-                    onFieldSubmitted: (_) {
-                      if (!busy) login();
-                    },
-                    validator: (value) => value == null || value.isEmpty
-                        ? 'Enter your password.'
-                        : null,
-                  ),
-                  if (error != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                        error!,
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: busy ? null : login,
-                    child: Text(busy ? 'Signing in…' : 'Sign in'),
-                  ),
-                  TextButton(
-                    onPressed: busy
-                        ? null
-                        : () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => RecoveryScreen(api: widget.api),
-                            ),
-                          ),
-                    child: const Text('Forgot password?'),
+            child: Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xffe1e8f3)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x091a3672),
+                    blurRadius: 30,
+                    offset: Offset(0, 12),
                   ),
                 ],
+              ),
+              child: Form(
+                key: form,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Image.asset(
+                        'assets/garowe-local-government.jpg',
+                        width: 64,
+                        height: 64,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Garowe City',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.w800, color: ink),
+                    ),
+                    const Text(
+                      'MANAGEMENT SYSTEM',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        fontSize: 11,
+                        letterSpacing: 2.2,
+                        color: Color(0xff65748b),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Welcome back',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(color: ink, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Sign in to manage your work and stay connected.',
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        color: Color(0xff66748c),
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: username,
+                      decoration: const InputDecoration(
+                        labelText: 'Email or employee number',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      autofillHints: const [AutofillHints.username],
+                      textInputAction: TextInputAction.next,
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Enter your email or employee number.'
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: password,
+                      obscureText: !show,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          tooltip: show ? 'Hide password' : 'Show password',
+                          icon: Icon(
+                            show ? Icons.visibility_off : Icons.visibility,
+                          ),
+                          onPressed: () => setState(() => show = !show),
+                        ),
+                      ),
+                      autofillHints: const [AutofillHints.password],
+                      onFieldSubmitted: (_) {
+                        if (!busy) login();
+                      },
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Enter your password.'
+                          : null,
+                    ),
+                    if (error != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          error!,
+                          style: const TextStyle(
+                            fontFamily: 'Roboto',
+                            color: Colors.red,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: busy ? null : login,
+                      child: Text(busy ? 'Signing in…' : 'Sign in'),
+                    ),
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => RecoveryScreen(api: widget.api),
+                              ),
+                            ),
+                      child: const Text('Forgot password?'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -627,8 +759,181 @@ class _EmployeeShellState extends State<EmployeeShell> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    drawer: Drawer(
+      backgroundColor: Colors.white,
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+          children: [
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/garowe-local-government.jpg',
+                    width: 52,
+                    height: 52,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Garowe City',
+                        style: TextStyle(
+                          fontFamily: 'Roboto',
+                          color: ink,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        'Management System',
+                        style: TextStyle(
+                          fontFamily: 'Roboto',
+                          fontSize: 12,
+                          color: Color(0xff66748c),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.api.email ?? 'My workspace',
+              style: const TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 13,
+                color: Color(0xff66748c),
+              ),
+            ),
+            const Divider(),
+            const Text(
+              'WORKSPACE',
+              style: TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 11,
+                letterSpacing: 1.4,
+                fontWeight: FontWeight.w700,
+                color: Color(0xff66748c),
+              ),
+            ),
+            const SizedBox(height: 12),
+            for (var i = 0; i < labels.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  selected: i == index,
+                  selectedTileColor: const Color(0xffe9f0ff),
+                  leading: Icon(icons[i]),
+                  title: Text(labels[i]),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() {
+                      index = i;
+                      revision++;
+                    });
+                  },
+                ),
+              ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: const Text('Notifications'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => NotificationsScreen(api: widget.api),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('My profile'),
+              onTap: () {
+                Navigator.pop(context);
+                account('profile');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Color(0xffb64141)),
+              title: const Text(
+                'Sign out',
+                style: TextStyle(
+                  fontFamily: 'Roboto',
+                  color: Color(0xffb64141),
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                logout();
+              },
+            ),
+            const Divider(),
+            const Text(
+              'Garowe City · 2.1',
+              style: TextStyle(
+                fontFamily: 'Roboto',
+                color: Color(0xff8390a4),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
     appBar: AppBar(
-      title: Text(labels[index]),
+      title: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/garowe-local-government.jpg',
+              width: 30,
+              height: 30,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'GAROWE CITY',
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    color: Color(0xff77859c),
+                    fontSize: 9,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  labels[index],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Roboto',
+                    color: ink,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
       actions: [
         IconButton(
           tooltip: 'Notifications',
@@ -672,6 +977,11 @@ class _EmployeeShellState extends State<EmployeeShell> {
       ),
     ),
     bottomNavigationBar: Material(
+      elevation: 8,
+      shadowColor: const Color(0x16213968),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       color: Colors.white,
       child: SafeArea(
         top: false,
@@ -703,14 +1013,14 @@ class _EmployeeShellState extends State<EmployeeShell> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: i == index
-                                  ? const Color(0xffe2eaff)
-                                  : Colors.transparent,
+                              color: i == index ? blue : Colors.transparent,
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Icon(
                               icons[i],
-                              color: i == index ? blue : ink,
+                              color: i == index
+                                  ? Colors.white
+                                  : const Color(0xff7c8ba2),
                               size: 22,
                             ),
                           ),
@@ -719,6 +1029,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
                             labels[i],
                             textAlign: TextAlign.center,
                             style: TextStyle(
+                              fontFamily: 'Roboto',
                               fontSize: 11,
                               fontWeight: i == index
                                   ? FontWeight.w800
@@ -829,10 +1140,64 @@ String statusLabel(String value) =>
     value == 'InProgress' ? 'In progress' : value;
 String money(dynamic value) => (value as num? ?? 0).toStringAsFixed(2);
 Widget badge(String text) => Chip(
-  label: Text(statusLabel(text), style: const TextStyle(fontSize: 12)),
+  label: Text(
+    statusLabel(text),
+    style: const TextStyle(fontFamily: 'Roboto', fontSize: 12),
+  ),
   padding: EdgeInsets.zero,
   visualDensity: VisualDensity.compact,
 );
+
+class DashboardMetric extends StatelessWidget {
+  const DashboardMetric({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
+  final String label, value;
+  final IconData icon;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Card(
+    child: InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: blue, size: 22),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Roboto',
+                color: ink,
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Roboto',
+                color: Color(0xff66748c),
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 class OverviewScreen extends StatelessWidget {
   const OverviewScreen({super.key, required this.api, required this.onOpen});
@@ -849,33 +1214,120 @@ class OverviewScreen extends StatelessWidget {
       final total = done + open + working;
       return contentList([
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(colors: [ink, blue]),
+            gradient: const LinearGradient(
+              colors: [Color(0xff142b5a), Color(0xff2354ba)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(22),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Image.asset(
-                'assets/garowe-local-government.jpg',
-                width: 55,
-                height: 55,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'My dashboard',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'YOUR WORKSPACE',
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        color: Color(0xffa9c4fb),
+                        fontSize: 10,
+                        letterSpacing: 1.7,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'My dashboard',
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        color: Colors.white,
+                        fontSize: 25,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Your work, at a glance.',
+                      style: TextStyle(
+                        fontFamily: 'Roboto',
+                        color: Color(0xffc8d8f7),
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const Text(
-                'Garowe City Management System',
-                style: TextStyle(color: Colors.white70),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Image.asset(
+                  'assets/garowe-local-government.jpg',
+                  width: 48,
+                  height: 48,
+                ),
               ),
             ],
           ),
+        ),
+        LayoutBuilder(
+          builder: (context, bounds) {
+            final width = (bounds.maxWidth - 12) / 2;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                if (tasks != null) ...[
+                  SizedBox(
+                    width: width,
+                    child: DashboardMetric(
+                      label: 'Active tasks',
+                      value: '${open + working}',
+                      icon: Icons.assignment_outlined,
+                      onTap: () => onOpen(1),
+                    ),
+                  ),
+                  SizedBox(
+                    width: width,
+                    child: DashboardMetric(
+                      label: 'Completed',
+                      value: '$done',
+                      icon: Icons.task_alt,
+                      onTap: () => onOpen(1),
+                    ),
+                  ),
+                ],
+                if (data['upcomingMeetings'] != null)
+                  SizedBox(
+                    width: width,
+                    child: DashboardMetric(
+                      label: 'Upcoming meetings',
+                      value: '${data['upcomingMeetings']}',
+                      icon: Icons.event_outlined,
+                      onTap: () => onOpen(2),
+                    ),
+                  ),
+                if (data['hoursThisMonth'] != null)
+                  SizedBox(
+                    width: width,
+                    child: DashboardMetric(
+                      label: 'Work hours this month',
+                      value: money(data['hoursThisMonth']),
+                      icon: Icons.schedule,
+                      onTap: () => onOpen(3),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
         if (tasks != null)
           Card(
@@ -896,7 +1348,10 @@ class OverviewScreen extends StatelessWidget {
                         Center(
                           child: Text(
                             '${total == 0 ? 0 : done * 100 ~/ total}%',
-                            style: const TextStyle(fontWeight: FontWeight.w800),
+                            style: const TextStyle(
+                              fontFamily: 'Roboto',
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ],
@@ -924,16 +1379,6 @@ class OverviewScreen extends StatelessWidget {
               ),
             ),
           ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (data['hoursThisMonth'] != null)
-              badge('${money(data['hoursThisMonth'])} work hours this month'),
-            if (data['upcomingMeetings'] != null)
-              badge('${data['upcomingMeetings']} active / upcoming meetings'),
-          ],
-        ),
         OutlinedButton.icon(
           onPressed: reload,
           icon: const Icon(Icons.refresh),
@@ -950,19 +1395,56 @@ class TasksScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DataView(
     load: () => api.get('/api/mobile/v2/tasks'),
-    builder: (data, reload) => WorkList(
-      items: List<Map<String, dynamic>>.from(data as List),
-      isMeeting: false,
-      onOpen: (item) async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => TaskScreen(api: api, task: item),
+    builder: (data, reload) => Column(
+      children: [
+        ManagementActions(api: api, module: 'tasks', refresh: reload),
+        Expanded(
+          child: WorkList(
+            items: List<Map<String, dynamic>>.from(data as List),
+            isMeeting: false,
+            onOpen: (item) async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TaskScreen(api: api, task: item),
+                ),
+              );
+              reload();
+            },
+            reload: reload,
           ),
-        );
-        reload();
-      },
-      reload: reload,
+        ),
+      ],
+    ),
+  );
+}
+
+Widget statusPill(String value) {
+  final done = value == 'Done' || value == 'Present';
+  final closed = value == 'Cancelled' || value == 'Ended';
+  return Container(
+    margin: const EdgeInsets.symmetric(vertical: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: done
+          ? const Color(0xffe8f6ee)
+          : closed
+          ? const Color(0xffedf0f5)
+          : const Color(0xffeaf0ff),
+      borderRadius: BorderRadius.circular(7),
+    ),
+    child: Text(
+      value,
+      style: TextStyle(
+        fontFamily: 'Roboto',
+        color: done
+            ? const Color(0xff26734b)
+            : closed
+            ? const Color(0xff64748b)
+            : blue,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+      ),
     ),
   );
 }
@@ -1007,7 +1489,7 @@ class _WorkListState extends State<WorkList> {
           ? meetingStatus(item)
           : statusLabel(item['status']);
       return (filter == 'All' || status == filter) &&
-          '${item['title']} ${item['responsibility'] ?? ''} ${item['description'] ?? item['agenda'] ?? ''}'
+          '${item['title']} ${item['responsibility'] ?? ''} ${item['description'] ?? item['agenda'] ?? ''} ${item['assigneeName'] ?? ''}'
               .toLowerCase()
               .contains(search.toLowerCase());
     }).toList();
@@ -1050,12 +1532,21 @@ class _WorkListState extends State<WorkList> {
             ),
             title: Text(
               item['responsibility'] ?? item['title'],
-              style: const TextStyle(fontWeight: FontWeight.w700),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Roboto',
+                fontWeight: FontWeight.w700,
+              ),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                badge(widget.isMeeting ? meetingStatus(item) : item['status']),
+                statusPill(
+                  widget.isMeeting
+                      ? meetingStatus(item)
+                      : statusLabel(item['status']),
+                ),
                 Text(
                   widget.isMeeting
                       ? date(item['startsUtc'], time: true)
@@ -1065,6 +1556,8 @@ class _WorkListState extends State<WorkList> {
                 ),
                 if (widget.isMeeting)
                   Text('${item['attending']} / ${item['invited']} checked in'),
+                if (!widget.isMeeting && item['assigneeName'] != null)
+                  Text('Assigned to ${item['assigneeName']}'),
                 if ((item['description'] ?? item['agenda'] ?? '')
                     .toString()
                     .isNotEmpty)
@@ -1123,6 +1616,48 @@ class _TaskScreenState extends State<TaskScreen> {
       if (widget.task['responsibility'] != null)
         Text('Team task · ${widget.task['title']}'),
       Text('Due ${date(widget.task['dueDate'])}'),
+      if (widget.task['assigneeName'] != null)
+        Text('Assigned to ${widget.task['assigneeName']}'),
+      if (widget.task['canManage'] == true && status != 'Cancelled')
+        Wrap(
+          spacing: 8,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Edit / reassign'),
+              onPressed: () => openManager(
+                context,
+                TaskEditor(api: widget.api, taskId: widget.task['id']),
+                () {
+                  if (mounted) Navigator.pop(context);
+                },
+              ),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Text('Cancel task'),
+              onPressed: () => confirmManage(
+                context,
+                widget.api,
+                '/api/mobile/v2/manage/tasks/${widget.task['id']}/cancel',
+                'Cancel this task?',
+                () {
+                  if (mounted) Navigator.pop(context);
+                },
+              ),
+            ),
+          ],
+        ),
+      OutlinedButton.icon(
+        icon: const Icon(Icons.history),
+        label: const Text('Activity & progress'),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TaskHistory(api: widget.api, id: widget.task['id']),
+          ),
+        ),
+      ),
       Text(widget.task['description'] ?? ''),
       if (status != 'Cancelled') ...[
         DropdownButtonFormField<String>(
@@ -1150,19 +1685,26 @@ class MeetingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DataView(
     load: () => api.get('/api/mobile/v2/meetings'),
-    builder: (data, reload) => WorkList(
-      items: List<Map<String, dynamic>>.from(data as List),
-      isMeeting: true,
-      reload: reload,
-      onOpen: (meeting) async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => MeetingScreen(api: api, id: meeting['id']),
+    builder: (data, reload) => Column(
+      children: [
+        ManagementActions(api: api, module: 'meetings', refresh: reload),
+        Expanded(
+          child: WorkList(
+            items: List<Map<String, dynamic>>.from(data as List),
+            isMeeting: true,
+            reload: reload,
+            onOpen: (meeting) async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MeetingScreen(api: api, id: meeting['id']),
+                ),
+              );
+              reload();
+            },
           ),
-        );
-        reload();
-      },
+        ),
+      ],
     ),
   );
 }
@@ -1200,6 +1742,44 @@ class MeetingScreen extends StatelessWidget {
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           badge(meetingStatus(m)),
+          if (m['isOwner'] == true)
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                if (!closed)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit meeting'),
+                    onPressed: () => openManager(
+                      context,
+                      MeetingEditor(api: api, meeting: m),
+                      reload,
+                    ),
+                  ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.notes_outlined),
+                  label: const Text('Manage minutes'),
+                  onPressed: () => openManager(
+                    context,
+                    MinutesEditor(api: api, meeting: m),
+                    reload,
+                  ),
+                ),
+                if (!closed)
+                  TextButton.icon(
+                    icon: const Icon(Icons.cancel_outlined),
+                    label: const Text('Cancel meeting'),
+                    onPressed: () => confirmManage(
+                      context,
+                      api,
+                      '/api/mobile/v2/manage/meetings/$id/cancel',
+                      'Cancel this meeting?',
+                      reload,
+                    ),
+                  ),
+              ],
+            ),
           Text(date(m['startsUtc'], time: true)),
           Text(m['location'] ?? 'Online meeting'),
           Card(
@@ -1243,6 +1823,27 @@ class MeetingScreen extends StatelessWidget {
                 }
               },
             ),
+          if (m['participants'] != null)
+            ExpansionTile(
+              title: const Text('Participants & attendance'),
+              children: [
+                for (final p in m['participants'] as List)
+                  ListTile(
+                    dense: true,
+                    leading: Icon(
+                      p['attendedUtc'] == null
+                          ? Icons.person_outline
+                          : Icons.check_circle_outline,
+                    ),
+                    title: Text(p['name'] ?? 'Participant'),
+                    subtitle: Text(
+                      p['attendedUtc'] == null
+                          ? 'Not checked in'
+                          : 'Checked in',
+                    ),
+                  ),
+              ],
+            ),
           Text('Shared agenda', style: Theme.of(context).textTheme.titleLarge),
           Text(
             (m['agenda'] as String).isEmpty
@@ -1275,7 +1876,7 @@ class MeetingScreen extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           Text(m['publishedMinutes'] ?? 'Minutes have not been published.'),
-          if (!closed && m['isOwner'] == true)
+          if (meetingStatus(m) == 'In progress' && m['isOwner'] == true)
             OutlinedButton.icon(
               icon: const Icon(Icons.stop_circle_outlined),
               label: const Text('End meeting for everyone'),

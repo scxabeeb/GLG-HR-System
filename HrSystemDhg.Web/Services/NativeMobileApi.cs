@@ -135,9 +135,9 @@ public static class NativeMobileApi
     private static async Task<IResult> Tasks(HrDbContext db, ModuleAccess access)
     {
         if (!await Allowed(access, "tasks")) return Results.Forbid();
-        return Results.Ok(await db.WorkTasks.AsNoTracking().Where(t => t.AssigneeId == db.ActorId)
+        return Results.Ok(await db.WorkTasks.AsNoTracking().Where(t => db.IsAdmin || t.AssigneeId == db.ActorId || t.OwnerId == db.ActorId)
             .OrderBy(t => t.Status >= TaskProgress.Done).ThenBy(t => t.DueDate == null).ThenBy(t => t.DueDate).Take(500)
-            .Select(t => new { t.Id, t.Title, t.Responsibility, t.Description, Status = t.Status.ToString(), t.Priority, t.DueDate }).ToListAsync());
+            .Select(t => new { t.Id, t.Title, t.Responsibility, t.Description, Status = t.Status.ToString(), t.Priority, t.DueDate, t.AssigneeId, t.TeamId, CanManage = db.IsAdmin || t.OwnerId == db.ActorId, AssigneeName = db.Users.Where(u => u.Id == t.AssigneeId).Select(u => u.Email).FirstOrDefault() }).ToListAsync());
     }
 
     private static async Task<IResult> TaskStatus(int id, StatusInput input, HrDbContext db, ModuleAccess access, OperationsNotices notices)
@@ -145,7 +145,7 @@ public static class NativeMobileApi
         if (!await Allowed(access, "tasks")) return Results.Forbid();
         if (!Enum.TryParse<TaskProgress>(input.Status, out var status) || !Enum.IsDefined(status) || status == TaskProgress.Cancelled)
             return Error("Choose Open, InProgress, or Done.");
-        var task = await db.WorkTasks.SingleOrDefaultAsync(t => t.Id == id && t.AssigneeId == db.ActorId);
+        var task = await db.WorkTasks.SingleOrDefaultAsync(t => t.Id == id && (db.IsAdmin || t.AssigneeId == db.ActorId || t.OwnerId == db.ActorId));
         if (task == null) return Results.NotFound();
         if (task.Status == TaskProgress.Cancelled) return Error("This task is cancelled.");
         if (task.Status == status) return Results.Ok(new { message = "Status saved." });
@@ -159,7 +159,7 @@ public static class NativeMobileApi
         return Results.Ok(new { message = "Status saved." });
     }
 
-    private static IQueryable<WorkMeeting> Visible(HrDbContext db) => OperationsPolicy.Meetings(db, db.ActorId!);
+    private static IQueryable<WorkMeeting> Visible(HrDbContext db) => db.IsAdmin ? db.WorkMeetings : OperationsPolicy.Meetings(db, db.ActorId!);
     private static async Task<IResult> Meetings(HrDbContext db, ModuleAccess access)
     {
         if (!await Allowed(access, "meetings")) return Results.Forbid();
@@ -169,7 +169,7 @@ public static class NativeMobileApi
             .Select(m => new { m.Id, m.Title, m.Agenda, StartsUtc = DateTime.SpecifyKind(m.StartsUtc, DateTimeKind.Utc), EndsUtc = DateTime.SpecifyKind(m.EndsUtc, DateTimeKind.Utc), m.Location, m.JoinUrl, m.Cancelled, m.EndedUtc,
                 Attending = m.Participants.Count(p => p.AttendedUtc != null), Invited = m.Participants.Count(),
                 CheckedIn = m.Participants.Any(p => p.UserId == db.ActorId && p.AttendedUtc != null),
-                IsInvited = m.Participants.Any(p => p.UserId == db.ActorId), IsOwner = m.OwnerId == db.ActorId }).ToListAsync());
+                IsInvited = m.Participants.Any(p => p.UserId == db.ActorId), IsOwner = db.IsAdmin || m.OwnerId == db.ActorId }).ToListAsync());
     }
 
     private static async Task<IResult> Meeting(int id, HrDbContext db, ModuleAccess access)
@@ -180,11 +180,11 @@ public static class NativeMobileApi
         var agenda = await db.MeetingAgendaItems.AsNoTracking().Where(a => a.MeetingId == id)
             .Select(a => new { a.Id, a.Title, a.Notes }).ToListAsync();
         var attendance = await db.Set<MeetingParticipant>().Where(p => p.MeetingId == id)
-            .Select(p => new { p.UserId, p.AttendedUtc }).ToListAsync();
+            .Select(p => new { p.UserId, p.AttendedUtc, Name = db.Users.Where(u => u.Id == p.UserId).Select(u => u.Email).FirstOrDefault() }).ToListAsync();
         var mine = attendance.SingleOrDefault(a => a.UserId == db.ActorId);
         return Results.Ok(new { m.Id, m.Title, m.Agenda, m.PublishedMinutes, StartsUtc = DateTime.SpecifyKind(m.StartsUtc, DateTimeKind.Utc), EndsUtc = DateTime.SpecifyKind(m.EndsUtc, DateTimeKind.Utc), m.Location, m.JoinUrl, m.Cancelled, m.EndedUtc,
             AgendaItems = agenda, Attending = attendance.Count(a => a.AttendedUtc != null), Invited = attendance.Count,
-            CheckedIn = mine?.AttendedUtc != null, IsInvited = mine != null, IsOwner = m.OwnerId == db.ActorId });
+            CheckedIn = mine?.AttendedUtc != null, Participants = attendance, IsInvited = mine != null, IsOwner = db.IsAdmin || m.OwnerId == db.ActorId });
     }
 
     private static async Task<IResult> Agenda(int id, AgendaInput input, HrDbContext db, ModuleAccess access)
@@ -223,7 +223,7 @@ public static class NativeMobileApi
     private static async Task<IResult> End(int id, HrDbContext db, ModuleAccess access, MeetingRooms rooms)
     {
         if (!await Allowed(access, "meetings")) return Results.Forbid();
-        var count = await db.WorkMeetings.Where(m => m.Id == id && m.OwnerId == db.ActorId && !m.Cancelled && m.EndedUtc == null && m.EndsUtc > DateTime.UtcNow)
+        var count = await db.WorkMeetings.Where(m => m.Id == id && (db.IsAdmin || m.OwnerId == db.ActorId) && !m.Cancelled && m.EndedUtc == null && m.EndsUtc > DateTime.UtcNow)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.EndedUtc, DateTime.UtcNow));
         if (count == 0) return Error("The meeting is closed or you are not its organizer.");
         db.AuditLogs.Add(new() { Actor = db.ActorId!, Action = $"Ended meeting {id} from mobile" });
@@ -242,7 +242,7 @@ public static class NativeMobileApi
         var ice = iceUrl != null && (iceUrl.StartsWith("stun:") || iceUrl.StartsWith("stuns:") || iceUrl.StartsWith("turn:") || iceUrl.StartsWith("turns:"))
             ? new[] { new { urls = iceUrl, username = config["MeetingRooms:IceUsername"] ?? "", credential = config["MeetingRooms:IceCredential"] ?? "" } }
             : [];
-        return Results.Ok(new { Ticket = links.Issue(meeting, db.ActorId), meeting.Title, IsOwner = meeting.OwnerId == db.ActorId, IceServers = ice });
+        return Results.Ok(new { Ticket = links.Issue(meeting, db.ActorId), meeting.Title, IsOwner = db.IsAdmin || meeting.OwnerId == db.ActorId, IceServers = ice });
     }
 
     private static async Task<IResult> Notifications(HrDbContext db, ModuleAccess access)

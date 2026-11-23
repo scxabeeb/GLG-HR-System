@@ -99,7 +99,7 @@ public sealed class MeetingRooms
         message.ValueKind == JsonValueKind.Object && message.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() : null;
 
-    private static async Task<bool> Authorized(HrDbContext db, RoomTicket? ticket, CancellationToken ct)
+    private static async Task<bool> Authorized(HrDbContext db, RoomTicket? ticket, CancellationToken ct, string? stamp)
     {
         if (ticket == null) return false;
         var meeting = await db.WorkMeetings.AsNoTracking().SingleOrDefaultAsync(m => m.Id == ticket.MeetingId, ct);
@@ -107,13 +107,13 @@ public sealed class MeetingRooms
         if (ticket.UserId == null) return true;
         return ticket.UserId == db.ActorId &&
             (db.IsAdmin || !await db.UserModuleRestrictions.AnyAsync(r => r.UserId == ticket.UserId && r.Module == "meetings", ct)) &&
-            await db.Users.AnyAsync(u => u.Id == ticket.UserId && u.IsEnabled && !u.MustChangePassword, ct) &&
-            await OperationsPolicy.Meetings(db, ticket.UserId).AnyAsync(m => m.Id == ticket.MeetingId, ct);
+            await db.Users.AnyAsync(u => u.Id == ticket.UserId && u.IsEnabled && !u.MustChangePassword && u.SecurityStamp == stamp, ct) &&
+            (db.IsAdmin || await OperationsPolicy.Meetings(db, ticket.UserId).AnyAsync(m => m.Id == ticket.MeetingId, ct));
     }
 
     private static async Task<bool> IsOrganizer(HrDbContext db, RoomTicket ticket, CancellationToken ct) =>
         ticket.UserId != null && await db.WorkMeetings.AnyAsync(m =>
-            m.Id == ticket.MeetingId && m.OwnerId == ticket.UserId && !m.Cancelled && m.EndedUtc == null && m.EndsUtc > DateTime.UtcNow, ct);
+            m.Id == ticket.MeetingId && (db.IsAdmin || m.OwnerId == ticket.UserId) && !m.Cancelled && m.EndedUtc == null && m.EndsUtc > DateTime.UtcNow, ct);
 
     public async Task Handle(HttpContext context, HrDbContext db, RoomLinks links)
     {
@@ -134,7 +134,7 @@ public sealed class MeetingRooms
             using var hello = await Read(socket, ct, 8);
             if (hello == null) return;
             ticket = links.Read(Text(hello.RootElement, "ticket"));
-            if (!await Authorized(db, ticket, ct))
+            if (!await Authorized(db, ticket, ct, context.User.FindFirst("AspNet.Identity.SecurityStamp")?.Value))
             {
                 var denied = new Peer(socket, "");
                 if (ticket != null && (ticket.UserId == null || ticket.UserId == db.ActorId) &&
@@ -186,7 +186,7 @@ public sealed class MeetingRooms
                 if (message == null) break;
                 if (DateTime.UtcNow - lastCheck >= TimeSpan.FromSeconds(5))
                 {
-                    if (!await Authorized(db, ticket, ct)) { await member.Send(new { type = "error", message = "The meeting ended or access was revoked." }); break; }
+                    if (!await Authorized(db, ticket, ct, context.User.FindFirst("AspNet.Identity.SecurityStamp")?.Value)) { await member.Send(new { type = "error", message = "The meeting ended or access was revoked." }); break; }
                     lastCheck = DateTime.UtcNow;
                 }
                 var root = message.RootElement;
@@ -197,7 +197,7 @@ public sealed class MeetingRooms
                     if (ticket.UserId == null) continue;
                     var now = DateTime.UtcNow;
                     await using var transaction = await db.Database.BeginTransactionAsync(ct);
-                    var changed = await db.WorkMeetings.Where(m => m.Id == id && m.OwnerId == ticket.UserId &&
+                    var changed = await db.WorkMeetings.Where(m => m.Id == id && (db.IsAdmin || m.OwnerId == ticket.UserId) &&
                         !m.Cancelled && m.EndedUtc == null && m.EndsUtc > now &&
                         m.StartsUtc == new DateTime(ticket.Starts) && m.EndsUtc == new DateTime(ticket.Ends))
                         .ExecuteUpdateAsync(set => set.SetProperty(m => m.EndedUtc, now), ct);

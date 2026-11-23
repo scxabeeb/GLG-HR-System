@@ -1,10 +1,4 @@
 @page
 @model HrSystemDhg.Web.Pages.Admin.DashboardModel
 @{ViewData["Title"]="Overview";}
-<div class="civic-hero">
-    <div><div class="eyebrow">MUNICIPAL ADMINISTRATION</div><h1>People &amp; operations</h1><p>Workforce, attendance and payroll overview</p></div>
-    <div class="civic-date"><small>OFFICE DATE · EAT</small><strong>@HrSystemDhg.Web.Services.BusinessClock.Today.ToString("dddd, dd MMMM yyyy")</strong></div>
-</div>
-<div class="grid civic-metrics"><div class="card stat">Active employees<strong>@Model.Employees</strong><small>Across authorized branches</small></div><div class="card stat">Pending leave<strong>@Model.Leave</strong><small>Awaiting a decision</small></div><div class="card stat">Attendance today<strong>@Model.AttendancePercent.ToString("N0")%</strong><small>@Model.Present of @Model.Expected expected employees</small></div><div class="card stat">Active branches<strong>@Model.Branches</strong><small>Connected workplaces</small></div></div>
-<div class="grid"><div class="card"><h2>Headcount by branch</h2>@if(Model.Headcount.Count == 0){<p>No branch headcount available.</p>}@foreach(var b in Model.Headcount){<div class="bar-row"><span>@b.Key</span><progress max="@Math.Max(1,Model.Employees)" value="@b.Value"></progress><strong>@b.Value</strong></div>}</div><div class="card"><h2>Latest payroll totals</h2>@foreach(var t in Model.Costs){<p><strong>@t.Key @t.Value.ToString("N2")</strong> net payable</p>}@if(Model.Costs.Count==0){<p>No calculated payroll yet.</p>}</div></div>
-<div class="card"><h2>Quick actions</h2><div class="actions">@if(User.IsInRole("HR")||User.IsInRole("Admin")){<a class="button" href="/Hr/Register">Register employee</a><a class="button" href="/Hr/Employees">Employee directory</a>}@if(User.IsInRole("Management")||User.IsInRole("Admin")){<a class="button" href="/Management/Payroll">Prepare payroll</a>}<a class="button" href="/Hr/Leave">Review leave</a><a href="/Me/Profile">My workspace</a></div></div>
+<partial name="/Pages/Shared/_OperationsDashboard.cshtml" model="Model" />

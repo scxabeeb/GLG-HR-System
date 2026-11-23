@@ -2,8 +2,10 @@
 
 Flutter screens for Android, iPhone and iPad. The app uses authenticated ASP.NET APIs and the server's MySQL database. There are no embedded WebViews.
 
+- Branded responsive design with a civic login, metric dashboard, task progress chart, workspace drawer, and persistent five-tab navigation. Forms, lists, filters and status labels use one design system.
 - Native sign-in, password visibility, email reset, mandatory password change, secure token storage and sign-out.
 - Overview, task status updates, searchable task and meeting lists, shared agenda submissions, meeting check-in, attendance, published payslips and notifications.
+- Native management: admins can manage all tasks and meetings; creators/organizers can manage their own. Create, assign, edit and cancel tasks, create team tasks and subtasks, review activity and progress, schedule/edit/cancel meetings, publish minutes, and end live sessions. Employees retain access to their assignments. Staff roles can assign other users and organize meetings, subject to module and branch permissions.
 - Profile image upload and native password changes.
 - Native WebRTC room: participant tiles, tap to focus, microphone/camera controls, camera switching, screen sharing, shared whiteboard, organizer mute/end and leave/rejoin. Rooms retain the server's six-participant limit. Screen capture support depends on the OS; camera/microphone permissions are requested by WebRTC. Recording and meeting-document management remain available in the web administration interface.
 - Teams and Google Meet links launch the provider's app or browser.
