@@ -211,3 +211,5 @@
 .civic-topbar .civic-masthead-title{flex:1 1 0;min-width:0;grid-template-columns:minmax(0,1fr)}
 .civic-masthead-title strong{display:block;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .civic-topbar .civic-account{flex:0 0 auto}
+@media(min-width:761px) and (max-width:1150px){.portal-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:761px) and (max-width:1000px){.portal-dashboard-grid{grid-template-columns:1fr}.portal-payroll{grid-column:auto}.civic-shell .civic-content{padding:25px 22px}.portal-module-grid{grid-template-columns:1fr}}
