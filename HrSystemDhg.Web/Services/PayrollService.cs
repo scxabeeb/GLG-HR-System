@@ -58,6 +58,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
         var employeeIds = employees.Select(x => x.Id).ToList();
         if (await db.LeaveRequests.AnyAsync(x => employeeIds.Contains(x.EmployeeId) && (x.Status == "Pending" || x.Status == "Manager approved" || x.Status == LeaveService.Submitted) && x.From <= p.To && x.To >= p.From))
             throw new InvalidOperationException("Resolve pending leave before payroll calculation.");
+        var unpaidTypeIds = (await db.LeaveTypes.Where(t => !t.IsPaid).Select(t => t.Id).ToListAsync()).ToHashSet();
         p.Revision++;
         foreach (var e in employees)
         {
@@ -66,6 +67,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             var org = await calendar.AssignmentAsync(e.Id, assignmentDate);
             var leaves = await db.LeaveRequests.Where(x => x.EmployeeId == e.Id && x.Status == "Approved" && x.From <= p.To && x.To >= p.From).ToListAsync();
             decimal overtime = 0;
+            decimal unpaidLeaveAmount = 0;
             var workingDates = new HashSet<DateTime>();
             var calendarDays = new List<(DateTime Date, WorkRule Rule, int BranchId)>();
             for (var date = p.From.Date; date <= p.To.Date; date = date.AddDays(1))
@@ -100,6 +102,9 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                 }
 
                 leaveFraction = Math.Min(1, leaveFraction);
+                if (working)
+                    unpaidLeaveAmount += AttendanceMinutes.UnpaidLeaveDeduction(rule, salary.Basic, date,
+                        leaveForDay.Where(l => unpaidTypeIds.Contains(l.LeaveTypeId)));
                 if (working && leaveFraction < 1)
                 {
                     var deductionRule = await db.DeductionRules.Where(x => x.EffectiveFrom <= date && (x.BranchId == null || x.BranchId == branchId)).OrderByDescending(x => x.BranchId != null).ThenByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).FirstOrDefaultAsync();
@@ -186,7 +191,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                 Gross = gross,
                 AttendanceCalculated = deductions.Sum(x => x.Calculated),
                 AttendanceApplied = deductions.Sum(x => x.Applied),
-                UnpaidLeave = 0,
+                UnpaidLeave = decimal.Round(unpaidLeaveAmount, 2),
                 Currency = salary.Currency
             };
             line.Net = Math.Max(0, line.Gross - line.AttendanceApplied - line.UnpaidLeave);

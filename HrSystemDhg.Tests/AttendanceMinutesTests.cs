@@ -51,4 +51,15 @@ public class AttendanceMinutesTests
         custom.SalaryDivisor = 0;
         Assert.False(AttendanceMinutes.Valid(custom));
     }
+    [Fact]
+    public void UnpaidLeaveUsesSalaryValueEvenWhenAttendanceRateIsZero()
+    {
+        var rule = new WorkRule { StartHour = 6, StartMinute = 30, DailyHours = 8, BreakMinutes = 0, SalaryDivisor = 30, MinuteRateMode = "Fixed", FixedMinuteRate = 0 };
+        var full = new LeaveRequest { From = Day, To = Day };
+        var half = new LeaveRequest { From = Day, To = Day, StartTime = TimeSpan.FromHours(6.5), EndTime = TimeSpan.FromHours(10.5) };
+        Assert.Equal(50m, AttendanceMinutes.UnpaidLeaveDeduction(rule, 1500m, Day, [full]));
+        Assert.Equal(25m, AttendanceMinutes.UnpaidLeaveDeduction(rule, 1500m, Day, [half]));
+        Assert.Equal(25m, AttendanceMinutes.UnpaidLeaveDeduction(rule, 1500m, Day, [half, half]));
+        Assert.Equal(0m, AttendanceMinutes.UnpaidLeaveDeduction(rule, 1500m, Day, []));
+    }
 }

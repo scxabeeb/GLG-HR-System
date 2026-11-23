@@ -161,7 +161,7 @@ await using (var fresh = new HrDbContext(options))
     Check(stored.SourceHash == await freshPayroll.HashAsync(stored), "payroll fingerprint survives a fresh request and database decimal normalization");
 }
 
-Check(line.UnpaidLeave == 0, "approved leave has no payroll deduction");
+Check(line.UnpaidLeave == decimal.Round(2200m / 30m, 2), "approved unpaid leave deducts one salary day separately from attendance");
 var deductions = await db.PayrollDeductions.Where(x => x.PayrollLineId == line.Id).ToListAsync();
 Check(!deductions.Any(x => x.Date == r1.From || x.Date == r2.From), "paid and unpaid leave have no attendance deduction");
 Check(deductions.Any(x => x.Date == new DateTime(2026, 10, 7) && x.Calculated == decimal.Round(20 * 2200m / 30m / 480m, 2)), "late deduction applies after grace");
@@ -180,7 +180,7 @@ await payroll.DecideAsync(p.Id, "Lock", "test");
 await payroll.PublishAsync(p.Id, "test");
 var current = await db.PayrollLines.SingleAsync(x => x.PayrollPeriodId == p.Id && x.Revision == 2);
 Check(current.AttendanceApplied == 0 && current.AttendanceCalculated > 0, "attendance can be waived while retaining calculated amounts");
-Check(current.Net == current.Gross - current.UnpaidLeave, "approved leave stays free of deductions when attendance deductions are waived");
+Check(current.Net == current.Gross - current.UnpaidLeave, "attendance waivers preserve the separate approved-unpaid-leave deduction");
 var lockedNet = current.Net;
 await attendance.ImportAsync(device.Id, suffix, new(2026, 10, 9, 8, 0, 0), "test", "late arrival after lock");
 Check((await db.PayrollLines.AsNoTracking().SingleAsync(x => x.Id == current.Id)).Net == lockedNet, "late punches never mutate locked payroll");
@@ -217,7 +217,7 @@ await payroll.CalculateAsync(p2.Id, true, "test");
 var second = await db.PayrollLines.SingleAsync(x => x.PayrollPeriodId == p2.Id);
 var partial = await db.PayrollDeductions.SingleAsync(x => x.PayrollLineId == second.Id && x.Date == half.From);
 Check(second.Basic == 3300, "payroll uses the salary effective at period end");
-Check(second.UnpaidLeave == 0 && partial.Calculated == 55m, "only the uncovered half-day is deducted");
+Check(second.UnpaidLeave == 55m && partial.Calculated == 55m, "unpaid half-day and uncovered absence are charged separately without double counting");
 Check(!await db.PayrollDeductions.AnyAsync(x => x.PayrollLineId == second.Id && x.Date == new DateTime(2026, 10, 12)), "public holidays do not create absence deductions");
 Check((await db.AttendanceDays.SingleAsync(x => x.EmployeeId == e.Id && x.Date == half.From)).Status == "On leave (partial)", "partial leave is visible in attendance");
 await payroll.OverrideLineAsync(second.Id, 25, "Integration net override", "test");

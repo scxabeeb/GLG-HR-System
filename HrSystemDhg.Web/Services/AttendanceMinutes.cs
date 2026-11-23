@@ -30,6 +30,11 @@ public static class AttendanceMinutes
         var overlap = first.HasValue && last.HasValue ? merged.Sum(r => Math.Max(0, (int)((last.Value < r.End ? last.Value : r.End) - (first.Value > r.Start ? first.Value : r.Start)).TotalMinutes)) : 0;
         return Math.Max(0, expected - excused - Math.Max(0, Worked(first, last, rule.BreakMinutes) - overlap));
     }
+    public static decimal UnpaidLeaveDeduction(WorkRule rule, decimal monthlyBasic, DateTime date, IEnumerable<LeaveRequest> unpaidLeave)
+    {
+        var unpaidMinutes = Required(rule) - Missing(rule, date, null, null, unpaidLeave);
+        return monthlyBasic * unpaidMinutes / (rule.SalaryDivisor * rule.DailyHours * 60m);
+    }
     public static decimal Deduction(WorkRule rule, decimal monthlyBasic, int missingMinutes) => rule.MinuteRateMode == "Fixed"
         ? rule.FixedMinuteRate * Math.Clamp(missingMinutes, 0, Required(rule))
         : monthlyBasic * Math.Clamp(missingMinutes, 0, Required(rule)) / (rule.SalaryDivisor * rule.DailyHours * 60m);
