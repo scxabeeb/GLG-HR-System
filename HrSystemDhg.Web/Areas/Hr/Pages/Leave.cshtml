@@ -3,49 +3,26 @@
 @model HrSystemDhg.Web.Pages.Hr.LeaveModel
 @{ ViewData["Title"] = "Leave management"; }
 <h1>Leave management</h1>
-<nav class="actions" aria-label="Leave management pages">
+
+<div asp-validation-summary="All" role="alert"></div>
+@if (TempData["LeaveNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
+<p class="muted">Record a request, submit it through HR, then track the final decision and remaining leave balance.</p>
+<div class="page-workspace" data-page-workspace>
+<nav class="workspace-tabs" aria-label="Leave views">
+<a href="#leave-register" data-workspace-link>@(Model.ViewMode == "balances" ? "Employee balances" : "Requests &amp; approvals")</a>
+@if (Model.CanSubmit) { <a href="#leave-create" data-workspace-link>Record request</a> }
+<a asp-page="./Leave" asp-route-viewMode="balances" asp-route-year="@Model.Year">Balances</a>
+@if (Model.CanSubmit) { <a asp-page="./Balances">Manage individual credits</a> }
+<a asp-area="" asp-page="/Reports/Index" asp-route-report="Leave">Leave reports</a>
+</nav>
+<section id="leave-register" data-workspace-panel><nav class="actions" aria-label="Leave management pages">
     @foreach (var tab in new[] { ("hr", $"HR submission ({Model.AwaitingHr})"), ("approval", $"Final approval ({Model.AwaitingDecision})"), ("history", "Request register"), ("balances", "Employee balances") })
     {
         <a class="button @(tab.Item1 == Model.ViewMode ? "" : "secondary")"
            aria-current="@(tab.Item1 == Model.ViewMode ? "page" : null)"
            asp-route-viewMode="@tab.Item1" asp-route-year="@Model.Year" asp-route-employeeId="@Model.EmployeeId" asp-route-typeId="@Model.TypeId">@tab.Item2</a>
     }
-</nav>
-<div asp-validation-summary="All" role="alert"></div>
-@if (TempData["LeaveNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
-@if (Model.CanSubmit)
-{
-    <details class="card" id="record-leave" open="@(Model.Record || (!ViewData.ModelState.IsValid && ViewContext.HttpContext.Request.Query["handler"] == "Create"))">
-        <summary><strong>Record a leave request</strong></summary>
-        <p>Select an employee to record leave on their behalf. Saved requests go to the HR submission queue.</p>
-        <form method="post" asp-page-handler="Create" enctype="multipart/form-data">
-            <div class="grid">
-                <label>Request for<select asp-for="NewRequest.EmployeeId" required>
-                    <option value="">Select employee</option>
-                    @foreach (var e in Model.Employees.Values.OrderBy(e => e.FullName))
-                    {
-                        <option value="@e.Id">@(e.Id == Model.OwnEmployeeId ? "Myself · " : "")@e.FullName · @e.EmployeeNumber</option>
-                    }
-                </select></label>
-                <label>Leave type<select asp-for="NewRequest.TypeId" required>
-                    <option value="">Select leave type</option>
-                    @foreach (var type in Model.Types.Values.OrderBy(t => t.Name))
-                    {
-                        <option value="@type.Id">@type.Name@(type.RequiresDocument ? " · Document required" : "")</option>
-                    }
-                </select></label>
-                <label>From<input asp-for="NewRequest.From" type="date" required /></label>
-                <label>To<input asp-for="NewRequest.To" type="date" required /></label>
-                <label>Start time (partial day)<input asp-for="NewRequest.Start" type="time" /></label>
-                <label>End time (partial day)<input asp-for="NewRequest.End" type="time" /></label>
-            </div>
-            <label>Reason<textarea asp-for="NewRequest.Reason" rows="2" maxlength="2000" required></textarea></label>
-            <label>Supporting document<input asp-for="NewRequest.Document" type="file" accept=".pdf,.jpg,.jpeg,.png" /></label>
-            <button>Record request</button>
-        </form>
-    </details>
-}
-<form method="get" class="card">
+</nav><form method="get" class="card">
     <input type="hidden" asp-for="ViewMode" />
     <div class="grid">
         <label>Year<input asp-for="Year" type="number" min="1900" max="9998" required /></label>
@@ -130,3 +107,40 @@ else
     }
 </section>
 }
+</section>
+@if (Model.CanSubmit) {
+<section id="leave-create" data-workspace-panel data-workspace-auto>@if (Model.CanSubmit)
+{
+    <details class="card workspace-tools" id="record-leave" open="@(Model.Record || (!ViewData.ModelState.IsValid && ViewContext.HttpContext.Request.Query["handler"] == "Create"))">
+        <summary><strong>Record a leave request</strong></summary>
+        <p>Select an employee to record leave on their behalf. Saved requests go to the HR submission queue.</p>
+        <form method="post" asp-page-handler="Create" enctype="multipart/form-data">
+            <div class="grid">
+                <label>Request for<select asp-for="NewRequest.EmployeeId" required>
+                    <option value="">Select employee</option>
+                    @foreach (var e in Model.Employees.Values.OrderBy(e => e.FullName))
+                    {
+                        <option value="@e.Id">@(e.Id == Model.OwnEmployeeId ? "Myself · " : "")@e.FullName · @e.EmployeeNumber</option>
+                    }
+                </select></label>
+                <label>Leave type<select asp-for="NewRequest.TypeId" required>
+                    <option value="">Select leave type</option>
+                    @foreach (var type in Model.Types.Values.OrderBy(t => t.Name))
+                    {
+                        <option value="@type.Id">@type.Name@(type.RequiresDocument ? " · Document required" : "")</option>
+                    }
+                </select></label>
+                <label>From<input asp-for="NewRequest.From" type="date" required /></label>
+                <label>To<input asp-for="NewRequest.To" type="date" required /></label>
+                <label>Start time (partial day)<input asp-for="NewRequest.Start" type="time" /></label>
+                <label>End time (partial day)<input asp-for="NewRequest.End" type="time" /></label>
+            </div>
+            <label>Reason<textarea asp-for="NewRequest.Reason" rows="2" maxlength="2000" required></textarea></label>
+            <label>Supporting document<input asp-for="NewRequest.Document" type="file" accept=".pdf,.jpg,.jpeg,.png" /></label>
+            <button>Record request</button>
+        </form>
+    </details>
+}
+</section>
+}
+</div>
