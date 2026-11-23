@@ -290,6 +290,7 @@ await using (var own = new HrDbContext(options, http))
     Check(await own.PayrollLines.AllAsync(x => x.EmployeeId == e.Id), "employee payroll is limited to own records");
 }
 
+await AttendanceMinuteChecks.RunAsync(options, Check);
 await AttendancePushChecks.RunAsync(options, suffix, e.Id, Check);
 await OperationsChecks.RunAsync(options, b.Id, b2.Id, Check);
 await PasswordRecoveryChecks.RunAsync(cs,Check);

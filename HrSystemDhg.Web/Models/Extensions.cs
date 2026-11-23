@@ -69,6 +69,7 @@ public partial class SalaryVersion
 
 public partial class WorkRule
 {
+    public bool UsePunchWindows { get; set; }
     public int? BranchId { get; set; }
     public int? DepartmentId { get; set; }
     public int? ShiftId { get; set; }
@@ -86,6 +87,7 @@ public partial class DeductionRule
 
 public partial class AttendanceDay
 {
+    public int MissingMinutes { get; set; }
     public decimal ExpectedHours { get; set; }
     public int EarlyMinutes { get; set; }
     public bool IsCorrected { get; set; }

@@ -2,7 +2,7 @@
 @model HrSystemDhg.Web.Pages.Hr.AttendanceModel
 @{ViewData["Title"]="Attendance & imports";}
 <div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Attendance & imports</h1>
-<div asp-validation-summary="All"></div>
+<div asp-validation-summary="All"></div><p class="muted">East Africa Time (UTC+3). From 23 November: check-in 6:30–10:30 AM; checkout 11:30 AM–3:30 PM. Saturday–Thursday: 480 worked minutes per day. Missing punches require review.</p>
 @if (TempData["RegistrationCsvResult"] is string csvResult)
 {
     <p role="status">@csvResult</p>
@@ -12,7 +12,7 @@
     <p class="notice" role="status">@notice</p>
 }
 
-<form method="post" asp-page-handler="Csv" enctype="multipart/form-data" class="card"><h2>CSV punch import</h2><p>Use the sample headers. Times are local unless the timestamp includes a UTC offset. Maximum 2 MB.</p><div class="actions"><a class="button secondary" asp-page-handler="Sample">Download sample CSV</a><a class="button secondary" asp-page-handler="Export" asp-route-from="@Model.From.ToString("yyyy-MM-dd")" asp-route-to="@Model.To.ToString("yyyy-MM-dd")">Export punches for selected dates</a></div><label>CSV file<input name="upload" type="file" accept=".csv" required/></label><label>Reason<input name="reason" required/></label><button>Import CSV</button></form>
+<form method="post" asp-page-handler="Csv" enctype="multipart/form-data" class="card"><h2>CSV punch import</h2><p>Use the sample headers. Times use East Africa Time (UTC+3) unless the timestamp includes a UTC offset. Maximum 2 MB.</p><div class="actions"><a class="button secondary" asp-page-handler="Sample">Download sample CSV</a><a class="button secondary" asp-page-handler="Export" asp-route-from="@Model.From.ToString("yyyy-MM-dd")" asp-route-to="@Model.To.ToString("yyyy-MM-dd")">Export punches for selected dates</a></div><label>CSV file<input name="upload" type="file" accept=".csv" required/></label><label>Reason<input name="reason" required/></label><button>Import CSV</button></form>
 <section class="card" aria-labelledby="today-punches-title">
     <h2 id="today-punches-title">Today’s punches</h2>
     <p>Latest 200 records for today in Mogadishu time. This list refreshes every 15 seconds while the page is visible.</p>
@@ -22,7 +22,7 @@
 </section>
 <script src="~/js/today-punches.js" asp-append-version="true" defer></script>
 
-<p>Import raw local device times or ISO timestamps with UTC offsets. Offset timestamps convert to the employee branch timezone. Raw punches are never deleted.</p><div class="grid"><form method="post" asp-page-handler="Punch" class="card"><h2>Manual punch</h2><label>Device<select name="deviceId">@foreach(var d in Model.Devices){<option value="@d.Id">@d.Name</option>}</select></label><label>Employee PIN<input name="pin" required/></label><label>Timestamp<input name="timestamp" value="@HrSystemDhg.Web.Services.BusinessClock.Now.ToString("yyyy-MM-ddTHH:mm:ss")" required/></label><label>Reason<input name="reason" required/></label><button>Import punch</button></form><form method="post" asp-page-handler="PunchAll" class="card">
+<p>Import raw local device times or ISO timestamps with UTC offsets. Offset timestamps convert to East Africa Time (EAT, UTC+3). Raw punches are never deleted.</p><div class="grid"><form method="post" asp-page-handler="Punch" class="card"><h2>Manual punch</h2><label>Device<select name="deviceId">@foreach(var d in Model.Devices){<option value="@d.Id">@d.Name</option>}</select></label><label>Employee PIN<input name="pin" required/></label><label>Timestamp<input name="timestamp" value="@HrSystemDhg.Web.Services.BusinessClock.Now.ToString("yyyy-MM-ddTHH:mm:ss")" required/></label><label>Reason<input name="reason" required/></label><button>Import punch</button></form><form method="post" asp-page-handler="PunchAll" class="card">
     <h2>Bulk manual punch</h2>
     <p>Record the current Mogadishu time for every active employee you can manage who has a terminal User ID.</p>
     <label>Device
@@ -48,18 +48,18 @@
     {
         <div class="table-scroll">
             <table class="workspace-table">
-                <thead><tr><th>Employee</th><th>Date</th><th>Check-in</th><th>Check-out</th><th>Worked / scheduled</th><th>Late / early</th><th>Status</th></tr></thead>
+                <thead><tr><th>Employee</th><th>Date</th><th>Time in (EAT)</th><th>Time out (EAT)</th><th>Worked / scheduled</th><th>Late / early</th><th>Missing minutes</th><th>Status</th></tr></thead>
                 <tbody>
                 @foreach (var day in Model.Items)
                 {
-                    var tone = day.Status switch { "Present" => "status-positive", "Absent" => "status-negative", "Late" or "Incomplete punch" => "status-warning", _ => "" };
+                    var tone = day.Status switch { "Present" => "status-positive", "Absent" => "status-negative", "Late" or "Short hours" or "Incomplete punch" => "status-warning", _ => "" };
                     <tr>
                         <th scope="row">@Model.Names.GetValueOrDefault(day.EmployeeId)</th>
                         <td>@day.Date.ToString("dd MMM yyyy")</td>
-                        <td>@(day.FirstIn?.ToString("HH:mm") ?? "—")</td>
-                        <td>@(day.LastOut?.ToString("HH:mm") ?? "—")</td>
+                        <td>@(day.FirstIn?.ToString("hh:mm tt") ?? "—")</td>
+                        <td>@(day.LastOut?.ToString("hh:mm tt") ?? "—")</td>
                         <td>@day.WorkedHours.ToString("0.##") / @day.ExpectedHours.ToString("0.##") hrs</td>
-                        <td>@day.LateMinutes / @day.EarlyMinutes min</td>
+                        <td>@day.LateMinutes / @day.EarlyMinutes min</td><td>@day.MissingMinutes min</td>
                         <td><span class="badge @tone">@day.Status</span>@if (day.IsCorrected) { <small> · Corrected</small> }</td>
                     </tr>
                 }

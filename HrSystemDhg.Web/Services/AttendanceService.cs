@@ -10,18 +10,27 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
         var e = await db.Employees.SingleAsync(x => x.Id == employeeId);
         var rule = await calendar.RuleAsync(employeeId, date);
         var window = CalendarService.Window(rule, date);
-        var punches = await db.ZkPunchs.Where(x => x.Pin == e.ZkPin && x.PunchTime >= window.Start.AddHours(-3) && x.PunchTime <= window.End.AddHours(4)).OrderBy(x => x.PunchTime).ToListAsync();
+        var from = rule.UsePunchWindows ? date.Date : window.Start.AddHours(-3);
+        var to = rule.UsePunchWindows ? date.Date.AddDays(1).AddTicks(-1) : window.End.AddHours(4);
+        var punches = await db.ZkPunchs.Where(x => x.Pin == e.ZkPin && x.PunchTime >= from && x.PunchTime <= to).OrderBy(x => x.PunchTime).ToListAsync();
         var day = await db.AttendanceDays.SingleOrDefaultAsync(x => x.EmployeeId == employeeId && x.Date == date.Date);
         if (day?.IsCorrected == true)
         {
-            if (!await calendar.HolidayAsync(employeeId, date) && CalendarService.Weekday(rule, date) &&
-                await db.LeaveRequests.AnyAsync(r => r.EmployeeId == employeeId && r.Status == "Approved" &&
-                    r.StartTime == null && r.From <= date && r.To >= date))
+            var leave = await db.LeaveRequests.Where(r => r.EmployeeId == employeeId && r.Status == "Approved" && r.From <= date && r.To >= date).ToListAsync();
+            var holiday = await calendar.HolidayAsync(employeeId, date);
+            var weekend = !CalendarService.Weekday(rule, date);
+            day.ExpectedHours = rule.DailyHours;
+            if (rule.UsePunchWindows)
             {
-                day.Status = "On leave";
+                day.MissingMinutes = AttendanceMinutes.Missing(rule, date, day.FirstIn, day.LastOut, leave);
                 day.LateMinutes = day.EarlyMinutes = 0;
-                await db.SaveChangesAsync();
+                day.Status = holiday ? "Holiday" : weekend ? "Weekend" : leave.Any(r => r.StartTime == null) ? "On leave" :
+                    day.FirstIn == null || day.LastOut == null || !AttendanceMinutes.CheckIn(day.FirstIn.Value) || !AttendanceMinutes.CheckOut(day.LastOut.Value) ? "Incomplete punch" : leave.Count > 0 ? "On leave (partial)" : day.MissingMinutes > 0 ? "Short hours" : "Present";
             }
+            else if (!holiday && !weekend && leave.Any(r => r.StartTime == null)) { day.Status = "On leave"; day.LateMinutes = day.EarlyMinutes = 0; }
+            if (day.Status is "Holiday" or "Weekend" or "On leave") day.MissingMinutes = 0;
+            if (day.Status is "Holiday" or "Weekend") day.ExpectedHours = 0;
+            await db.SaveChangesAsync();
             return;
         }
         if (day == null)
@@ -35,11 +44,11 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
         }
 
         day.ExpectedHours = rule.DailyHours;
-        day.FirstIn = punches.FirstOrDefault()?.PunchTime;
-        day.LastOut = punches.Count > 1 ? punches.Last().PunchTime : null;
-        day.WorkedHours = day.LastOut.HasValue ? (decimal)Math.Max(0, (day.LastOut.Value - day.FirstIn!.Value).TotalHours - rule.BreakMinutes / 60d) : 0;
-        day.LateMinutes = day.FirstIn.HasValue ? Math.Max(0, (int)(day.FirstIn.Value - window.Start).TotalMinutes - rule.GraceMinutes) : 0;
-        day.EarlyMinutes = day.LastOut.HasValue ? Math.Max(0, (int)(window.End - day.LastOut.Value).TotalMinutes) : 0;
+        day.FirstIn = rule.UsePunchWindows ? punches.FirstOrDefault(p => AttendanceMinutes.CheckIn(p.PunchTime))?.PunchTime : punches.FirstOrDefault()?.PunchTime;
+        day.LastOut = rule.UsePunchWindows ? punches.LastOrDefault(p => AttendanceMinutes.CheckOut(p.PunchTime))?.PunchTime : punches.Count > 1 ? punches.Last().PunchTime : null;
+        day.WorkedHours = day.FirstIn.HasValue && day.LastOut.HasValue ? (decimal)Math.Max(0, (day.LastOut.Value - day.FirstIn!.Value).TotalHours - rule.BreakMinutes / 60d) : 0;
+        day.LateMinutes = !rule.UsePunchWindows && day.FirstIn.HasValue ? Math.Max(0, (int)(day.FirstIn.Value - window.Start).TotalMinutes - rule.GraceMinutes) : 0;
+        day.EarlyMinutes = !rule.UsePunchWindows && day.LastOut.HasValue ? Math.Max(0, (int)(window.End - day.LastOut.Value).TotalMinutes) : 0;
         var approved = await db.LeaveRequests.Where(x => x.EmployeeId == employeeId && x.Status == "Approved" && x.From <= date && x.To >= date).ToListAsync();
         foreach (var r in approved)
         {
@@ -55,7 +64,7 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
         var fullLeave = approved.Any(x => x.StartTime == null);
         if (fullLeave)
             day.LateMinutes = day.EarlyMinutes = 0;
-        foreach (var r in approved.Where(x => x.StartTime != null))
+        foreach (var r in approved.Where(x => x.StartTime != null && !rule.UsePunchWindows))
         {
             var leaveWindow = CalendarService.LeaveWindow(r, rule, date);
             var start = leaveWindow.Start;
@@ -66,7 +75,10 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
                 day.EarlyMinutes = Math.Max(0, (int)(start - day.LastOut.Value).TotalMinutes);
         }
 
-        day.Status = await calendar.HolidayAsync(employeeId, date) ? "Holiday" : !CalendarService.Weekday(rule, date) ? "Weekend" : fullLeave ? "On leave" : approved.Count > 0 ? "On leave (partial)" : punches.Count == 0 ? "Absent" : punches.Count == 1 ? "Incomplete punch" : day.LateMinutes > 0 ? "Late" : "Present";
+        day.MissingMinutes = rule.UsePunchWindows ? AttendanceMinutes.Missing(rule, date, day.FirstIn, day.LastOut, approved) : Math.Max(0, day.LateMinutes + day.EarlyMinutes);
+        day.Status = await calendar.HolidayAsync(employeeId, date) ? "Holiday" : !CalendarService.Weekday(rule, date) ? "Weekend" : fullLeave ? "On leave" : approved.Count > 0 ? "On leave (partial)" : punches.Count == 0 ? "Absent" : (day.FirstIn == null || day.LastOut == null) ? "Incomplete punch" : rule.UsePunchWindows && day.MissingMinutes > 0 ? "Short hours" : !rule.UsePunchWindows && day.LateMinutes > 0 ? "Late" : "Present";
+        if (day.Status is "Holiday" or "Weekend" or "On leave") day.MissingMinutes = 0;
+        if (day.Status is "Holiday" or "Weekend") day.ExpectedHours = 0;
         await db.SaveChangesAsync();
     }
 

@@ -68,7 +68,7 @@ public static class MobileEmployeeApi
                     else if (OperationsPolicy.IsJoinUrl(m.JoinUrl))
                         actions.Add(new("Join video meeting", m.JoinUrl));
                 }
-                return new Row(m.Title, $"{OperationsPolicy.Local(m.StartsUtc):dd MMM yyyy, HH:mm} EAT",
+                return new Row(m.Title, $"{OperationsPolicy.Local(m.StartsUtc):dd MMM yyyy, hh:mm tt} EAT",
                     $"{m.Location ?? "Online meeting"} · {m.Attending} / {m.Invited} employees checked in", m.Cancelled ? "Cancelled" : closed ? "Ended" : m.StartsUtc <= now ? "In progress" : "Upcoming", actions);
             }));
         }
@@ -80,7 +80,7 @@ public static class MobileEmployeeApi
                 .OrderByDescending(n => n.Id).Take(PageSize)
                 .Select(n => new { n.Title, n.Kind, n.CreatedUtc, n.ReadUtc }).ToListAsync(ct);
             return Rows(notices.Select(n => new Row(n.Title,
-                $"{HrSystemDhg.Web.Pages.Operations.NotificationsModel.Label(n.Kind)} · {OperationsPolicy.Local(n.CreatedUtc):dd MMM yyyy, HH:mm} EAT",
+                $"{HrSystemDhg.Web.Pages.Operations.NotificationsModel.Label(n.Kind)} · {OperationsPolicy.Local(n.CreatedUtc):dd MMM yyyy, hh:mm tt} EAT",
                 n.ReadUtc == null ? "Unread" : "")));
         }
 
@@ -108,9 +108,9 @@ public static class MobileEmployeeApi
         {
             var records = await db.AttendanceDays.AsNoTracking().Where(d => d.EmployeeId == employeeId)
                 .OrderByDescending(d => d.Date).Take(PageSize)
-                .Select(d => new { d.Date, d.Status, d.FirstIn, d.LastOut, d.WorkedHours, d.LateMinutes }).ToListAsync(ct);
+                .Select(d => new { d.Date, d.Status, d.FirstIn, d.LastOut, d.WorkedHours, d.LateMinutes, d.MissingMinutes }).ToListAsync(ct);
             return Rows(records.Select(d => new Row(d.Date.ToString("dd MMM yyyy"), d.Status,
-                $"{d.FirstIn?.ToString("HH:mm") ?? "—"} – {d.LastOut?.ToString("HH:mm") ?? "—"} · {d.WorkedHours:0.##} hours · {d.LateMinutes} min late")));
+                $"Time in {d.FirstIn?.ToString("hh:mm tt") ?? "—"} EAT · Time out {d.LastOut?.ToString("hh:mm tt") ?? "—"} · {d.WorkedHours:0.##} hours · {d.LateMinutes} min late · {d.MissingMinutes} min missing · EAT (UTC+3)")));
         }
 
         if (section == "payroll")

@@ -82,9 +82,7 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
             if (!DateTimeOffset.TryParse(timestamp, out var offset))
                 throw new FormatException("Invalid timestamp offset.");
             var e = await db.Employees.SingleOrDefaultAsync(x => x.ZkPin == pin) ?? throw new InvalidOperationException("Map the PIN before importing offset timestamps.");
-            var a = await calendar.AssignmentAsync(e.Id, offset.Date);
-            var branch = await db.Branchs.SingleAsync(x => x.Id == a.BranchId);
-            local = TimeZoneInfo.ConvertTime(offset, TimeZoneInfo.FindSystemTimeZoneById(branch.Timezone)).DateTime;
+            local = TimeZoneInfo.ConvertTime(offset, TimeZoneInfo.FindSystemTimeZoneById("Africa/Mogadishu")).DateTime;
         }
 
         return DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
@@ -175,6 +173,8 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
             db.AttendanceDays.Add(day);
         }
 
+        if (rule.UsePunchWindows && (!AttendanceMinutes.CheckIn(first) || !AttendanceMinutes.CheckOut(last) || last.Date != date.Date))
+            throw new InvalidOperationException("Use time in 6:30–10:30 AM and time out 11:30 AM–3:30 PM EAT for this work date.");
         day.FirstIn = first;
         day.LastOut = last;
         day.WorkedHours = (decimal)Math.Max(0, (last - first).TotalHours - rule.BreakMinutes / 60d);
@@ -186,6 +186,7 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
         day.CorrectionReason = reason;
         db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Attendance correction {employeeId}/{date:yyyy-MM-dd}: {reason}" });
         await db.SaveChangesAsync();
+        await attendance.RebuildAsync(employeeId, date);
     });
     public Task<IActionResult> OnPostOvertimeAsync(int employeeId, DateTime date, decimal hours, string reason) => Attempt(async () =>
     {

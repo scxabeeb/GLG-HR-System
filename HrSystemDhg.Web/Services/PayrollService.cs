@@ -107,19 +107,27 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                     decimal amount = 0;
                     var kind = "Late";
                     string? calculation = null;
-                    if (day.Status == "Absent" || day.FirstIn == null)
+                    if (day.Status == "Absent" || (day.FirstIn == null && day.LastOut == null && day.Status != "Incomplete punch"))
                     {
-                        amount = dailyDeduction * (1 - leaveFraction) * (deductionRule?.AbsenceMultiplier ?? 1m);
+                        amount = dailyDeduction * (1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m);
                         kind = "Absence";
+                        calculation = rule.UsePunchWindows ? $"{(int)(480 * (1 - leaveFraction))} absent min × {salary.Basic / 30m / 480m:0.######} {salary.Currency}/min (basic ÷ 30 ÷ 480)" : null;
                     }
-                    else if (day.Status == "Incomplete punch" || day.FirstIn.HasValue && day.LastOut == null)
+                    else if (day.Status == "Incomplete punch" || day.FirstIn == null || day.LastOut == null)
                     {
                         kind = "Incomplete punch";
                         amount = rule.IncompletePolicy switch
                         {
-                            "Absent" => dailyDeduction * (1 - leaveFraction) * (deductionRule?.AbsenceMultiplier ?? 1m),
-                            "Half day" => dailyDeduction * Math.Min(.5m, 1 - leaveFraction) * (deductionRule?.AbsenceMultiplier ?? 1m),
+                            "Absent" => dailyDeduction * (1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m),
+                            "Half day" => dailyDeduction * Math.Min(.5m, 1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m),
                             _ => throw new InvalidOperationException("Resolve incomplete punch for " + e.EmployeeNumber + " on " + date.ToString("yyyy-MM-dd"))};
+                    }
+                    else if (rule.UsePunchWindows)
+                    {
+                        var missing = AttendanceMinutes.Missing(rule, date, day.FirstIn, day.LastOut, leaveForDay);
+                        amount = AttendanceMinutes.Deduction(salary.Basic, missing);
+                        kind = "Missing minutes";
+                        calculation = $"{missing} missing min × {salary.Basic / 30m / 480m:0.######} {salary.Currency}/min (basic ÷ 30 ÷ 480)";
                     }
                     else
                     {
@@ -264,7 +272,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             throw new InvalidOperationException("Your access does not cover every employee in this payroll. Choose an individual employee.");
 
         var matching = db.PayrollDeductions.Where(d => lineIds.Contains(d.PayrollLineId) &&
-            (d.Type == "Absence" || (!absencesOnly && d.Type == "Late")) && d.Applied > 0);
+            (d.Type == "Absence" || (!absencesOnly && (d.Type == "Late" || d.Type == "Missing minutes" || d.Type == "Incomplete punch"))) && d.Applied > 0);
         if (selectedDates != null)
             matching = matching.Where(d => selectedDates.Contains(d.Date.Date));
         var waived = await matching.ToListAsync();

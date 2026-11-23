@@ -348,6 +348,9 @@ namespace HrSystemDhg.Web.Migrations
                     b.Property<int>("LateMinutes")
                         .HasColumnType("int");
 
+                    b.Property<int>("MissingMinutes")
+                        .HasColumnType("int");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -1830,6 +1833,9 @@ namespace HrSystemDhg.Web.Migrations
 
                     b.Property<int>("StartMinute")
                         .HasColumnType("int");
+
+                    b.Property<bool>("UsePunchWindows")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<bool>("WeekendOvertime")
                         .HasColumnType("tinyint(1)");

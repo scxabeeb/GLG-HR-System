@@ -104,10 +104,10 @@ public class IndexModel(HrDbContext db,LeaveService leaves) : PageModel
         {
             var days = db.AttendanceDays.AsNoTracking().Where(x => ids.Contains(x.EmployeeId) && x.Date >= From && x.Date <= To);
             Statuses = await days.Select(x => x.Status).Distinct().OrderBy(x => x).ToListAsync();
-            Rows.Add(["Employee", "Date", "In", "Out", "Hours", "Late minutes", "Status"]);
+            Rows.Add(["Employee", "Date", "Time in (EAT)", "Time out (EAT)", "Hours", "Late minutes", "Missing minutes", "Status"]);
             foreach (var a in await days.Where(x => Status == null || x.Status == Status)
                 .OrderByDescending(x => x.Date).ThenBy(x => x.EmployeeId).ToListAsync())
-                Rows.Add([Name(a.EmployeeId), a.Date.ToString("yyyy-MM-dd"), a.FirstIn?.ToString("HH:mm") ?? "", a.LastOut?.ToString("HH:mm") ?? "", a.WorkedHours.ToString("F2"), a.LateMinutes.ToString(), a.Status]);
+                Rows.Add([Name(a.EmployeeId), a.Date.ToString("yyyy-MM-dd"), a.FirstIn?.ToString("hh:mm tt") ?? "", a.LastOut?.ToString("hh:mm tt") ?? "", a.WorkedHours.ToString("F2"), a.LateMinutes.ToString(), a.MissingMinutes.ToString(), a.Status]);
         }
         else if (Report == "Salary")
         {

@@ -101,8 +101,8 @@
 <div class="calendar">@foreach(var d in Model.Attendance){<div class="calendar-day">
 <strong>@d.Date.ToString("ddd dd")</strong>
 <span class="badge">@d.Status</span>
-<small>@d.FirstIn?.ToString("HH:mm") – @d.LastOut?.ToString("HH:mm")</small>
-<small>@d.WorkedHours.ToString("N2") hours · @d.LateMinutes min late</small>
+<small>Time in @(d.FirstIn?.ToString("hh:mm tt") ?? "—") · Time out @(d.LastOut?.ToString("hh:mm tt") ?? "—") · EAT</small>
+<small>@d.WorkedHours.ToString("N2") hours · @d.MissingMinutes min missing</small>
 </div>}</div>
 <details>
 <summary>Raw punches</summary>@foreach(var punch in Model.Punches){<p>@punch.PunchTime.ToString("dd MMM yyyy HH:mm:ss") · device @punch.DeviceId</p>}</details>
