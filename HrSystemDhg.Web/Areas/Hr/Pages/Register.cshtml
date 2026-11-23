@@ -2,7 +2,8 @@
 @model HrSystemDhg.Web.Pages.Hr.RegisterModel
 @{ViewData["Title"]="Register employee";}
 <div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Register employee</h1>
-<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("employees")' />
+<partial name="/Pages/Shared/_EmployeeNavigation.cshtml" model='("register")' />
+<details id="employee-import" class="card workspace-tools"><summary>Import &amp; export employees</summary><partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("employees")' /></details>
 
 @if(!Model.Branches.Any() || !Model.Departments.Any()){<div class="notice">Create an active branch and department in <a href="/Admin/Organization">Organization structure</a> before registration.</div>}
 <a class="hub-back" asp-page="./Employees">← Employee directory</a>

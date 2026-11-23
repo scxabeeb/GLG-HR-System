@@ -4,7 +4,10 @@
         const panels = [...workspace.querySelectorAll('[data-workspace-panel]')];
         const select = id => {
             if (!panels.some(panel => panel.id === id)) return;
-            panels.forEach(panel => { panel.hidden = panel.id !== id; });
+            panels.forEach(panel => {
+                panel.hidden = panel.id !== id;
+                if (!panel.hidden) panel.querySelectorAll(':scope > details, :scope > details > details').forEach(details => { details.open = true; });
+            });
             links.forEach(link => {
                 const active = link.hash === `#${id}`;
                 link.classList.toggle('is-active', active);
@@ -25,13 +28,32 @@
         const handler = new URLSearchParams(location.search).get('handler')?.toLowerCase();
         const submitted = [...workspace.querySelectorAll('form')].find(form =>
             handler && new URL(form.action).searchParams.get('handler')?.toLowerCase() === handler);
+        const editing = workspace.querySelector('[data-workspace-auto] details[open]')?.closest('[data-workspace-panel]');
         fromLocation();
+        if (!location.hash && editing) select(editing.id);
         if (!location.hash && submitted) select(submitted.closest('[data-workspace-panel]')?.id);
         window.addEventListener('hashchange', fromLocation);
+        workspace.addEventListener('submit', event => {
+            if (!(event.target instanceof HTMLFormElement) || event.target.method.toLowerCase() !== 'post') return;
+            const panel = event.target.closest('[data-workspace-panel]');
+            if (panel) {
+                const action = new URL(event.target.action);
+                action.hash = panel.id;
+                event.target.action = action.href;
+            }
+        });
         workspace.addEventListener('invalid', event => {
             select(event.target.closest('[data-workspace-panel]')?.id);
         }, true);
     });
+    const revealLinkedDetails = () => {
+        const target = document.getElementById(location.hash.slice(1));
+        if (!target) return;
+        for (let detail = target.closest('details'); detail; detail = detail.parentElement?.closest('details')) detail.open = true;
+        if (target instanceof HTMLDetailsElement) target.querySelectorAll('details').forEach(detail => { detail.open = true; });
+    };
+    revealLinkedDetails();
+    window.addEventListener('hashchange', revealLinkedDetails);
     // Long module pages get a consistent section index without hiding records or actions.
     const content = document.querySelector('.civic-content');
     if (content && !content.querySelector('[data-page-workspace]') && !document.body.classList.contains('civic-auth')) {

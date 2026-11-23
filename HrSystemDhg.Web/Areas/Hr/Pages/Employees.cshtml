@@ -4,7 +4,7 @@
 @{ ViewData["Title"] = "Employee directory"; }
 <div class="eyebrow">GAROWE HR WORKSPACE</div>
 <h1>Employee directory</h1>
-<div class="actions"><a class="button" asp-page="./Register">Register employee</a></div>
+<partial name="/Pages/Shared/_EmployeeNavigation.cshtml" model='("directory")' />
 @if (TempData["TerminalNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
 <form method="get" class="card workspace-filters">
 <label>Search employees<input asp-for="Search" type="search" placeholder="Name, number, email or job title" /></label>

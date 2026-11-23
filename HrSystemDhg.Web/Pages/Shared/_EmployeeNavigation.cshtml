@@ -1,0 +1,7 @@
+@model string
+<nav class="workspace-tabs" aria-label="Employee views">
+<a class="@(Model == "directory" ? "is-active" : "")" asp-area="Hr" asp-page="/Employees">Employee directory</a>
+<a class="@(Model == "register" ? "is-active" : "")" asp-area="Hr" asp-page="/Register">Register employee</a>
+<a asp-area="Hr" asp-page="/Register" asp-fragment="employee-import">Import &amp; export</a>
+<a asp-area="" asp-page="/Reports/Index" asp-route-report="Employees">Employee reports</a>
+</nav>

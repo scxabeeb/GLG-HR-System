@@ -2,7 +2,7 @@
 @model HrSystemDhg.Web.Pages.Management.PayrollModel
 @{ViewData["Title"]="Payroll workspace";}
 <div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Payroll workspace</h1>
-<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("payroll periods")' />
+
 <section class="card">
     <h2>Select payroll</h2>
     <form method="get" class="actions">
@@ -16,11 +16,7 @@
         <button class="secondary">Apply filters</button>
     </form>
     <div asp-validation-summary="All"></div>
-    <form method="post" asp-page-handler="Generate" class="actions">
-        <input type="hidden" name="Month" value="@Model.Month" />
-        <input type="hidden" name="PayrollBranchId" value="@Model.PayrollBranchId" />
-        <button type="submit">Generate payroll</button>
-    </form>
+
     <p>Generation uses the displayed month and branch. Late arrival and early departure are charged per minute using basic salary ÷ 30 ÷ scheduled daily minutes.</p>
 </section>
 @if (Model.MissingRule is { } missing)
@@ -55,24 +51,6 @@
 {
     <p class="notice" role="status">@notice</p>
 }
-@if (Model.Periods.Count > 0)
-{
-    <form method="get" class="card actions">
-        <input type="hidden" name="Month" value="@Model.Month" />
-        <input type="hidden" name="PayrollBranchId" value="@Model.PayrollBranchId" />
-        <label>Saved payroll
-            <select name="PeriodId">
-                @foreach (var period in Model.Periods)
-                {
-                    <option value="@period.Id" selected="@(Model.SelectedPeriod?.Id == period.Id)">
-                        @period.From.ToString("dd MMM yyyy") – @period.To.ToString("dd MMM yyyy") · @(period.BranchId is int branchId ? Model.Branches.FirstOrDefault(b => b.Id == branchId)?.Name : "All branches") · @period.Status
-                    </option>
-                }
-            </select>
-        </label>
-        <button class="secondary">Open payroll</button>
-    </form>
-}
 @{
     var p = Model.SelectedPeriod;
     var lines = Model.Lines.ToDictionary(l => l.EmployeeId);
@@ -81,92 +59,10 @@
     if (Model.PayrollBranchId is int branch) selection["PayrollBranchId"] = branch.ToString();
     if (p != null) selection["PeriodId"] = p.Id.ToString();
 }
-<section class="card workspace-list" id="@(p == null ? "employee-payroll" : $"payroll-{p.Id}")">
+<div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Payroll views"><a href="#payroll-register" data-workspace-link>Employee payroll</a><a href="#payroll-manage" data-workspace-link>Generate &amp; manage</a><a href="#payroll-waivers" data-workspace-link>Deduction waivers</a><a href="#payroll-import" data-workspace-link>Import &amp; export</a><a asp-area="" asp-page="/Reports/Index" asp-route-report="Payroll">Reports</a></nav>
+<section id="payroll-register" data-workspace-panel><section class="card workspace-list" id="@(p == null ? "employee-payroll" : $"payroll-{p.Id}")">
     <header class="workspace-list-heading"><h2>Employee payroll @if (p != null) { <span class="badge @(p.Status == "Paid" ? "status-positive" : "")">@p.Status</span> }</h2><small>@Model.SalaryRows.Count employees shown</small></header>
-    @if (p != null)
-    {
-        <p>@p.From.ToString("dd MMM yyyy") – @p.To.ToString("dd MMM yyyy") · @(p.BranchId is int branchId ? Model.Branches.FirstOrDefault(b => b.Id == branchId)?.Name : "All branches")</p>
-        <div class="actions">
-            @if (p.Status is "Draft" or "Calculated")
-            {
-                <form method="post" asp-page-handler="Calculate" asp-all-route-data="selection" asp-route-id="@p.Id">
-                    <label class="inline"><input type="checkbox" name="apply" value="true" checked /> Apply attendance deductions</label>
-                    <button>@(p.Status == "Draft" ? "Calculate payroll" : "Recalculate payroll")</button>
-                </form>
-            }
-            @if (p.Status is "Calculated" or "Reviewed")
-            {
-                <form method="post" asp-page-handler="Transition" asp-all-route-data="selection" asp-route-id="@p.Id">
-                    <button name="action" value="@(p.Status == "Calculated" ? "Review" : "Lock")">@(p.Status == "Calculated" ? "Approve review" : "Lock payroll")</button>
-                </form>
-            }
-            @if (p.Status is "Calculated" or "Reviewed" or "Locked")
-            {
-                <form method="post" asp-page-handler="MarkPaid" asp-all-route-data="selection" asp-route-id="@p.Id">
-                    <label class="inline"><input type="checkbox" name="confirmed" value="true" required /> Payment has been made</label>
-                    <button>Mark as paid</button>
-                </form>
-            }
-            @if (p.Status is "Locked" or "Paid")
-            {
-                <form method="post" asp-page-handler="Publish" asp-all-route-data="selection" asp-route-id="@p.Id"><button>Publish payslips</button></form>
-                <a class="button secondary" asp-area="" asp-page="/Reports/Index" asp-route-report="Payroll" asp-route-periodId="@p.Id">Payroll report</a>
-            }
-            @if (p.Status is not ("Draft" or "Paid"))
-            {
-                <form method="post" asp-page-handler="Transition" asp-all-route-data="selection" asp-route-id="@p.Id">
-                    <label>Reason to reopen<input name="reason" required /></label><button name="action" value="Reopen">Reopen</button>
-                </form>
-            }
-        </div>
-    }
-    <fieldset class="payroll-waiver">
-        <legend>Waive attendance deductions</legend>
-        @if (p?.Status == "Calculated" && Model.Deductions.Any(d => (d.Type is "Absence" or "Late") && d.Applied > 0))
-        {
-            <form method="post" asp-page-handler="WaiveAttendance" asp-all-route-data="selection" asp-route-id="@p.Id">
-                <div class="grid">
-                    <label>Employee
-                        <select name="employeeId" required>
-                            <option value="">Choose who to waive deductions for</option>
-                            <option value="0">All employees in this payroll</option>
-                            @foreach (var employee in Model.SalaryRows.Where(e => lines.TryGetValue(e.Id, out var line) &&
-                                deductions[line.Id].Any(d => (d.Type is "Absence" or "Late") && d.Applied > 0)))
-                            {
-                                <option value="@employee.Id">@employee.Name · @employee.Number</option>
-                            }
-                        </select>
-                    </label>
-                    <label>Waiver reason<input name="reason" maxlength="500" required /></label>
-                </div>
-                <fieldset>
-                    <legend>Waiver dates</legend>
-                    <label class="inline"><input type="radio" name="dateScope" value="all" required /> All days in this payroll</label>
-                    <label class="inline"><input type="radio" name="dateScope" value="selected" required /> Selected dates</label>
-                    <div class="checkbox-list">
-                        @foreach (var date in Model.Deductions.Where(d => (d.Type is "Absence" or "Late") && d.Applied > 0)
-                            .Select(d => d.Date.Date).Distinct().Order())
-                        {
-                            <label class="inline"><input type="checkbox" name="dates" value="@date.ToString("yyyy-MM-dd")" /> @date.ToString("dd MMM yyyy")</label>
-                        }
-                    </div>
-                </fieldset>
-                <p>Waives deductions for absences, late arrival, and early departure in this calculation. If you recalculate payroll, review the new deductions before paying.</p>
-                <button class="secondary">Apply waiver</button>
-            </form>
-        }
-        else
-        {
-            <p>@(p?.Status switch
-            {
-                null => "Select a payroll run below or generate a run for the selected month.",
-                "Draft" => "Calculate payroll to see the attendance deductions available for waiver.",
-                "Calculated" => "There are no applied attendance deductions to waive in this run.",
-                "Paid" => "This payroll run has been paid.",
-                _ => "Reopen and recalculate this run before applying a waiver."
-            })</p>
-        }
-    </fieldset>
+
     @if (Model.SalaryRows.Count == 0)
     {
         <p>No employees match this selection.</p>
@@ -252,6 +148,116 @@
     }
 </section>
 
+</section>
+<section id="payroll-manage" data-workspace-panel>@if (Model.Periods.Count > 0)
+{
+    <form method="get" class="card actions">
+        <input type="hidden" name="Month" value="@Model.Month" />
+        <input type="hidden" name="PayrollBranchId" value="@Model.PayrollBranchId" />
+        <label>Saved payroll
+            <select name="PeriodId">
+                @foreach (var period in Model.Periods)
+                {
+                    <option value="@period.Id" selected="@(Model.SelectedPeriod?.Id == period.Id)">
+                        @period.From.ToString("dd MMM yyyy") – @period.To.ToString("dd MMM yyyy") · @(period.BranchId is int branchId ? Model.Branches.FirstOrDefault(b => b.Id == branchId)?.Name : "All branches") · @period.Status
+                    </option>
+                }
+            </select>
+        </label>
+        <button class="secondary">Open payroll</button>
+    </form>
+}
+<section class="card"><h2>Manage payroll</h2>    <form method="post" asp-page-handler="Generate" class="actions">
+        <input type="hidden" name="Month" value="@Model.Month" />
+        <input type="hidden" name="PayrollBranchId" value="@Model.PayrollBranchId" />
+        <button type="submit">Generate payroll</button>
+    </form>    @if (p != null)
+    {
+        <p>@p.From.ToString("dd MMM yyyy") – @p.To.ToString("dd MMM yyyy") · @(p.BranchId is int branchId ? Model.Branches.FirstOrDefault(b => b.Id == branchId)?.Name : "All branches")</p>
+        <div class="actions">
+            @if (p.Status is "Draft" or "Calculated")
+            {
+                <form method="post" asp-page-handler="Calculate" asp-all-route-data="selection" asp-route-id="@p.Id">
+                    <label class="inline"><input type="checkbox" name="apply" value="true" checked /> Apply attendance deductions</label>
+                    <button>@(p.Status == "Draft" ? "Calculate payroll" : "Recalculate payroll")</button>
+                </form>
+            }
+            @if (p.Status is "Calculated" or "Reviewed")
+            {
+                <form method="post" asp-page-handler="Transition" asp-all-route-data="selection" asp-route-id="@p.Id">
+                    <button name="action" value="@(p.Status == "Calculated" ? "Review" : "Lock")">@(p.Status == "Calculated" ? "Approve review" : "Lock payroll")</button>
+                </form>
+            }
+            @if (p.Status is "Calculated" or "Reviewed" or "Locked")
+            {
+                <form method="post" asp-page-handler="MarkPaid" asp-all-route-data="selection" asp-route-id="@p.Id">
+                    <label class="inline"><input type="checkbox" name="confirmed" value="true" required /> Payment has been made</label>
+                    <button>Mark as paid</button>
+                </form>
+            }
+            @if (p.Status is "Locked" or "Paid")
+            {
+                <form method="post" asp-page-handler="Publish" asp-all-route-data="selection" asp-route-id="@p.Id"><button>Publish payslips</button></form>
+                <a class="button secondary" asp-area="" asp-page="/Reports/Index" asp-route-report="Payroll" asp-route-periodId="@p.Id">Payroll report</a>
+            }
+            @if (p.Status is not ("Draft" or "Paid"))
+            {
+                <form method="post" asp-page-handler="Transition" asp-all-route-data="selection" asp-route-id="@p.Id">
+                    <label>Reason to reopen<input name="reason" required /></label><button name="action" value="Reopen">Reopen</button>
+                </form>
+            }
+        </div>
+    }
+@if (p == null) { <p>Choose a month and branch above, then generate payroll to calculate, review and pay.</p> }</section></section>
+<section id="payroll-waivers" data-workspace-panel><section class="card"><h2>Deduction waivers</h2>    <fieldset class="payroll-waiver">
+        <legend>Waive attendance deductions</legend>
+        @if (p?.Status == "Calculated" && Model.Deductions.Any(d => (d.Type is "Absence" or "Late") && d.Applied > 0))
+        {
+            <form method="post" asp-page-handler="WaiveAttendance" asp-all-route-data="selection" asp-route-id="@p.Id">
+                <div class="grid">
+                    <label>Employee
+                        <select name="employeeId" required>
+                            <option value="">Choose who to waive deductions for</option>
+                            <option value="0">All employees in this payroll</option>
+                            @foreach (var employee in Model.SalaryRows.Where(e => lines.TryGetValue(e.Id, out var line) &&
+                                deductions[line.Id].Any(d => (d.Type is "Absence" or "Late") && d.Applied > 0)))
+                            {
+                                <option value="@employee.Id">@employee.Name · @employee.Number</option>
+                            }
+                        </select>
+                    </label>
+                    <label>Waiver reason<input name="reason" maxlength="500" required /></label>
+                </div>
+                <fieldset>
+                    <legend>Waiver dates</legend>
+                    <label class="inline"><input type="radio" name="dateScope" value="all" required /> All days in this payroll</label>
+                    <label class="inline"><input type="radio" name="dateScope" value="selected" required /> Selected dates</label>
+                    <div class="checkbox-list">
+                        @foreach (var date in Model.Deductions.Where(d => (d.Type is "Absence" or "Late") && d.Applied > 0)
+                            .Select(d => d.Date.Date).Distinct().Order())
+                        {
+                            <label class="inline"><input type="checkbox" name="dates" value="@date.ToString("yyyy-MM-dd")" /> @date.ToString("dd MMM yyyy")</label>
+                        }
+                    </div>
+                </fieldset>
+                <p>Waives deductions for absences, late arrival, and early departure in this calculation. If you recalculate payroll, review the new deductions before paying.</p>
+                <button class="secondary">Apply waiver</button>
+            </form>
+        }
+        else
+        {
+            <p>@(p?.Status switch
+            {
+                null => "Select a payroll run below or generate a run for the selected month.",
+                "Draft" => "Calculate payroll to see the attendance deductions available for waiver.",
+                "Calculated" => "There are no applied attendance deductions to waive in this run.",
+                "Paid" => "This payroll run has been paid.",
+                _ => "Reopen and recalculate this run before applying a waiver."
+            })</p>
+        }
+    </fieldset></section></section>
+<section id="payroll-import" data-workspace-panel><partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("payroll periods")' /></section>
+</div>
 @section Scripts {
     <script src="~/js/payroll-details.js" asp-append-version="true" defer></script>
 }

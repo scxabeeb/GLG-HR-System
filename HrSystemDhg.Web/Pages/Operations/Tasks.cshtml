@@ -29,11 +29,11 @@ else
 {
 <div class="eyebrow">OPERATIONS / WORK</div>
 <h1>@(Model.View == "created" ? "Manage tasks" : "Task manager")</h1>
-<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("tasks")' />
+
 
 <p class="muted">Find assigned work, follow team progress, or create a task. Expand a subtask to see each employee’s responsibility.</p>
 <div class="actions">
-    <button type="button" data-open-workspace="task-editor">+ Create task</button>
+    <a class="button" href="#tasks-create">+ Create task</a>
     <a class="button secondary" asp-page="./TaskReport">Task progress report</a>
     <a class="button @(Model.View == "related" ? "" : "secondary")" asp-page="./Tasks" asp-route-view="related">All my work</a>
     <a class="button @(Model.View == "mine" ? "" : "secondary")" asp-page="./Tasks" asp-route-view="mine">My tasks</a>
@@ -41,59 +41,9 @@ else
     @if (Model.IsAdmin) { <a class="button @(Model.View == "all" ? "" : "secondary")" asp-page="./Tasks" asp-route-view="all">All tasks</a> }
 </div>
 @if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
-<details id="task-editor" class="card task-create-panel workspace-tools" open="@(Model.Input.Id != 0 || !ViewData.ModelState.IsValid)">
-<summary>@(Model.Input.Id == 0 ? "Create a task" : "Edit task")</summary>
-<form method="post" asp-page-handler="Save">
-    <div asp-validation-summary="All"></div>
-    <input asp-for="Input.Id" type="hidden" />
-    <div class="grid">
-        <label>Task title<input asp-for="Input.Title" required maxlength="160" readonly="@Model.EditingTeamAssignment" /></label>
-        <label class="task-single-setting">Due date<input asp-for="Input.DueDate" type="date" /></label>
-        <label class="task-single-setting">Priority<select asp-for="Input.Priority" asp-items="Html.GetEnumSelectList<TaskPriority>()"></select></label>
-        @if (Model.CanAssign && Model.Input.Id != 0) {
-            <label>Assign to<select asp-for="Input.AssigneeId">
-                @if (!Model.EditingTeamAssignment) { <option value="">Myself</option> }
-                @foreach (var person in Model.AssignmentOptions.Where(p => Model.EditingTeamAssignment || p.Key != Model.Actor)) { <option value="@person.Key">@person.Value</option> }
-            </select></label>
-        }
-    </div>
-    @if (Model.CanAssign && Model.Input.Id == 0) {
-        <fieldset class="task-type-picker">
-            <legend>Task type</legend>
-            <label><input type="radio" asp-for="Input.DivideWork" value="false" id="task-type-individual" /> Individual task <small>Each selected employee receives their own task.</small></label>
-            <label><input type="radio" asp-for="Input.DivideWork" value="true" id="task-type-team" /> Team task <small>One parent task with subtasks assigned to team members.</small></label>
-        </fieldset>
-        <fieldset>
-            <legend>Assign to employees</legend>
-            <div class="checkbox-list">
-                <label><input asp-for="Input.AssignToAll" /> Select all eligible employees</label>
-            </div>
-            <label>Assign by department
-                <select asp-for="Input.DepartmentId">
-                    <option value="">No department selected</option>
-                    @foreach (var department in Model.Departments)
-                    {
-                        <option value="@department.Id">@department.Label</option>
-                    }
-                </select>
-            </label>
-            <p>Select a department to assign the task to its eligible employees. Check Myself to add yourself.</p>
-            <p>Select all includes active employee accounts in your branch scope that have Task Manager access. Check Myself to include your own assignment.</p>
-            <div class="ops-participants team-assignees">
-                @foreach (var person in new[] { new KeyValuePair<string, string>(Model.Actor, "Myself") }.Concat(Model.Assignable.Where(p => p.Key != Model.Actor))) {
-                    <div class="team-assignee">
-                        <label class="inline"><input type="checkbox" name="Input.AssigneeIds" value="@person.Key" checked="@Model.Input.AssigneeIds.Contains(person.Key)" /> @person.Value</label>
-                    </div>
-                }
-            </div>
-        </fieldset>
-    }
-    @if (Model.EditingTeamAssignment) { <label>Responsibility<textarea asp-for="Input.Responsibility" maxlength="1000" rows="3" readonly="@Model.SharedSubtask" required></textarea></label> }
-    <label>Details<textarea asp-for="Input.Description" rows="3" maxlength="2500"></textarea></label>
-    <button id="save-task-button">Save task</button> @if (Model.Input.Id != 0) { <a asp-page="./Tasks">Cancel edit</a> }
-</form>
-</details>
-<div class="card workspace-list compact-task-list">
+
+<div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Task views"><a href="#tasks-list" data-workspace-link>Task list</a><a href="#tasks-create" data-workspace-link>Create / edit task</a><a href="#tasks-import" data-workspace-link>Import &amp; export</a><a href="/Operations/TaskReport">Progress reports</a></nav>
+<section id="tasks-list" data-workspace-panel><div class="card workspace-list compact-task-list">
     <header class="workspace-list-heading"><h2>Tasks</h2><small>@Model.Items.Count assignments shown</small></header>
     <form method="get" class="task-list-filters">
         <input type="hidden" name="view" value="@Model.View" />
@@ -198,6 +148,61 @@ else
     </div>
     </section>
     }
+</div>
+</section>
+<section id="tasks-create" data-workspace-panel data-workspace-auto><details id="task-editor" class="card task-create-panel workspace-tools" open="@(Model.Input.Id != 0 || !ViewData.ModelState.IsValid)">
+<summary>@(Model.Input.Id == 0 ? "Create a task" : "Edit task")</summary>
+<form method="post" asp-page-handler="Save">
+    <div asp-validation-summary="All"></div>
+    <input asp-for="Input.Id" type="hidden" />
+    <div class="grid">
+        <label>Task title<input asp-for="Input.Title" required maxlength="160" readonly="@Model.EditingTeamAssignment" /></label>
+        <label class="task-single-setting">Due date<input asp-for="Input.DueDate" type="date" /></label>
+        <label class="task-single-setting">Priority<select asp-for="Input.Priority" asp-items="Html.GetEnumSelectList<TaskPriority>()"></select></label>
+        @if (Model.CanAssign && Model.Input.Id != 0) {
+            <label>Assign to<select asp-for="Input.AssigneeId">
+                @if (!Model.EditingTeamAssignment) { <option value="">Myself</option> }
+                @foreach (var person in Model.AssignmentOptions.Where(p => Model.EditingTeamAssignment || p.Key != Model.Actor)) { <option value="@person.Key">@person.Value</option> }
+            </select></label>
+        }
+    </div>
+    @if (Model.CanAssign && Model.Input.Id == 0) {
+        <fieldset class="task-type-picker">
+            <legend>Task type</legend>
+            <label><input type="radio" asp-for="Input.DivideWork" value="false" id="task-type-individual" /> Individual task <small>Each selected employee receives their own task.</small></label>
+            <label><input type="radio" asp-for="Input.DivideWork" value="true" id="task-type-team" /> Team task <small>One parent task with subtasks assigned to team members.</small></label>
+        </fieldset>
+        <fieldset>
+            <legend>Assign to employees</legend>
+            <div class="checkbox-list">
+                <label><input asp-for="Input.AssignToAll" /> Select all eligible employees</label>
+            </div>
+            <label>Assign by department
+                <select asp-for="Input.DepartmentId">
+                    <option value="">No department selected</option>
+                    @foreach (var department in Model.Departments)
+                    {
+                        <option value="@department.Id">@department.Label</option>
+                    }
+                </select>
+            </label>
+            <p>Select a department to assign the task to its eligible employees. Check Myself to add yourself.</p>
+            <p>Select all includes active employee accounts in your branch scope that have Task Manager access. Check Myself to include your own assignment.</p>
+            <div class="ops-participants team-assignees">
+                @foreach (var person in new[] { new KeyValuePair<string, string>(Model.Actor, "Myself") }.Concat(Model.Assignable.Where(p => p.Key != Model.Actor))) {
+                    <div class="team-assignee">
+                        <label class="inline"><input type="checkbox" name="Input.AssigneeIds" value="@person.Key" checked="@Model.Input.AssigneeIds.Contains(person.Key)" /> @person.Value</label>
+                    </div>
+                }
+            </div>
+        </fieldset>
+    }
+    @if (Model.EditingTeamAssignment) { <label>Responsibility<textarea asp-for="Input.Responsibility" maxlength="1000" rows="3" readonly="@Model.SharedSubtask" required></textarea></label> }
+    <label>Details<textarea asp-for="Input.Description" rows="3" maxlength="2500"></textarea></label>
+    <button id="save-task-button">Save task</button> @if (Model.Input.Id != 0) { <a asp-page="./Tasks">Cancel edit</a> }
+</form>
+</details></section>
+<section id="tasks-import" data-workspace-panel><partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("tasks")' /></section>
 </div>
 
 }
