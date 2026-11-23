@@ -143,6 +143,7 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
                 }
             }
 
+        b.Entity<WorkRule>().Property(x => x.FixedMinuteRate).HasPrecision(18, 6);
         b.Entity<EmployeeAssignment>().HasOne<Employee>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Education>().HasOne<Employee>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<WorkExperience>().HasOne<Employee>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);

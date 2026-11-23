@@ -173,8 +173,8 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
             db.AttendanceDays.Add(day);
         }
 
-        if (rule.UsePunchWindows && (!AttendanceMinutes.CheckIn(first) || !AttendanceMinutes.CheckOut(last) || last.Date != date.Date))
-            throw new InvalidOperationException("Use time in 6:30–10:30 AM and time out 11:30 AM–3:30 PM EAT for this work date.");
+        if (rule.UsePunchWindows && (!AttendanceMinutes.CheckIn(rule, first) || !AttendanceMinutes.CheckOut(rule, last) || last.Date != date.Date))
+            throw new InvalidOperationException("Use punches within the configured check-in and checkout windows (EAT) for this work date.");
         day.FirstIn = first;
         day.LastOut = last;
         day.WorkedHours = (decimal)Math.Max(0, (last - first).TotalHours - rule.BreakMinutes / 60d);

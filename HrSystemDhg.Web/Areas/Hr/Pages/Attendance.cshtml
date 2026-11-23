@@ -2,7 +2,7 @@
 @model HrSystemDhg.Web.Pages.Hr.AttendanceModel
 @{ViewData["Title"]="Attendance & imports";}
 <div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Attendance & imports</h1>
-<div asp-validation-summary="All"></div><p class="muted">East Africa Time (UTC+3). From 23 November: check-in 6:30–10:30 AM; checkout 11:30 AM–3:30 PM. Saturday–Thursday: 480 worked minutes per day. Missing punches require review.</p>
+<div asp-validation-summary="All"></div><p class="muted">East Africa Time (UTC+3). Check-in and checkout windows, working days, required hours and deduction rates follow your effective Attendance &amp; Payroll Rules. Missing punches follow the configured review policy.</p>
 @if (TempData["RegistrationCsvResult"] is string csvResult)
 {
     <p role="status">@csvResult</p>

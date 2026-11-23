@@ -29,16 +29,22 @@ public class RulesModel(HrDbContext db) : PageModel
     public List<WorkRule> Rules = [];
     public List<Holiday> Holidays = [];
     public int? PayrollId { get; private set; }
+    [BindProperty] public int[] WorkingDays { get; set; } = [0, 1, 2, 3, 4, 6];
 
     public async Task OnGetAsync(DateTime? effective = null, int? branchId = null, int? departmentId = null,
-        int? shiftId = null, int? payrollId = null)
+        int? shiftId = null, int? payrollId = null, int? templateId = null)
     {
         Branches = await db.Branchs.ToListAsync();
         Departments = await db.Departments.ToListAsync();
         Shifts = await db.Shifts.Where(x => x.IsActive).ToListAsync();
-        Rules = await db.WorkRules.OrderByDescending(x => x.EffectiveFrom).ToListAsync();
+        Rules = await db.WorkRules.AsNoTracking().OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).ToListAsync();
         Holidays = await db.Holidays.OrderBy(x => x.Date).ToListAsync();
         PayrollId = payrollId;
+        if (templateId.HasValue)
+        {
+            var source = Rules.FirstOrDefault(r => r.Id == templateId);
+            if (source != null) { Rule = System.Text.Json.JsonSerializer.Deserialize<WorkRule>(System.Text.Json.JsonSerializer.Serialize(source))!; Rule.Id = 0; Rule.EffectiveFrom = BusinessClock.Today; WorkingDays = Rule.WorkingWeekdays.Split(',').Select(int.Parse).ToArray(); }
+        }
         if (effective.HasValue)
         {
             Rule.EffectiveFrom = effective.Value.Date;
@@ -51,6 +57,14 @@ public class RulesModel(HrDbContext db) : PageModel
     public async Task<IActionResult> OnPostAsync(int? payrollId = null)
     {
         await OnGetAsync(payrollId: payrollId);
+        if (Request.HasFormContentType && Request.Form.ContainsKey("WorkingDaysSubmitted"))
+        {
+            WorkingDays = Request.Form["WorkingDays"].Select(x => int.TryParse(x, out var day) ? day : -1).ToArray();
+            Rule.WorkingWeekdays = string.Join(",", WorkingDays.Distinct().OrderBy(x => x));
+        }
+        if (Rule.BranchId != null && !Branches.Any(b => b.Id == Rule.BranchId)) ModelState.AddModelError("", "Select an existing branch.");
+        if (Rule.ShiftId != null && !Shifts.Any(s => s.Id == Rule.ShiftId)) ModelState.AddModelError("", "Select an active shift.");
+        if (!AttendanceMinutes.Valid(Rule)) ModelState.AddModelError("", "Check the time windows, required hours, formula and rate. Check-in must end before checkout begins; use a divisor of 1–366 days.");
         if (!ModelState.IsValid || Rule.DailyHours <= 0 || Rule.DailyHours > 20 || Rule.StartHour < 0 || Rule.StartHour > 23 || Rule.StartMinute < 0 || Rule.StartMinute > 59 || Rule.BreakMinutes < 0 || Rule.BreakMinutes > 180 || Rule.GraceMinutes < 0 || Rule.OvertimeMultiplier < 0 || Absence < 0 || Late < 0 || Rule.EffectiveFrom == default || string.IsNullOrWhiteSpace(Rule.WorkingWeekdays) || Rule.WorkingWeekdays.Split(',').Any(x => !int.TryParse(x, out var n) || n < 0 || n > 6) || !new[]
         {
             "Flag",
@@ -62,17 +76,12 @@ public class RulesModel(HrDbContext db) : PageModel
             return Page();
         }
 
-        if (Rule.UsePunchWindows)
-        {
-            Rule.StartHour = 6; Rule.StartMinute = 30; Rule.DailyHours = 8;
-            Rule.BreakMinutes = 0; Rule.GraceMinutes = 0; Rule.WorkingWeekdays = "0,1,2,3,4,6";
-            Absence = 1;
-        }
+        if (Rule.UsePunchWindows) { Rule.StartHour = Rule.CheckInFrom.Hours; Rule.StartMinute = Rule.CheckInFrom.Minutes; }
         Rule.WorkingWeekdays = string.Join(",", Rule.WorkingWeekdays.Split(',').Select(int.Parse).Distinct().OrderBy(x => x));
         Rule.Id = 0;
         db.WorkRules.Add(Rule);
         db.DeductionRules.Add(new() { EffectiveFrom = Rule.EffectiveFrom, BranchId = Rule.BranchId, AbsenceMultiplier = Absence, LatePerMinute = Late });
-        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = "Added effective work/deduction rules" });
+        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action =  $"Added attendance rule from {Rule.EffectiveFrom:yyyy-MM-dd}; {Rule.DailyHours} hours, days {Rule.WorkingWeekdays}; {AttendanceMinutes.Formula(Rule)}" });
         await db.SaveChangesAsync();
         if (payrollId.HasValue)
             return RedirectToPage("/Payroll", null, new { area = "Management", PeriodId = payrollId }, $"payroll-{payrollId}");
@@ -107,13 +116,13 @@ public class RulesModel(HrDbContext db) : PageModel
         return RedirectToPage();
     }
 
-    private const string CsvColumns = "EffectiveFrom,BranchId,DepartmentId,ShiftId,DailyHours,StartHour,StartMinute,BreakMinutes,GraceMinutes,WorkingWeekdays,IncompletePolicy,OvertimeMultiplier,WeekendOvertime,Absence,Late,UsePunchWindows";
+    private const string CsvColumns = "EffectiveFrom,BranchId,DepartmentId,ShiftId,DailyHours,StartHour,StartMinute,BreakMinutes,GraceMinutes,WorkingWeekdays,IncompletePolicy,OvertimeMultiplier,WeekendOvertime,Absence,Late,UsePunchWindows,CheckInFrom,CheckInUntil,CheckOutFrom,CheckOutUntil,MinuteRateMode,SalaryDivisor,FixedMinuteRate";
 
     public IActionResult OnGetSample(string? dataset)
     {
         if (dataset == "shifts") return RegistrationCsv.Download("shifts-sample", "Name", [["Morning shift"]]);
         if (dataset == "holidays") return RegistrationCsv.Download("holidays-sample", "Name,Date,BranchId", [["Example holiday", BusinessClock.Today.AddDays(1), null]]);
-        return RegistrationCsv.Download("work-rules-sample", CsvColumns, [[BusinessClock.Today, null, null, null, 8, 6, 30, 0, 0, "0,1,2,3,4,6", "Flag", 1.5m, false, 1, 0, true]]);
+        return RegistrationCsv.Download("work-rules-sample", CsvColumns, [[BusinessClock.Today, null, null, null, 8, 6, 30, 0, 0, "0,1,2,3,4,6", "Flag", 1.5m, false, 1, 0, true, "06:30", "10:30", "11:30", "15:30", "Salary", 30, 0]]);
     }
 
     public async Task<IActionResult> OnGetExportAsync(string? dataset)
@@ -132,7 +141,7 @@ public class RulesModel(HrDbContext db) : PageModel
         Response.Headers.CacheControl = "no-store";
         var deductions = (await db.DeductionRules.AsNoTracking().OrderByDescending(x => x.Id).ToListAsync())
             .ToLookup(x => (x.BranchId, x.EffectiveFrom));
-        return RegistrationCsv.Download("work-rules", CsvColumns, records.Select(x => new object?[] { x.EffectiveFrom, x.BranchId, x.DepartmentId, x.ShiftId, x.DailyHours, x.StartHour, x.StartMinute, x.BreakMinutes, x.GraceMinutes, x.WorkingWeekdays, x.IncompletePolicy, x.OvertimeMultiplier, x.WeekendOvertime, deductions[(x.BranchId, x.EffectiveFrom)].FirstOrDefault()?.AbsenceMultiplier, deductions[(x.BranchId, x.EffectiveFrom)].FirstOrDefault()?.LatePerMinute, x.UsePunchWindows }));
+        return RegistrationCsv.Download("work-rules", CsvColumns, records.Select(x => new object?[] { x.EffectiveFrom, x.BranchId, x.DepartmentId, x.ShiftId, x.DailyHours, x.StartHour, x.StartMinute, x.BreakMinutes, x.GraceMinutes, x.WorkingWeekdays, x.IncompletePolicy, x.OvertimeMultiplier, x.WeekendOvertime, deductions[(x.BranchId, x.EffectiveFrom)].FirstOrDefault()?.AbsenceMultiplier, deductions[(x.BranchId, x.EffectiveFrom)].FirstOrDefault()?.LatePerMinute, x.UsePunchWindows, x.CheckInFrom, x.CheckInUntil, x.CheckOutFrom, x.CheckOutUntil, x.MinuteRateMode, x.SalaryDivisor, x.FixedMinuteRate }));
     }
 
     public Task<IActionResult> OnPostImportAsync(IFormFile? upload, string? dataset)
@@ -158,6 +167,13 @@ public class RulesModel(HrDbContext db) : PageModel
         return RegistrationCsv.ImportAsync(this, db, upload, CsvColumns, async row =>
         {
             Rule = new WorkRule { UsePunchWindows = row.Get<bool>("UsePunchWindows") };
+            Rule.CheckInFrom = row.Get<TimeSpan>("CheckInFrom");
+            Rule.CheckInUntil = row.Get<TimeSpan>("CheckInUntil");
+            Rule.CheckOutFrom = row.Get<TimeSpan>("CheckOutFrom");
+            Rule.CheckOutUntil = row.Get<TimeSpan>("CheckOutUntil");
+            Rule.MinuteRateMode = row.Get<string>("MinuteRateMode");
+            Rule.SalaryDivisor = row.Get<decimal>("SalaryDivisor");
+            Rule.FixedMinuteRate = row.Get<decimal>("FixedMinuteRate");
             Rule.EffectiveFrom = row.Get<DateTime>("EffectiveFrom");
             Rule.BranchId = row.Get<int?>("BranchId");
             Rule.DepartmentId = row.Get<int?>("DepartmentId");

@@ -1,16 +1,86 @@
 @page
 @model HrSystemDhg.Web.Pages.Admin.RulesModel
-@{ViewData["Title"]="Work calendars & deduction rules";}
-<div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Work calendars & deduction rules</h1>
+@using HrSystemDhg.Web.Services
+@{ViewData["Title"]="Attendance & payroll rules"; var dayNames = new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };}
+<div class="eyebrow">MAIN SETTINGS · HR</div>
+<h1>Attendance &amp; payroll rules</h1>
+<p class="page-intro">Manage work schedules, attendance windows and deduction rates. All times use East Africa Time (UTC+3).</p>
 <div class="grid">
 <partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("work rules")' />
-
-<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("shifts")'
-         view-data='new ViewDataDictionary(ViewData) { ["CsvDataset"] = "shifts" }' />
-
-<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("holidays")'
-         view-data='new ViewDataDictionary(ViewData) { ["CsvDataset"] = "holidays" }' />
+<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("shifts")' view-data='new ViewDataDictionary(ViewData) { ["CsvDataset"] = "shifts" }' />
+<partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("holidays")' view-data='new ViewDataDictionary(ViewData) { ["CsvDataset"] = "holidays" }' />
 </div>
-
-<div asp-validation-summary="All"></div>
-<p>Effective rules resolve by shift, then department, then branch, then global default.</p><form method="post" class="card"><input type="hidden" name="payrollId" value="@Model.PayrollId" /><h2>New effective rule</h2><label class="inline"><input asp-for="Rule.UsePunchWindows"/> Government attendance: check-in 6:30–10:30 AM, check-out 11:30 AM–3:30 PM EAT; 480 minutes daily, Saturday–Thursday</label><p>When selected, deductions use basic salary ÷ 30 ÷ 480 × missing minutes. Friday, holidays, approved paid leave and waivers are excluded. Missing punches require review.</p><div class="grid"><label>Effective from<input asp-for="Rule.EffectiveFrom" type="date"/></label><label>Branch<select asp-for="Rule.BranchId"><option value="">Global</option>@foreach(var b in Model.Branches){<option value="@b.Id">@b.Name</option>}</select></label><label>Department<select asp-for="Rule.DepartmentId"><option value="">All</option>@foreach(var d in Model.Departments){<option value="@d.Id">@d.Name</option>}</select></label><label>Shift<select asp-for="Rule.ShiftId"><option value="">Any</option>@foreach(var s in Model.Shifts){<option value="@s.Id">@s.Name</option>}</select></label><label>Daily paid hours<input asp-for="Rule.DailyHours" type="number" min="1" max="20" step="0.25"/></label><label>Start hour<input asp-for="Rule.StartHour" type="number" min="0" max="23"/></label><label>Start minute<input asp-for="Rule.StartMinute" type="number" min="0" max="59"/></label><label>Break minutes<input asp-for="Rule.BreakMinutes" type="number" min="0" max="180"/></label><label>Grace minutes<input asp-for="Rule.GraceMinutes" type="number" min="0"/></label><label>Weekday numbers (Sun=0 … Sat=6)<input asp-for="Rule.WorkingWeekdays" placeholder="1,2,3,4,5"/></label><label>Incomplete punch policy<select asp-for="Rule.IncompletePolicy"><option>Flag</option><option>Absent</option><option>Half day</option></select></label><label>Overtime multiplier<input asp-for="Rule.OvertimeMultiplier" type="number" min="0" step="0.1"/></label><label class="inline"><input asp-for="Rule.WeekendOvertime"/> Weekend work eligible for overtime</label><label>Absence daily-rate multiplier<input asp-for="Absence" type="number" min="0" step="0.01"/></label><label>Legacy late / early rate (government rule uses salary ÷ 30 ÷ 480)<input asp-for="Late" type="number" min="0" step="0.01"/></label></div><button>Save effective rules</button></form><div class="card table-scroll"><h2>Work rule history</h2><table><tr><th>Effective</th><th>Scope</th><th>Hours</th><th>Start</th><th>Weekdays</th><th>Incomplete</th><th>Attendance calculation</th></tr>@foreach(var r in Model.Rules){<tr><td>@r.EffectiveFrom.ToString("dd MMM yyyy")</td><td>Branch @(r.BranchId?.ToString()??"all"), dept @(r.DepartmentId?.ToString()??"all"), shift @(r.ShiftId?.ToString()??"all")</td><td>@r.DailyHours</td><td>@r.StartHour:@r.StartMinute.ToString("00")</td><td>@r.WorkingWeekdays</td><td>@r.IncompletePolicy</td><td>@(r.UsePunchWindows ? "EAT punch windows · 480 minutes · salary ÷ 30 ÷ 480" : "Fixed shift")</td></tr>}</table></div><div class="grid"><form method="post" asp-page-handler="Shift" class="card"><h2>Add shift</h2><label>Name<input name="name" required/></label><button>Create shift</button></form><form method="post" asp-page-handler="Holiday" class="card"><h2>Add public holiday</h2><label>Name<input name="name" required/></label><label>Date<input name="date" type="date" required/></label><label>Branch<select name="branchId"><option value="">All branches</option>@foreach(var b in Model.Branches){<option value="@b.Id">@b.Name</option>}</select></label><button>Add holiday</button></form></div><div class="card"><h2>Holidays</h2>@foreach(var h in Model.Holidays){<form method="post" asp-page-handler="RemoveHoliday" class="inline"><input type="hidden" name="id" value="@h.Id"/><span>@h.Date.ToString("dd MMM yyyy") · @h.Name</span><button>Remove holiday</button></form>}</div>
+<div asp-validation-summary="All" role="alert"></div>
+<form method="post" class="card">
+<input type="hidden" name="payrollId" value="@Model.PayrollId" />
+<input type="hidden" name="WorkingDaysSubmitted" value="true" />
+<h2>1. Effective date and scope</h2>
+<p>Save a new version to change a policy. The previous version continues to apply to earlier dates. Rules resolve by shift, department, branch, then global default.</p>
+<div class="grid">
+<label>Effective from<input asp-for="Rule.EffectiveFrom" type="date" required /></label>
+<label>Branch<select asp-for="Rule.BranchId"><option value="">All branches</option>@foreach(var b in Model.Branches){<option value="@b.Id">@b.Name</option>}</select></label>
+<label>Department<select asp-for="Rule.DepartmentId"><option value="">All departments</option>@foreach(var d in Model.Departments){<option value="@d.Id">@d.Name</option>}</select></label>
+<label>Shift<select asp-for="Rule.ShiftId"><option value="">All shifts</option>@foreach(var shift in Model.Shifts){<option value="@shift.Id">@shift.Name</option>}</select></label>
+</div>
+<hr /><h2>2. Working days and required hours</h2>
+<div class="actions" role="group" aria-label="Working days">@foreach(var number in new[] {6,0,1,2,3,4,5}){
+<label class="inline"><input type="checkbox" name="WorkingDays" value="@number" checked="@Model.WorkingDays.Contains(number)" /> @dayNames[number]</label>
+}</div>
+<div class="grid">
+<label>Required work hours per day<input asp-for="Rule.DailyHours" type="number" min="0.25" max="20" step="0.25" required /></label>
+<label>Unpaid break minutes<input asp-for="Rule.BreakMinutes" type="number" min="0" max="180" required /></label>
+</div>
+<p>Worked minutes = time out − time in − unpaid break. Approved leave reduces required attendance minutes. Non-working days and holidays have no attendance deduction.</p>
+<hr /><h2>3. Check-in and checkout windows</h2>
+<label class="inline"><input asp-for="Rule.UsePunchWindows" /> Use attendance windows and deduct minutes short of the daily requirement</label>
+<div class="grid">
+<label>Check-in opens (EAT)<input name="Rule.CheckInFrom" type="time" value='@Model.Rule.CheckInFrom.ToString(@"hh\:mm")' required /></label>
+<label>Check-in closes (EAT)<input name="Rule.CheckInUntil" type="time" value='@Model.Rule.CheckInUntil.ToString(@"hh\:mm")' required /></label>
+<label>Checkout opens (EAT)<input name="Rule.CheckOutFrom" type="time" value='@Model.Rule.CheckOutFrom.ToString(@"hh\:mm")' required /></label>
+<label>Checkout closes (EAT)<input name="Rule.CheckOutUntil" type="time" value='@Model.Rule.CheckOutUntil.ToString(@"hh\:mm")' required /></label>
+</div>
+<p>Punches outside the windows remain in the raw log. A missing valid check-in or checkout follows the incomplete-punch policy below.</p>
+<hr /><h2>4. Deduction formula and rate</h2>
+<div class="grid">
+<label>Calculation method<select asp-for="Rule.MinuteRateMode"><option value="Salary">Monthly basic salary ÷ salary days ÷ daily minutes</option><option value="Fixed">Fixed amount per missing minute</option></select></label>
+<label>Salary days divisor<input asp-for="Rule.SalaryDivisor" type="number" min="1" max="366" step="1" required /></label>
+<label>Fixed rate per minute (employee salary currency)<input asp-for="Rule.FixedMinuteRate" type="number" min="0" step="0.000001" required /></label>
+<label>Missing check-in or checkout<select asp-for="Rule.IncompletePolicy"><option value="Flag">Require HR review before payroll</option><option value="Absent">Deduct the unexcused full day</option><option value="Half day">Deduct up to half a day</option></select></label>
+</div>
+<div class="notice" id="formula-preview" aria-live="polite">@AttendanceMinutes.Formula(Model.Rule) × missing minutes</div>
+<p>A full absence uses the same rate for the daily required minutes. Approved leave is excluded from absence counts and attendance penalties. Attendance waivers remain available in payroll.</p>
+<details><summary>Fixed-shift and overtime settings</summary><div class="grid">
+<label>Fixed shift start hour<input asp-for="Rule.StartHour" type="number" min="0" max="23" /></label>
+<label>Fixed shift start minute<input asp-for="Rule.StartMinute" type="number" min="0" max="59" /></label>
+<label>Fixed shift grace minutes<input asp-for="Rule.GraceMinutes" type="number" min="0" /></label>
+<label>Fixed shift absence multiplier<input asp-for="Absence" type="number" min="0" step="0.01" /></label>
+<input asp-for="Late" type="hidden" />
+<label>Approved overtime multiplier<input asp-for="Rule.OvertimeMultiplier" type="number" min="0" step="0.1" /></label>
+<label class="inline"><input asp-for="Rule.WeekendOvertime" /> Allow approved overtime on non-working days</label>
+</div></details>
+<div class="actions"><button>Save new effective version</button><a class="button secondary" href="/Admin/Settings">Main settings</a></div>
+</form>
+<section class="card table-scroll"><h2>Policy versions</h2>
+<table class="workspace-table"><thead><tr><th>Effective</th><th>Scope</th><th>Working days</th><th>Hours / break</th><th>Check-in / checkout (EAT)</th><th>Deduction</th><th>Manage</th></tr></thead><tbody>
+@foreach(var r in Model.Rules){<tr>
+<td>@r.EffectiveFrom.ToString("dd MMM yyyy")</td>
+<td>@(Model.Branches.FirstOrDefault(x=>x.Id==r.BranchId)?.Name ?? "All branches") · @(Model.Departments.FirstOrDefault(x=>x.Id==r.DepartmentId)?.Name ?? "All departments") · @(Model.Shifts.FirstOrDefault(x=>x.Id==r.ShiftId)?.Name ?? "All shifts")</td>
+<td>@string.Join(", ", r.WorkingWeekdays.Split(',').Select(n=>dayNames[int.Parse(n)]))</td>
+<td>@r.DailyHours hours / @r.BreakMinutes min</td>
+<td>@if(r.UsePunchWindows){<span>@r.CheckInFrom.ToString(@"hh\:mm")–@r.CheckInUntil.ToString(@"hh\:mm")<br />@r.CheckOutFrom.ToString(@"hh\:mm")–@r.CheckOutUntil.ToString(@"hh\:mm")</span>}else{<span>Fixed shift @r.StartHour:@r.StartMinute.ToString("00")</span>}</td>
+<td>@(r.UsePunchWindows ? AttendanceMinutes.Formula(r) : "Fixed shift late / early minutes")</td>
+<td><a asp-route-templateId="@r.Id">Change this rule</a></td>
+</tr>}
+</tbody></table></section>
+<div class="grid">
+<form method="post" asp-page-handler="Shift" class="card"><h2>Add shift</h2><label>Name<input name="name" required /></label><button>Create shift</button></form>
+<form method="post" asp-page-handler="Holiday" class="card"><h2>Add public holiday</h2><label>Name<input name="name" required /></label><label>Date<input name="date" type="date" required /></label><label>Branch<select name="branchId"><option value="">All branches</option>@foreach(var b in Model.Branches){<option value="@b.Id">@b.Name</option>}</select></label><button>Add holiday</button></form>
+</div>
+<section class="card"><h2>Public holidays</h2>@foreach(var h in Model.Holidays){<form method="post" asp-page-handler="RemoveHoliday" class="inline"><input type="hidden" name="id" value="@h.Id"/><span>@h.Date.ToString("dd MMM yyyy") · @h.Name</span><button>Remove holiday</button></form>}</section>
+<script>
+(() => {
+ const field = n => document.querySelector('[name="Rule.' + n + '"]');
+ const preview = () => { const hours = Number(field('DailyHours').value); const days = Number(field('SalaryDivisor').value); document.getElementById('formula-preview').textContent = field('MinuteRateMode').value === 'Fixed' ? field('FixedMinuteRate').value + ' per minute × missing minutes' : 'Monthly basic salary ÷ ' + days + ' days ÷ ' + Math.round(hours * 60) + ' minutes × missing minutes'; };
+ ['DailyHours','SalaryDivisor','MinuteRateMode','FixedMinuteRate'].forEach(n=>field(n).addEventListener('input',preview)); preview();
+})();
+</script>

@@ -80,7 +80,6 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             var workingDays = workingDates.Count;
             if (workingDays == 0)
                 throw new InvalidOperationException($"Employee {e.EmployeeNumber} has no scheduled working days in this payroll period. Check the effective work rule and holidays.");
-            var dailyDeduction = salary.Basic / 30m;
             int eligible = 0;
             var deductions = new List<PayrollDeduction>();
             foreach (var (date, rule, branchId) in calendarDays)
@@ -104,30 +103,31 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                 if (working && leaveFraction < 1)
                 {
                     var deductionRule = await db.DeductionRules.Where(x => x.EffectiveFrom <= date && (x.BranchId == null || x.BranchId == branchId)).OrderByDescending(x => x.BranchId != null).ThenByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).FirstOrDefaultAsync();
+                    var ruleDailyRate = AttendanceMinutes.Deduction(rule, salary.Basic, AttendanceMinutes.Required(rule));
                     decimal amount = 0;
                     var kind = "Late";
                     string? calculation = null;
                     if (day.Status == "Absent" || (day.FirstIn == null && day.LastOut == null && day.Status != "Incomplete punch"))
                     {
-                        amount = dailyDeduction * (1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m);
+                        amount = ruleDailyRate * (1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m);
                         kind = "Absence";
-                        calculation = rule.UsePunchWindows ? $"{(int)(480 * (1 - leaveFraction))} absent min × {salary.Basic / 30m / 480m:0.######} {salary.Currency}/min (basic ÷ 30 ÷ 480)" : null;
+                        calculation = rule.UsePunchWindows ? $"{(int)(AttendanceMinutes.Required(rule) * (1 - leaveFraction))} absent min × {AttendanceMinutes.Rate(rule, salary.Basic):0.######} {salary.Currency}/min ({AttendanceMinutes.Formula(rule)})" : null;
                     }
                     else if (day.Status == "Incomplete punch" || day.FirstIn == null || day.LastOut == null)
                     {
                         kind = "Incomplete punch";
                         amount = rule.IncompletePolicy switch
                         {
-                            "Absent" => dailyDeduction * (1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m),
-                            "Half day" => dailyDeduction * Math.Min(.5m, 1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m),
+                            "Absent" => ruleDailyRate * (1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m),
+                            "Half day" => ruleDailyRate * Math.Min(.5m, 1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m),
                             _ => throw new InvalidOperationException("Resolve incomplete punch for " + e.EmployeeNumber + " on " + date.ToString("yyyy-MM-dd"))};
                     }
                     else if (rule.UsePunchWindows)
                     {
                         var missing = AttendanceMinutes.Missing(rule, date, day.FirstIn, day.LastOut, leaveForDay);
-                        amount = AttendanceMinutes.Deduction(salary.Basic, missing);
+                        amount = AttendanceMinutes.Deduction(rule, salary.Basic, missing);
                         kind = "Missing minutes";
-                        calculation = $"{missing} missing min × {salary.Basic / 30m / 480m:0.######} {salary.Currency}/min (basic ÷ 30 ÷ 480)";
+                        calculation = $"{missing} missing min × {AttendanceMinutes.Rate(rule, salary.Basic):0.######} {salary.Currency}/min ({AttendanceMinutes.Formula(rule)})";
                     }
                     else
                     {
@@ -151,8 +151,8 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                         }
 
                         var chargeableMinutes = Math.Max(0, minutes);
-                        amount = chargeableMinutes * dailyDeduction / (rule.DailyHours * 60m);
-                        calculation = $"{chargeableMinutes} chargeable min × {dailyDeduction / (rule.DailyHours * 60m):0.######} {salary.Currency}/min";
+                        amount = AttendanceMinutes.Deduction(rule, salary.Basic, chargeableMinutes);
+                        calculation = $"{chargeableMinutes} chargeable min × {AttendanceMinutes.Rate(rule, salary.Basic):0.######} {salary.Currency}/min";
                     }
 
                     if (amount > 0)

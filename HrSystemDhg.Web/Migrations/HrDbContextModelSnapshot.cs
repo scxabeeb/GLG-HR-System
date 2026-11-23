@@ -1804,6 +1804,18 @@ namespace HrSystemDhg.Web.Migrations
                     b.Property<int>("BreakMinutes")
                         .HasColumnType("int");
 
+                    b.Property<TimeSpan>("CheckInFrom")
+                        .HasColumnType("time(6)");
+
+                    b.Property<TimeSpan>("CheckInUntil")
+                        .HasColumnType("time(6)");
+
+                    b.Property<TimeSpan>("CheckOutFrom")
+                        .HasColumnType("time(6)");
+
+                    b.Property<TimeSpan>("CheckOutUntil")
+                        .HasColumnType("time(6)");
+
                     b.Property<decimal>("DailyHours")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1814,6 +1826,10 @@ namespace HrSystemDhg.Web.Migrations
                     b.Property<DateTime>("EffectiveFrom")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<decimal>("FixedMinuteRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<int>("GraceMinutes")
                         .HasColumnType("int");
 
@@ -1821,7 +1837,15 @@ namespace HrSystemDhg.Web.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<string>("MinuteRateMode")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
                     b.Property<decimal>("OvertimeMultiplier")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("SalaryDivisor")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 

@@ -70,6 +70,13 @@ public partial class SalaryVersion
 public partial class WorkRule
 {
     public bool UsePunchWindows { get; set; }
+    public TimeSpan CheckInFrom { get; set; } = new(6, 30, 0);
+    public TimeSpan CheckInUntil { get; set; } = new(10, 30, 0);
+    public TimeSpan CheckOutFrom { get; set; } = new(11, 30, 0);
+    public TimeSpan CheckOutUntil { get; set; } = new(15, 30, 0);
+    public string MinuteRateMode { get; set; } = "Salary";
+    public decimal SalaryDivisor { get; set; } = 30;
+    public decimal FixedMinuteRate { get; set; }
     public int? BranchId { get; set; }
     public int? DepartmentId { get; set; }
     public int? ShiftId { get; set; }

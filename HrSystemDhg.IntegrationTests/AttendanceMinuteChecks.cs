@@ -40,5 +40,32 @@ public static class AttendanceMinuteChecks
         db.ZkPunchs.Add(new() { DeviceId = device.Id, Pin = key, PunchTime = date.AddDays(1).AddHours(15) });
         await db.SaveChangesAsync(); await attendance.RebuildAsync(employee.Id, date.AddDays(1));
         check((await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == date.AddDays(1))).Status == "Incomplete punch", "checkout-only attendance requires review instead of inventing a check-in");
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(new[] { new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "minute-fixture"), new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Admin") }, "test"));
+        context.Request.ContentType = "application/x-www-form-urlencoded";
+        context.Request.Form = new Microsoft.AspNetCore.Http.FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues> { ["WorkingDaysSubmitted"] = "true", ["WorkingDays"] = new[] { "1", "3", "6" } });
+        var settings = new HrSystemDhg.Web.Pages.Admin.RulesModel(db) { PageContext = new Microsoft.AspNetCore.Mvc.RazorPages.PageContext { HttpContext = context }, Rule = new WorkRule { BranchId = branch.Id, EffectiveFrom = date.AddDays(10), UsePunchWindows = true, CheckInFrom = TimeSpan.FromHours(7), CheckInUntil = TimeSpan.FromHours(11), CheckOutFrom = TimeSpan.FromHours(12), CheckOutUntil = TimeSpan.FromHours(17), DailyHours = 7, BreakMinutes = 30, MinuteRateMode = "Fixed", FixedMinuteRate = .125m, SalaryDivisor = 26 } };
+        check(await settings.OnPostAsync() is Microsoft.AspNetCore.Mvc.RedirectToPageResult, "structured settings save an effective version");
+        var savedPolicy = await db.WorkRules.AsNoTracking().SingleAsync(r => r.Id == settings.Rule.Id);
+        check(savedPolicy.WorkingWeekdays == "1,3,6" && savedPolicy.DailyHours == 7 && savedPolicy.CheckInFrom == TimeSpan.FromHours(7) && savedPolicy.CheckOutUntil == TimeSpan.FromHours(17) && savedPolicy.FixedMinuteRate == .125m && savedPolicy.SalaryDivisor == 26, "settings persist selected days, time windows, hours, divisor and a precise fixed minute rate");
+        var invalid = new HrSystemDhg.Web.Pages.Admin.RulesModel(db) { PageContext = new Microsoft.AspNetCore.Mvc.RazorPages.PageContext { HttpContext = context }, Rule = new WorkRule { EffectiveFrom = date, UsePunchWindows = true, CheckInFrom = TimeSpan.FromHours(12), CheckInUntil = TimeSpan.FromHours(10) } };
+        check(await invalid.OnPostAsync() is Microsoft.AspNetCore.Mvc.RazorPages.PageResult && !invalid.ModelState.IsValid, "settings reject reversed time windows");
+        var paid = new LeaveType { Name = "Paid fixture", IsPaid = true };
+        db.LeaveTypes.Add(paid); await db.SaveChangesAsync();
+        db.LeaveRequests.Add(new() { EmployeeId = employee.Id, LeaveTypeId = paid.Id, From = date.AddDays(1), To = date.AddDays(1), Status = "Approved" });
+        await db.SaveChangesAsync(); await attendance.RebuildAsync(employee.Id, date.AddDays(1));
+        var approvedDay = await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == date.AddDays(1));
+        check(approvedDay.Status == "On leave" && approvedDay.MissingMinutes == 0, "approved full-day leave is not absence or missing time");
+        var partialDate = date.AddDays(2);
+        db.LeaveRequests.Add(new() { EmployeeId = employee.Id, LeaveTypeId = paid.Id, From = partialDate, To = partialDate, StartTime = TimeSpan.FromHours(6.5), EndTime = TimeSpan.FromHours(10.5), Status = "Approved" });
+        db.ZkPunchs.AddRange(new() { DeviceId = device.Id, Pin = key, PunchTime = partialDate.AddHours(10.5) }, new() { DeviceId = device.Id, Pin = key, PunchTime = partialDate.AddHours(14.5) });
+        await db.SaveChangesAsync(); await attendance.RebuildAsync(employee.Id, partialDate);
+        var partialDay = await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == partialDate);
+        check(partialDay.MissingMinutes == 0 && partialDay.Status == "On leave (partial)", "approved partial-day leave plus worked hours meets the attendance requirement");
+        var leavePeriod = new PayrollPeriod { From = date.AddDays(1), To = partialDate, BranchId = branch.Id };
+        db.PayrollPeriods.Add(leavePeriod); await db.SaveChangesAsync();
+        await new PayrollService(db, calendar, attendance).CalculateAsync(leavePeriod.Id, true, "minute-fixture");
+        var leaveLine = await db.PayrollLines.SingleAsync(l => l.PayrollPeriodId == leavePeriod.Id);
+        check(leaveLine.AttendanceApplied == 0 && leaveLine.Net == leaveLine.Gross, "approved full and partial paid leave has no payroll deduction");
     }
 }

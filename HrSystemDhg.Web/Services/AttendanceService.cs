@@ -25,7 +25,7 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
                 day.MissingMinutes = AttendanceMinutes.Missing(rule, date, day.FirstIn, day.LastOut, leave);
                 day.LateMinutes = day.EarlyMinutes = 0;
                 day.Status = holiday ? "Holiday" : weekend ? "Weekend" : leave.Any(r => r.StartTime == null) ? "On leave" :
-                    day.FirstIn == null || day.LastOut == null || !AttendanceMinutes.CheckIn(day.FirstIn.Value) || !AttendanceMinutes.CheckOut(day.LastOut.Value) ? "Incomplete punch" : leave.Count > 0 ? "On leave (partial)" : day.MissingMinutes > 0 ? "Short hours" : "Present";
+                    day.FirstIn == null || day.LastOut == null || !AttendanceMinutes.CheckIn(rule, day.FirstIn.Value) || !AttendanceMinutes.CheckOut(rule, day.LastOut.Value) ? "Incomplete punch" : leave.Count > 0 ? "On leave (partial)" : day.MissingMinutes > 0 ? "Short hours" : "Present";
             }
             else if (!holiday && !weekend && leave.Any(r => r.StartTime == null)) { day.Status = "On leave"; day.LateMinutes = day.EarlyMinutes = 0; }
             if (day.Status is "Holiday" or "Weekend" or "On leave") day.MissingMinutes = 0;
@@ -44,8 +44,8 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
         }
 
         day.ExpectedHours = rule.DailyHours;
-        day.FirstIn = rule.UsePunchWindows ? punches.FirstOrDefault(p => AttendanceMinutes.CheckIn(p.PunchTime))?.PunchTime : punches.FirstOrDefault()?.PunchTime;
-        day.LastOut = rule.UsePunchWindows ? punches.LastOrDefault(p => AttendanceMinutes.CheckOut(p.PunchTime))?.PunchTime : punches.Count > 1 ? punches.Last().PunchTime : null;
+        day.FirstIn = rule.UsePunchWindows ? punches.FirstOrDefault(p => AttendanceMinutes.CheckIn(rule, p.PunchTime))?.PunchTime : punches.FirstOrDefault()?.PunchTime;
+        day.LastOut = rule.UsePunchWindows ? punches.LastOrDefault(p => AttendanceMinutes.CheckOut(rule, p.PunchTime))?.PunchTime : punches.Count > 1 ? punches.Last().PunchTime : null;
         day.WorkedHours = day.FirstIn.HasValue && day.LastOut.HasValue ? (decimal)Math.Max(0, (day.LastOut.Value - day.FirstIn!.Value).TotalHours - rule.BreakMinutes / 60d) : 0;
         day.LateMinutes = !rule.UsePunchWindows && day.FirstIn.HasValue ? Math.Max(0, (int)(day.FirstIn.Value - window.Start).TotalMinutes - rule.GraceMinutes) : 0;
         day.EarlyMinutes = !rule.UsePunchWindows && day.LastOut.HasValue ? Math.Max(0, (int)(window.End - day.LastOut.Value).TotalMinutes) : 0;
