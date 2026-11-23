@@ -32,3 +32,5 @@ flutter build apk --release --split-per-abi
 The arm64 APK supports the Infinix. Release builds currently use the project's existing debug signing key for compatibility with previously installed builds; configure a protected production signing key before store distribution.
 
 For the iOS simulator and a local server, debug builds allow `--dart-define=GAROWE_HR_URL=http://127.0.0.1:5189`. Physical devices require reachable HTTPS.
+
+Version 2.2 adds native administrator task and meeting reports with search, status and date filters, report pagination, and per-employee task completion/overdue summaries on the dashboard. Reports require administrator and module/report permissions; employees keep their personal dashboard.

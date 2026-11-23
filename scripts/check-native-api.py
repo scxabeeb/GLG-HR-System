@@ -146,6 +146,22 @@ try:
     assert req('v2/manage/tasks/'+tid)['status']=='Cancelled'
     print('PASS mobile administrator and organizer create/edit/assign/cancel, team subtasks, activity tracking, meeting minutes and room controls; participant and outsider escalation rejected')
     token=administrator
+    assert req('v2/manage/options?module=tasks')['canReport']
+    report=req('v2/manage/reports/tasks?search=Edited')
+    assert report['total'] >= 1 and report['employees']
+    assert any(t['id']==int(tid) for t in report['items'])
+    assert req('v2/manage/reports/tasks?status=Cancelled')['summary']['active']==0
+    meetingsReport=req('v2/manage/reports/meetings')
+    assert meetingsReport['total'] >= 1 and meetingsReport['summary']['withMinutes'] >= 1
+    assert any(m['id']==int(meetingId) for m in meetingsReport['items'])
+    req('v2/manage/reports/tasks?status=Invalid',expected=400)
+    req('v2/manage/reports/meetings?from=2027-01-01&to=2026-01-01',expected=400)
+    for denied in [employeeToken, outsider, organizer]:
+        token=denied
+        req('v2/manage/reports/tasks',expected=403)
+        req('v2/manage/reports/meetings',expected=403)
+    print('PASS administrator reports, progress aggregation, search/status/date validation, and report access restrictions')
+    token=administrator
     req('v2/auth/logout',{});req('v2/auth/me',expected=401)
     print('PASS native bearer login, mandatory password change, old-token revocation, user-scoped feeds, task update audit, invalid status rejection, missing-record authorization, logout revocation')
 finally:

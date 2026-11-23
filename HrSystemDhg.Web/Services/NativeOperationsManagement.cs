@@ -17,6 +17,7 @@ public static class NativeOperationsManagement
     static IQueryable<WorkTask> Tasks(HrDbContext db) => db.IsAdmin ? db.WorkTasks : OperationsPolicy.Tasks(db, db.ActorId!);
     public static void Map(WebApplication app)
     {
+        NativeOperationsReports.Map(app);
         var api = app.MapGroup("/api/mobile/v2/manage").RequireAuthorization(NativeMobileApi.Policy);
         api.MapGet("/options", Options);
         api.MapPost("/tasks", SaveTask);
@@ -35,7 +36,7 @@ public static class NativeOperationsManagement
         var people = OperationsPolicy.EligiblePeople(db, module);
         if (!db.IsStaff) people = people.Where(u => u.Id == db.ActorId);
         var rows = await people.OrderBy(u => u.Email).Select(u => new { u.Id, Name = db.Employees.Where(e => e.Id == u.EmployeeId).Select(e => e.FullName).FirstOrDefault() ?? u.Email ?? u.UserName }).Take(1000).ToListAsync();
-        return Results.Ok(new { People = rows, CanAssign = db.IsStaff, CanOrganize = db.IsStaff, IsAdmin = db.IsAdmin, ActorId = db.ActorId });
+        return Results.Ok(new { People = rows, CanAssign = db.IsStaff, CanOrganize = db.IsStaff, IsAdmin = db.IsAdmin, CanReport = db.IsAdmin && await Allowed(access, "reports"), ActorId = db.ActorId });
     }
     static async Task<bool> Assignees(HrDbContext db, string module, string[] ids)
     {

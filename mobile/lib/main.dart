@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
 import 'meeting_room.dart';
 import 'management.dart';
+import 'reports.dart';
 export 'api.dart' show parseServer;
 
 const blue = Color(0xff1745c3);
@@ -881,7 +882,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
             ),
             const Divider(),
             const Text(
-              'Garowe City · 2.1',
+              'Garowe City · 2.2',
               style: TextStyle(
                 fontFamily: 'Roboto',
                 color: Color(0xff8390a4),
@@ -1379,6 +1380,7 @@ class OverviewScreen extends StatelessWidget {
               ),
             ),
           ),
+        AdminReportEntry(api: api, module: 'tasks', dashboard: true),
         OutlinedButton.icon(
           onPressed: reload,
           icon: const Icon(Icons.refresh),

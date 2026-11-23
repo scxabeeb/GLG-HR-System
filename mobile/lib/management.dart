@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'reports.dart';
 import 'main.dart'
     show DataView, FormPage, TaskScreen, contentList, date, message;
 
@@ -67,6 +68,8 @@ class ManagementActions extends StatelessWidget {
           spacing: 8,
           runSpacing: 4,
           children: [
+            if (options['canReport'] == true)
+              AdminReportEntry(api: api, module: module),
             if (module == 'tasks') ...[
               FilledButton.icon(
                 icon: const Icon(Icons.add),
