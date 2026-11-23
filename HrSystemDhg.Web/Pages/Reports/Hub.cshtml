@@ -33,21 +33,50 @@
     if (Db.IsAdmin)
         reports.Add(("Audit log", "Account, configuration and HR changes", "/Audit", null, "Admin"));
 }
+<div class="eyebrow">REPORTING WORKSPACE</div>
 <h1>Main reports</h1>
-@if ((staff || User.IsInRole("General Secretary")) && Show("leave"))
-{
-    <p><a class="button secondary" asp-area="Hr" asp-page="/Leave" asp-route-viewMode="history">Leave register and balance reports</a></p>
+<p class="page-intro">Choose a module, then open its report to filter records and download results.</p>
+@{
+    var groups = new[] {
+        (Id: "all", Label: "All reports", Detail: "Every report available to your account.", Titles: reports.Select(r => r.Title).ToArray()),
+        (Id: "hr", Label: "HR & payroll", Detail: "Employees, attendance, leave, salary and payroll.", Titles: new[] { "Employees", "Attendance", "Leave", "Payroll", "Salary" }),
+        (Id: "work", Label: "Tasks & meetings", Detail: "Assignments, completion, meeting activity and participation.", Titles: new[] { "Tasks", "Meetings" }),
+        (Id: "resources", Label: "Assets & fleet", Detail: "Inventory, custody, vehicles, expenses and maintenance.", Titles: new[] { "Assets", "Fleet" }),
+        (Id: "audit", Label: "Audit", Detail: "Account, configuration and administrative changes.", Titles: new[] { "Audit log" })
+    };
+    var leaveAccess = (staff || User.IsInRole("General Secretary")) && Show("leave");
 }
-<div class="hub-grid">
-    @foreach (var report in reports)
-    {
-        <a class="hub-card" asp-page="@report.Page" asp-area="@(report.Area ?? "")" asp-route-report="@report.Report">
-            <strong>@report.Title</strong>
-            <span>@report.Detail</span>
-        </a>
-    }
-</div>
-@if (reports.Count == 0)
+@if (reports.Count > 0 || leaveAccess)
 {
-    <p>No reports are available for your account.</p>
+<div class="page-workspace" data-page-workspace>
+<nav class="workspace-tabs" aria-label="Report categories">
+@foreach (var group in groups.Where(g => reports.Any(r => g.Titles.Contains(r.Title)) || (leaveAccess && g.Id is "all" or "hr")))
+{
+    <a href="#reports-@group.Id" data-workspace-link>@group.Label</a>
+}
+</nav>
+@foreach (var group in groups.Where(g => reports.Any(r => g.Titles.Contains(r.Title)) || (leaveAccess && g.Id is "all" or "hr")))
+{
+    <section id="reports-@group.Id" data-workspace-panel>
+        <header class="hub-section-heading"><h2>@group.Label</h2><p>@group.Detail</p></header>
+        <div class="hub-grid focused-hub-grid">
+        @foreach (var report in reports.Where(r => group.Titles.Contains(r.Title)))
+        {
+            <a class="hub-card" asp-page="@report.Page" asp-area="@(report.Area ?? "")" asp-route-report="@report.Report">
+                <strong>@report.Title</strong><span>@report.Detail</span>
+                <small class="hub-link-caption">Open report →</small>
+            </a>
+        }
+        @if (leaveAccess && group.Id is "all" or "hr")
+        {
+            <a class="hub-card" asp-area="Hr" asp-page="/Leave" asp-route-viewMode="history"><strong>Leave register &amp; balances</strong><span>Review employee requests, approved leave and remaining days.</span><small class="hub-link-caption">Open register →</small></a>
+        }
+        </div>
+    </section>
+}
+</div>
+}
+else
+{
+    <section class="card"><h2>No reports available</h2><p>No reports are available for your account.</p></section>
 }

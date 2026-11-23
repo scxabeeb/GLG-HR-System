@@ -4,18 +4,23 @@
 <div class="eyebrow">ADMINISTRATION</div><h1>Main settings</h1><p class="page-intro">Manage your organization, working policies and access from one place.</p>
 @if(TempData["Success"] is string message){<div class="notice" role="status">@message</div>}
 <div asp-validation-summary="All"></div>
-<div class="hub-grid">
-<a class="hub-card" asp-page="./WhatsApp"><h2>WhatsApp &amp; staff messages</h2><p>Send staff messages and check the business sender and delivery queue.</p></a>
-<a class="hub-card" href="/Admin/Users"><h2>Users & permissions</h2><p>Create accounts, grant or revoke roles, and control branch access.</p></a>
-<a class="hub-card" href="/Admin/Organization"><h2>Organization structure</h2><p>Add and edit branches, departments and sub-departments. Deactivate units no longer in use.</p></a>
-<a class="hub-card" href="/Admin/LeaveTypes"><h2>Leave policies</h2><p>Manage leave types, allowances and approval requirements.</p></a>
-<a class="hub-card" href="/Admin/Rules"><h2>Attendance &amp; payroll rules</h2><p>Change check-in/out windows, working days, required hours, breaks and salary-based or fixed deduction rates.</p></a>
-<a class="hub-card" href="/Admin/Devices"><h2>Attendance devices</h2><p>Manage devices and employee PIN mappings for manual imports.</p></a>
-<a class="hub-card" href="/Admin/Audit"><h2>Activity & audit</h2><p>Review account, configuration and HR changes.</p></a>
-<a class="hub-card" asp-page="./PasswordResets"><h2>Password reset requests</h2><p>Review account recovery requests.</p></a>
-<a class="hub-card" asp-page="./Support"><h2>Support view</h2><p>Open an authorized support session.</p></a>
-</div>
+<div class="page-workspace" data-page-workspace>
+<nav class="workspace-tabs" aria-label="Settings sections"><a href="#settings-general" data-workspace-link>General</a><a href="#settings-hr" data-workspace-link>HR &amp; attendance</a><a href="#settings-access" data-workspace-link>Users &amp; security</a><a href="#settings-messages" data-workspace-link>Communications</a></nav>
+<section id="settings-general" data-workspace-panel>
+
 <form method="post" class="card"><h2>General preferences</h2><p>These policies apply across the organization.</p><label>Organization name<input asp-for="Input.CompanyName" required maxlength="200"/></label><hr/>
 <label class="inline"><input asp-for="Input.AllowFutureHires"/> Allow future-dated hires</label><p>Register employees before their employment start date.</p>
 <p>HR submits leave requests for final approval by the General Secretary.</p>
 <label class="inline"><input asp-for="Input.ManagementBankAccess"/> Allow Management to export bank details</label><p>HR and Admin retain access to bank exports.</p><button>Save preferences</button></form>
+<header class="hub-section-heading"><h2>Organization structure</h2><p>Manage branches, departments and office structure.</p></header>
+<div class="hub-grid focused-hub-grid"><a class="hub-card" href="/Admin/Organization"><h2>Organization structure</h2><p>Add and edit branches, departments and sub-departments. Deactivate units no longer in use.</p></a></div></section>
+<section id="settings-hr" data-workspace-panel>
+<header class="hub-section-heading"><h2>HR &amp; attendance</h2><p>Set work schedules, payroll deductions, leave policies and attendance devices.</p></header>
+<div class="hub-grid focused-hub-grid"><a class="hub-card" href="/Admin/LeaveTypes"><h2>Leave policies</h2><p>Manage leave types, allowances and approval requirements.</p></a><a class="hub-card" href="/Admin/Rules"><h2>Attendance &amp; payroll rules</h2><p>Change check-in/out windows, working days, required hours, breaks and salary-based or fixed deduction rates.</p></a><a class="hub-card" href="/Admin/Devices"><h2>Attendance devices</h2><p>Manage devices and employee PIN mappings for manual imports.</p></a></div></section>
+<section id="settings-access" data-workspace-panel>
+<header class="hub-section-heading"><h2>Users &amp; security</h2><p>Manage sign-in access, permissions, recovery and audit history.</p></header>
+<div class="hub-grid focused-hub-grid"><a class="hub-card" href="/Admin/Users"><h2>Users & permissions</h2><p>Create accounts, grant or revoke roles, and control branch access.</p></a><a class="hub-card" asp-page="./PasswordResets"><h2>Password reset requests</h2><p>Review account recovery requests.</p></a><a class="hub-card" href="/Admin/Audit"><h2>Activity & audit</h2><p>Review account, configuration and HR changes.</p></a><a class="hub-card" asp-page="./Support"><h2>Support view</h2><p>Open an authorized support session.</p></a></div></section>
+<section id="settings-messages" data-workspace-panel>
+<header class="hub-section-heading"><h2>Communications</h2><p>Configure staff messaging and review delivery.</p></header>
+<div class="hub-grid focused-hub-grid"><a class="hub-card" asp-page="./WhatsApp"><h2>WhatsApp &amp; staff messages</h2><p>Send staff messages and check the business sender and delivery queue.</p></a></div></section>
+</div>
