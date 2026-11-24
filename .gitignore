@@ -8,3 +8,6 @@ App_Data/
 scripts/backup.sh
 
 .DS_Store
+
+__pycache__/
+*.pyc

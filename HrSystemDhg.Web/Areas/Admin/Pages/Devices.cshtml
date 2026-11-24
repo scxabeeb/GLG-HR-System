@@ -87,6 +87,16 @@
         </form>
         @if (device.PushSerial != null)
         {
+            <section class="card"><h3>Office connector → online system</h3><p>For the Railway system, run the connector on the office computer connected to the terminal. It forwards punches and enrollment commands over HTTPS.</p>
+            <p>Connector: @(device.OfficeConnectorKeyHash == null ? "Not configured" : device.LastOfficeConnectorSeenUtc >= DateTime.UtcNow.AddMinutes(-2) ? "Online" : "Waiting / offline") · Last heartbeat: @(device.LastOfficeConnectorSeenUtc is DateTime beat ? OperationsPolicy.Local(beat).ToString("dd MMM yyyy HH:mm:ss") + " EAT" : "—")</p>
+            <a class="button secondary" asp-page-handler="ConnectorScript">Download connector script</a>
+            <form method="post" asp-page-handler="Connector" asp-route-id="@device.Id"><button>Download / rotate connector configuration</button>@if(device.OfficeConnectorKeyHash != null){<button class="secondary" name="revoke" value="true">Revoke connector</button>}</form>
+            <p class="muted">The configuration contains a device-specific secret. Keep it on the office computer. Downloading a new configuration replaces the previous key.</p>
+            <code>python3 attendance_connector.py --config attendance-connector-@(device.Id).json</code>
+            <p>On the terminal: ADMS, server address = office computer’s Ethernet IP, port = 5190, HTTPS = OFF for this private LAN connector. The terminal’s own IP stays unchanged.</p></section>
+        }
+        @if (device.PushSerial != null)
+        {
             <form method="post" asp-page-handler="Employee" asp-route-id="@device.Id">
                 <h3>Employee sync and fingerprint enrollment</h3>
                 <p>Assign a unique ZKTeco PIN when registering the employee in HR. Send the profile to create or update a normal user on the terminal. Confirm the PIN belongs to that employee on the terminal before sending.</p>

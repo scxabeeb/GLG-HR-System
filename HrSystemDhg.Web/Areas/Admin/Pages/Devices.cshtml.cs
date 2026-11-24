@@ -137,6 +137,7 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         {
             var pending = await db.ZkDeviceCommands.Where(c => c.DeviceId == id && c.Result == null && c.ExpiresUtc > DateTime.UtcNow).ToListAsync();
             foreach (var command in pending) command.ExpiresUtc = DateTime.UtcNow;
+            device.OfficeConnectorKeyHash = null; device.LastOfficeConnectorSeenUtc = null;
             device.PushStamp = null;
             device.LastPushSeenUtc = null;
             device.LastSuccess = null;
@@ -151,9 +152,32 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
             TempData["DeviceNotice"] = "That serial number is already paired with another device.";
             return RedirectToPage();
         }
-        TempData["DeviceNotice"] = disable ? "Automatic sync disabled." : "Device pairing saved. Configure the terminal’s ADMS server address and port.";
+        TempData["DeviceNotice"] = disable ? "Automatic sync disabled." : "Device pairing saved. For the online system, download the office connector script and configuration below, then set the terminal’s ADMS server to the office computer’s IP and connector port.";
         return RedirectToPage();
     }
+
+    public async Task<IActionResult> OnPostConnectorAsync(int id, bool revoke = false)
+    {
+        var device = await db.ZkDevices.FindAsync(id); if (device == null) return NotFound();
+        if (revoke)
+        {
+            device.OfficeConnectorKeyHash = null; device.LastOfficeConnectorSeenUtc = null;
+            db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Revoked office connector for device {id}" });
+            await db.SaveChangesAsync(); TempData["DeviceNotice"] = "Office connector revoked.";
+            return RedirectToPage(null, null, $"device-{id}");
+        }
+        if (device.PushSerial == null || device.PushAddress == null) { TempData["DeviceNotice"] = "Save ADMS pairing first."; return RedirectToPage(null, null, $"device-{id}"); }
+        var key = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        device.OfficeConnectorKeyHash = OperationsPolicy.HashTrackerKey(key); device.LastOfficeConnectorSeenUtc = null;
+        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Issued office connector configuration for device {id}" });
+        await db.SaveChangesAsync();
+        Response.Headers.CacheControl = "no-store";
+        var origin = $"{(env.IsDevelopment() ? Request.Scheme : "https")}://{Request.Host}";
+        var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { server = origin, listen = "192.168.50.1", port = 5190,
+            terminals = new[] { new { id, serial = device.PushSerial, address = device.PushAddress, key } } }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        return File(bytes, "application/json", $"attendance-connector-{id}.json");
+    }
+    public IActionResult OnGetConnectorScript() => PhysicalFile(Path.Combine(env.ContentRootPath, "Connectors", "attendance_connector.py"), "application/octet-stream", "attendance_connector.py");
 
     private const string CsvColumns = "Name,Endpoint,BranchId,Location";
 

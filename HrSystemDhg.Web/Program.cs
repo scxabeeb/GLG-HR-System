@@ -204,6 +204,7 @@ app.Use(async (context, next) =>
         app.Logger.LogWarning("Page not found: {Method} {Path}", context.Request.Method, context.Request.Path);
 });
 PortalBranding.Map(app);
+AttendanceOfficeBridge.Map(app);
 app.MapRazorPages();
 app.MapGet("/api/mobile/v1/{section}", MobileEmployeeApi.Read).RequireAuthorization(NativeMobileApi.LegacyPolicy);
 NativeMobileApi.Map(app);

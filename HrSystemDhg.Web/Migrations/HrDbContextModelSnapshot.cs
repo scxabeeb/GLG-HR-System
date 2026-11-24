@@ -2104,6 +2104,9 @@ namespace HrSystemDhg.Web.Migrations
                     b.Property<string>("LastError")
                         .HasColumnType("longtext");
 
+                    b.Property<DateTime?>("LastOfficeConnectorSeenUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<DateTime?>("LastPushSeenUtc")
                         .HasColumnType("datetime(6)");
 
@@ -2117,6 +2120,10 @@ namespace HrSystemDhg.Web.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("longtext");
+
+                    b.Property<string>("OfficeConnectorKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
 
                     b.Property<string>("PushAddress")
                         .HasMaxLength(45)

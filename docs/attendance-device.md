@@ -2,6 +2,14 @@
 
 This application supports the attendance-log subset of ZKTeco ADMS / Attendance PUSH. The [manufacturer’s FAQ](https://www.zkteco.com/en/faq.html) explains that ADMS depends on the model and firmware. The terminal must have **COMM → ADMS** or **Cloud Server Setting** with a server address and port. If the menu is missing, get the model number from the rear label and confirm the supported SDK with the vendor before changing firmware or buying anything. This app does not include a TCP/4370 pull driver.
 
+## Railway / online ERP: office connector
+
+When the ERP runs on Railway, use **Admin → Attendance devices → Edit / configure → Office connector**. Download the script and device configuration and run the connector on the office Mac. The connector listens on the private Ethernet address and forwards requests to the authenticated cloud receiver over HTTPS. It also carries profile/enrollment commands back to the terminal. The original unauthenticated ADMS routes remain private-LAN-only.
+
+For the direct Mac cable connection, the terminal is `192.168.50.2/24`, the Mac Ethernet interface is `192.168.50.1/24`, and the terminal ADMS server is `192.168.50.1`, port `5190`, HTTPS OFF, domain mode OFF. Keep the Mac awake and online. Start the downloaded script with `python3 attendance_connector.py --config attendance-connector-ID.json`; the JSON's `listen` field must be the Mac's actual Ethernet address. `--check` tests the cloud key without reporting the terminal online. The local `/health` endpoint and the web device page distinguish connector heartbeat from actual terminal contact.
+
+Configuration downloads rotate a device-specific key. Revocation and pairing changes invalidate it. Keep the JSON private; no MySQL password is required on the office Mac. The connector accepts only the paired terminal IP and serial, uses verified HTTPS to the cloud, and returns an error when forwarding fails instead of acknowledging unsaved attendance. The terminal must retry unacknowledged requests; make a real punch to verify this firmware's behavior.
+
 ## Setup on the office network
 
 1. Connect the HR host and terminal to the same trusted office network. Give the terminal a stable private IPv4 address (for example, use a DHCP reservation). On the terminal, note that address and the serial number from System Information or the back label.
@@ -18,8 +26,8 @@ This application supports the attendance-log subset of ZKTeco ADMS / Attendance 
 
 The app accepts tab-delimited attendance rows and only stores the user ID and local punch timestamp. It does not accept enrollment data, fingerprint templates, photos, or access-control logs. Repeated uploads are deduplicated; unmapped punches are preserved. A batch acknowledgement is sent only after the database commits. Compatibility must still be verified with a test punch from the physical terminal; this is not a full implementation of the vendor SDK.
 
-## Multiple departments and locations
+## Multiple branches and locations
 
-Register each physical terminal separately in Administration → Attendance devices. Save its department and office location, then pair its unique serial number and stable source address. Each terminal retains its own contact status, upload status, error, command queue and source device ID on every punch. The department label organizes devices. Employee assignments and effective work rules determine attendance calculations.
+Register each physical terminal separately in Administration → Attendance devices. Save its branch and office location, then pair its unique serial number and stable source address. Each terminal retains its own contact status, upload status, error, command queue and source device ID on every punch. The department label organizes devices. Employee assignments and effective work rules determine attendance calculations.
 
 Use the same unique employee PIN on every terminal where that employee punches. All terminals send to the central HR device listener. Offices on separate networks need private routed connectivity, such as a site-to-site VPN, to that listener. Configure distinct routed source addresses for the terminals and pair the addresses observed by the server. Test each office with a real punch and verify its source machine in the attendance register.

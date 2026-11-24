@@ -52,12 +52,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  await page.goto(base+'/Admin/Devices?Connection=online');if(await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).count()!==0)throw Error('Online filter includes unpaired device');
  await page.goto(base+'/Admin/Devices#devices-list');page.once('dialog',dialog=>dialog.accept());await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).getByRole('button',{name:'Delete device'}).click();await page.waitForLoadState('networkidle');if(await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).count()!==0)throw Error('Unused device was not deleted');
  const historical=page.locator('#devices-list tbody tr').filter({hasText:'Legacy terminal'});
- if(await historical.count()){page.once('dialog',dialog=>dialog.accept());await historical.getByRole('button',{name:'Delete device'}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.notice').textContent()).includes('history'))throw Error('Historical device deletion was not blocked');}
+ if(await historical.count()){page.once('dialog',dialog=>dialog.accept());await historical.getByRole('button',{name:'Delete device'}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.notice[role="status"]').textContent()).includes('history'))throw Error('Historical device deletion was not blocked');}
  await page.goto(base+'/Admin/OrgEdit?kind=Branch');await page.locator('input[name="Name"]').fill('Delete test branch');await page.locator('input[name="Code"]').fill('DELTEST');await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
  let deleteCard=page.locator('.card').filter({has:page.getByRole('heading',{name:/Delete test branch/})});const deleteBranchId=(await deleteCard.getAttribute('id')).split('-')[1];
  await page.goto(base+'/Admin/OrgEdit?kind=Department');await page.locator('input[name="Name"]').fill('Delete test department');await page.locator('input[name="Code"]').fill('DELD');await page.locator('select[name="ParentId"]').selectOption(deleteBranchId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
  const deleteDeptRow=page.locator('.org-unit').filter({hasText:'Delete test department'});const deleteDepartmentId=(await deleteDeptRow.getAttribute('id')).split('-')[1];
- page.once('dialog',dialog=>dialog.accept());await page.locator('#branch-'+deleteBranchId).getByRole('button',{name:'Delete branch',exact:true}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.notice').textContent()).includes('cannot be deleted'))throw Error('Branch with child department was deleted');
+ page.once('dialog',dialog=>dialog.accept());await page.locator('#branch-'+deleteBranchId).getByRole('button',{name:'Delete branch',exact:true}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.notice[role="status"]').textContent()).includes('cannot be deleted'))throw Error('Branch with child department was deleted');
  await page.goto(base+'/Admin/OrgEdit?kind=SubDepartment');await page.locator('input[name="Name"]').fill('Delete test desk');await page.locator('select[name="ParentId"]').selectOption(deleteDepartmentId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
  const subRow=page.locator('tr').filter({hasText:'Delete test desk'});page.once('dialog',dialog=>dialog.accept());await subRow.getByRole('button',{name:'Delete sub-department',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('tr').filter({hasText:'Delete test desk'}).count())throw Error('Unused sub-department was not deleted');
  page.once('dialog',dialog=>dialog.accept());await page.locator('#department-'+deleteDepartmentId).getByRole('button',{name:'Delete department',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('#department-'+deleteDepartmentId).count())throw Error('Unused department was not deleted');
@@ -100,6 +100,21 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  await page.goto(base+'/Admin/ReportViews');await page.getByRole('button',{name:'Disable',exact:true}).click();await page.waitForLoadState('networkidle');if((await page.request.get(base+savedUrl)).status()!==404)throw Error('Disabled report is accessible');
  await page.goto(base+'/Admin/Settings#settings-general');await page.locator('form[action*="handler=Logo"]').getByRole('button',{name:'Restore default logo'}).click();await page.waitForLoadState('networkidle');if(await page.locator('[name="Input.PortalName"]').inputValue()!=='Test Civic Workspace')throw Error('Logo change reset organization settings');
  for(const id of ['devices-list','devices-register','devices-config','devices-setup','devices-import']){await page.goto(base+'/Admin/Devices#'+id);if(!await page.locator('#'+id).isVisible())throw Error('Device settings pane failed: '+id);await fit(id);}
+ await page.goto(base+'/Admin/Devices#devices-list');
+ const connectorRow=page.locator('#devices-list tbody tr').filter({hasText:'Legacy terminal'});
+ if(await connectorRow.count()){
+   const anchor=await connectorRow.getByRole('link',{name:'Edit / configure',exact:true}).getAttribute('href');await page.goto(base+'/Admin/Devices'+anchor);
+   const connectorForm=page.locator(anchor+' form[action*="handler=Connector"]');const connectorToken=await connectorForm.locator('input[name="__RequestVerificationToken"]').inputValue();
+   const connectorUrl=new URL(await connectorForm.getAttribute('action'),base).href;
+   const download=await page.request.post(connectorUrl,{form:{__RequestVerificationToken:connectorToken}});if(download.status()!==200)throw Error('Connector configuration download failed');
+   const config=await download.json();const terminal=config.terminals[0];if(terminal.key.length!==64 || !download.headers()['cache-control'].includes('no-store'))throw Error('Invalid connector configuration security');
+   const bridgeUrl=base+'/api/attendance/bridge/'+terminal.id+'/heartbeat';const bridgeHeaders={Authorization:'Bearer '+terminal.key,'X-Terminal-Serial':terminal.serial,'X-Terminal-Address':terminal.address};
+   if((await page.request.get(bridgeUrl,{headers:bridgeHeaders})).status()!==200)throw Error('Issued connector key was not accepted');
+   await page.request.post(connectorUrl,{form:{__RequestVerificationToken:connectorToken,revoke:'true'}});
+   if((await page.request.get(bridgeUrl,{headers:bridgeHeaders})).status()!==401)throw Error('Revoked connector key still works');
+ }
+ const script=await page.request.get(base+'/Admin/Devices?handler=ConnectorScript');if(script.status()!==200 || !(await script.text()).includes('Private-LAN ADMS receiver'))throw Error('Connector script download failed');
+ console.log('PASS admin connector configuration download, device-scoped key issuance/revocation and script download');
  console.log('PASS saved branding/logo, report creation, selected columns, CSV/PDF/Excel, report disabling and device settings views');
  if(errors.length) throw Error(errors.join('; '));
  } finally { await browser.close(); }

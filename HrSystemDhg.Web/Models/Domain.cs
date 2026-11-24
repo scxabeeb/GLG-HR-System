@@ -123,6 +123,8 @@ public partial class DeductionRule
 
 public partial class ZkDevice
 {
+    [System.ComponentModel.DataAnnotations.MaxLength(64)] public string? OfficeConnectorKeyHash { get; set; }
+    public DateTime? LastOfficeConnectorSeenUtc { get; set; }
     public int? BranchId { get; set; }
     public int? DepartmentId { get; set; }
     [System.ComponentModel.DataAnnotations.MaxLength(250)] public string? Location { get; set; }

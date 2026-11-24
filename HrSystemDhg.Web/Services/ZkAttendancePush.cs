@@ -48,6 +48,9 @@ public static class ZkAttendancePush
     private static async Task<ZkDevice?> Device(HttpContext context, HrDbContext db, IWebHostEnvironment env)
     {
         var sn = Serial(context.Request.Query["SN"].ToString());
+        if (context.Items[typeof(AttendanceOfficeBridge)] is AttendanceOfficeBridge.Identity connector)
+            return sn == null ? null : await db.ZkDevices.AsNoTracking().SingleOrDefaultAsync(d => d.Id == connector.DeviceId &&
+                d.OfficeConnectorKeyHash == connector.Hash && d.PushSerial == sn && d.PushAddress == connector.Address, context.RequestAborted);
         var address = LocalAddress(context.Connection.RemoteIpAddress, env.IsDevelopment());
         if (sn == null || address == null) return null;
         return await db.ZkDevices.AsNoTracking().SingleOrDefaultAsync(d => d.PushSerial == sn && d.PushAddress == address, context.RequestAborted);
