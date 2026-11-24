@@ -186,6 +186,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
     {
         if (!await db.PayrollPeriods.AnyAsync(p => p.Id == id))
             throw new InvalidOperationException("Choose a payroll period you can manage.");
+        if (!apply && !CanReview) throw new InvalidOperationException("Admin or Finance permission is required to waive attendance deductions.");
         PeriodId = id;
         try
         {
@@ -219,7 +220,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
     private Task<IActionResult> Waive(int id, int? employeeId, string? reason, bool absencesOnly = false,
         string? dateScope = null, DateTime[]? dates = null) => Attempt(async () =>
     {
-        if (!CanGenerate && !CanReview) throw new InvalidOperationException("Only HR or Admin/Finance can adjust attendance deductions.");
+        if (!CanReview) throw new InvalidOperationException("Only Admin or Finance can adjust attendance deductions.");
         PeriodId = id;
         if (!ModelState.IsValid || (!absencesOnly && employeeId is not >= 0))
             throw new InvalidOperationException("Choose a valid payroll and employee.");
@@ -230,9 +231,9 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
         TempData["PayrollNotice"] = count == 0 ? "No applied attendance deductions match your selection." : $"Waived {count} attendance deduction(s).";
     });
 
-    public Task<IActionResult> OnPostAdjustAsync(int deductionId, decimal amount, string reason) => !CanGenerate && !CanReview ? Task.FromResult<IActionResult>(Forbid()) : Attempt(() => payroll.AdjustAsync(deductionId, amount, reason, User.Identity!.Name!));
+    public Task<IActionResult> OnPostAdjustAsync(int deductionId, decimal amount, string reason) => !CanReview ? Task.FromResult<IActionResult>(Forbid()) : Attempt(() => payroll.AdjustAsync(deductionId, amount, reason, User.Identity!.Name!));
     public Task<IActionResult> OnPostPublishAsync(int id) => !CanPublish ? Task.FromResult<IActionResult>(Forbid()) : Attempt(() => payroll.PublishAsync(id, User.Identity!.Name!));
-    public Task<IActionResult> OnPostOverrideAsync(int lineId, decimal? amount, string reason) => !CanGenerate && !CanReview ? Task.FromResult<IActionResult>(Forbid()) : Attempt(() => payroll.OverrideLineAsync(lineId, amount, reason, User.Identity!.Name!));
+    public Task<IActionResult> OnPostOverrideAsync(int lineId, decimal? amount, string reason) => !CanReview ? Task.FromResult<IActionResult>(Forbid()) : Attempt(() => payroll.OverrideLineAsync(lineId, amount, reason, User.Identity!.Name!));
 
     private const string CsvColumns = "From,To,WorkingDays,BranchId";
 

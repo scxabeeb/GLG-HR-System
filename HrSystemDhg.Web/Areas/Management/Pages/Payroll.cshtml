@@ -123,7 +123,7 @@
                                         @if (d.Calculated > d.Applied) { <span> · Waived @Money(d.Calculated - d.Applied)</span> }
                                         @if (!string.IsNullOrEmpty(d.Reason)) { <span> · @d.Reason</span> }
                                     </p>
-                                    @if (p?.Status == "Calculated" && (Model.CanGenerate || Model.CanReview))
+                                    @if (p?.Status == "Calculated" && Model.CanReview)
                                     {
                                         <form method="post" asp-page-handler="Adjust" asp-all-route-data="selection" asp-route-deductionId="@d.Id" class="deduction-row">
                                             <label>Applied amount<input name="amount" type="number" min="0" step="0.01" value="@d.Applied" required /></label>
@@ -132,7 +132,7 @@
                                     }
                                     </div>
                                 }
-                                @if (p?.Status == "Calculated" && (Model.CanGenerate || Model.CanReview))
+                                @if (p?.Status == "Calculated" && Model.CanReview)
                                 {
                                     <form method="post" asp-page-handler="Override" asp-all-route-data="selection" asp-route-lineId="@line.Id" class="deduction-row">
                                         <label>Net override<input name="amount" type="number" min="0" step="0.01" value="@line.NetOverride" /></label>
@@ -180,7 +180,7 @@
             @if (Model.CanGenerate && p.Status is "Draft" or "Calculated")
             {
                 <form method="post" asp-page-handler="Calculate" asp-all-route-data="selection" asp-route-id="@p.Id">
-                    <label class="inline"><input type="checkbox" name="apply" value="true" checked /> Apply attendance deductions</label>
+                    @if(Model.CanReview){<label class="inline"><input type="checkbox" name="apply" value="true" checked /> Apply attendance deductions</label>}else{<input type="hidden" name="apply" value="true"/><span>Attendance deductions will be applied.</span>}
                     <button>@(p.Status == "Draft" ? "Calculate payroll" : "Recalculate payroll")</button>
                 </form>
             }
@@ -217,7 +217,7 @@
 @if (p == null) { <p>Choose a month and branch above, then generate payroll to calculate, review and pay.</p> }</section></section>
 <section id="payroll-waivers" data-workspace-panel><section class="card"><h2>Deduction waivers</h2>    <fieldset class="payroll-waiver">
         <legend>Waive attendance deductions</legend>
-        @if ((Model.CanGenerate || Model.CanReview) && p?.Status == "Calculated" && Model.Deductions.Any(d => (d.Type is "Absence" or "Late") && d.Applied > 0))
+        @if (Model.CanReview && p?.Status == "Calculated" && Model.Deductions.Any(d => (d.Type is "Absence" or "Late") && d.Applied > 0))
         {
             <form method="post" asp-page-handler="WaiveAttendance" asp-all-route-data="selection" asp-route-id="@p.Id">
                 <div class="grid">

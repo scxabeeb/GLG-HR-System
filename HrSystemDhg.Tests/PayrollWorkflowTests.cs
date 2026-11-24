@@ -46,4 +46,20 @@ public class PayrollWorkflowTests
         Assert.True(db.EmployeeOnly);
     }
 
+    [Fact]
+    public async Task HrPreparationDoesNotGrantFinancialOverrides()
+    {
+        using var db = new HrSystemDhg.Web.Data.HrDbContext(new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<HrSystemDhg.Web.Data.HrDbContext>().Options);
+        var model = new HrSystemDhg.Web.Pages.Management.PayrollModel(db, null!)
+        {
+            PageContext = new Microsoft.AspNetCore.Mvc.RazorPages.PageContext
+            {
+                HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = Actor("HR") }
+            }
+        };
+        Assert.IsType<Microsoft.AspNetCore.Mvc.ForbidResult>(await model.OnPostAdjustAsync(1, 0, "No deduction"));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.ForbidResult>(await model.OnPostOverrideAsync(1, 100, "Override"));
+        Assert.IsType<Microsoft.AspNetCore.Mvc.ForbidResult>(await model.OnPostMarkPaidAsync(1, true));
+    }
+
 }

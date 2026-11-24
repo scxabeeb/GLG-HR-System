@@ -7,3 +7,5 @@ Finance rejection returns generated payroll to HR preparation. General Secretary
 Existing paid runs remain paid and immutable. Existing locked runs remain approved snapshots. Existing legacy reviewed runs must be submitted to the General Secretary before approval. Draft and calculated runs follow the new workflow on their next transition. No historical payroll amounts are recalculated by deployment.
 
 Registered basic salary is not changed by work rules or payroll calculation. Salary-based attendance deductions use monthly basic ÷ the configured salary divisor ÷ required daily minutes × missing minutes; with 30 days and eight hours this is basic ÷ 30 ÷ 480 × missing minutes. Employment-date proration continues to determine basic pay for a partial employment period. Attendance deductions are separate deductions from earnings, as is approved unpaid leave; approved paid leave has no attendance penalty. Existing fixed-rate settings remain configurable.
+
+HR preparation applies attendance deductions. Attendance waivers and net-pay overrides require Admin/Finance; HR generation alone does not grant these financial adjustment permissions.
