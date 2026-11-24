@@ -34,10 +34,10 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  await page.goto(base+'/Admin/Devices#devices-list');
  let deviceRow=page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal'});if(!(await deviceRow.textContent()).includes('Blank fields test office'))throw Error('Device registration did not save branch');
  if(await page.locator('select[name="departmentId"]').count()!==0)throw Error('Department selector still appears for devices');
- const deviceAnchor=await deviceRow.getByRole('link',{name:'Manage device'}).getAttribute('href');
- await page.goto(base+'/Admin/Devices'+deviceAnchor);const locationForm=page.locator(deviceAnchor+' form[action*="handler=Location"]');
+ const deviceAnchor=await deviceRow.getByRole('link',{name:'Edit / configure'}).getAttribute('href');
+ await page.goto(base+'/Admin/Devices'+deviceAnchor);const locationForm=page.locator(deviceAnchor+' form[action*="handler=Edit"]');
  const anotherBranch=await locationForm.locator('select[name="branchId"] option').filter({hasText:'Example office'}).getAttribute('value');
- await locationForm.locator('select[name="branchId"]').selectOption(anotherBranch);await locationForm.getByRole('button',{name:'Save branch and location'}).click();await page.waitForLoadState('networkidle');
+ await locationForm.locator('select[name="branchId"]').selectOption(anotherBranch);await locationForm.locator('input[name="name"]').fill('Branch terminal updated');await locationForm.locator('input[name="endpoint"]').fill('Updated reference');await locationForm.getByRole('button',{name:'Save device'}).click();await page.waitForLoadState('networkidle');
  await page.goto(base+'/Admin/Devices#devices-list');deviceRow=page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal'});if(!(await deviceRow.textContent()).includes('Example office'))throw Error('Device reassignment did not persist');
  const deviceCsv=await page.request.get(base+'/Admin/Devices?handler=Export');if(!(await deviceCsv.text()).includes('BranchId'))throw Error('Device export omits branch');
  await page.goto(base+'/Admin/Devices#devices-import');
@@ -46,6 +46,24 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  const deviceImport=await page.request.post(new URL(await deviceImportForm.getAttribute('action'),base).href,{multipart:{__RequestVerificationToken:deviceImportToken,upload:{name:'devices.csv',mimeType:'text/csv',buffer:await deviceSample.body()}}});
  if(deviceImport.status()!==200 || !(await deviceImport.text()).includes('Example terminal'))throw Error('Device CSV branch import failed');
  console.log('PASS device branch registration, branch reassignment, branch dropdowns and branch CSV import/export');
+ await page.goto(base+'/Admin/Devices#devices-list');
+ const editedRow=page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'});if(await editedRow.count()!==1 || !(await editedRow.textContent()).includes('Updated reference'))throw Error('Device edit did not persist');
+ await page.locator('select[name="Connection"]').selectOption('unpaired');await page.getByRole('button',{name:'Apply',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).count()!==1)throw Error('Unpaired filter hid manual registration');
+ await page.goto(base+'/Admin/Devices?Connection=online');if(await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).count()!==0)throw Error('Online filter includes unpaired device');
+ await page.goto(base+'/Admin/Devices#devices-list');page.once('dialog',dialog=>dialog.accept());await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).getByRole('button',{name:'Delete device'}).click();await page.waitForLoadState('networkidle');if(await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).count()!==0)throw Error('Unused device was not deleted');
+ const historical=page.locator('#devices-list tbody tr').filter({hasText:'Legacy terminal'});
+ if(await historical.count()){page.once('dialog',dialog=>dialog.accept());await historical.getByRole('button',{name:'Delete device'}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.notice').textContent()).includes('history'))throw Error('Historical device deletion was not blocked');}
+ await page.goto(base+'/Admin/OrgEdit?kind=Branch');await page.locator('input[name="Name"]').fill('Delete test branch');await page.locator('input[name="Code"]').fill('DELTEST');await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ let deleteCard=page.locator('.card').filter({has:page.getByRole('heading',{name:/Delete test branch/})});const deleteBranchId=(await deleteCard.getAttribute('id')).split('-')[1];
+ await page.goto(base+'/Admin/OrgEdit?kind=Department');await page.locator('input[name="Name"]').fill('Delete test department');await page.locator('input[name="Code"]').fill('DELD');await page.locator('select[name="ParentId"]').selectOption(deleteBranchId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ const deleteDeptRow=page.locator('.org-unit').filter({hasText:'Delete test department'});const deleteDepartmentId=(await deleteDeptRow.getAttribute('id')).split('-')[1];
+ page.once('dialog',dialog=>dialog.accept());await page.locator('#branch-'+deleteBranchId).getByRole('button',{name:'Delete branch',exact:true}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.notice').textContent()).includes('cannot be deleted'))throw Error('Branch with child department was deleted');
+ await page.goto(base+'/Admin/OrgEdit?kind=SubDepartment');await page.locator('input[name="Name"]').fill('Delete test desk');await page.locator('select[name="ParentId"]').selectOption(deleteDepartmentId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ const subRow=page.locator('tr').filter({hasText:'Delete test desk'});page.once('dialog',dialog=>dialog.accept());await subRow.getByRole('button',{name:'Delete sub-department',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('tr').filter({hasText:'Delete test desk'}).count())throw Error('Unused sub-department was not deleted');
+ page.once('dialog',dialog=>dialog.accept());await page.locator('#department-'+deleteDepartmentId).getByRole('button',{name:'Delete department',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('#department-'+deleteDepartmentId).count())throw Error('Unused department was not deleted');
+ page.once('dialog',dialog=>dialog.accept());await page.locator('#branch-'+deleteBranchId).getByRole('button',{name:'Delete branch',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('#branch-'+deleteBranchId).count())throw Error('Unused branch was not deleted');
+ console.log('PASS device editing/status filters, unused device deletion, historical device protection, and organization deletion/child safeguards');
+
 
  await page.goto(base+'/Admin/Settings#settings-general');
  const preferences=page.locator('form').filter({has:page.locator('[name="Input.CompanyName"]')});

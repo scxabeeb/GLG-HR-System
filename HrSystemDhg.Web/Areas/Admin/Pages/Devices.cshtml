@@ -1,6 +1,7 @@
 @page
 @model HrSystemDhg.Web.Pages.Admin.DevicesModel
 @using HrSystemDhg.Web.Services
+@using HrSystemDhg.Web.Pages.Admin
 @{ ViewData["Title"] = "Attendance devices"; }
 <div class="eyebrow">ADMINISTRATION / ATTENDANCE</div>
 <h1>Attendance devices</h1>
@@ -12,6 +13,9 @@
 <div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Device settings views"><a href="#devices-list" data-workspace-link>Registered devices</a><a href="#devices-register" data-workspace-link>Register device</a><a href="#devices-config" data-workspace-link>Device configuration</a><a href="#devices-setup" data-workspace-link>Connection guide</a><a href="#devices-import" data-workspace-link>Import &amp; export</a></nav>
 <section id="devices-list" data-workspace-panel><section class="card">
     <h2>Registered devices <span class="badge">@Model.Items.Count</span></h2>
+    <p>@Model.Items.Count(d => DevicesModel.ConnectionStatus(d) == "Online") online · @Model.Items.Count(d => DevicesModel.ConnectionStatus(d) is "Offline" or "Not connected") offline / waiting · @Model.Items.Count(d => d.PushSerial == null) not paired</p>
+    <form method="get" class="actions"><label>Connection status<select asp-for="Connection"><option value="">All devices</option><option value="online">Online</option><option value="offline">Offline / not connected</option><option value="unpaired">Not paired</option></select></label><button class="secondary">Apply</button><a asp-page="./Devices" asp-route-connection="@Model.Connection" class="button secondary">Refresh status</a></form>
+    <p class="muted">Only registered terminals appear here. Online means the paired terminal contacted the server within the last five minutes. Not paired devices support manual and CSV imports.</p>
     @if (Model.Items.Count == 0) { <p>No devices registered yet. Add a terminal below.</p> }
     else
     {
@@ -19,28 +23,28 @@
             <table>
                 <thead><tr><th>Device</th><th>Branch</th><th>Office / location</th><th>Serial number</th><th>IP address</th><th>Status</th><th>Last contact (EAT)</th><th>Last upload (EAT)</th><th>Error</th><th>Actions</th></tr></thead>
                 <tbody>
-                @foreach (var registered in Model.Items.OrderBy(d => d.Name))
+                @foreach (var registered in Model.ListedDevices)
                 {
                     var branch = Model.Branches.FirstOrDefault(b => b.Id == registered.BranchId);
-                    var paired = registered.PushSerial != null;
-                    var recent = registered.LastPushSeenUtc >= DateTime.UtcNow.AddMinutes(-5);
+
                     <tr>
                         <td><strong>@registered.Name</strong><br /><small>#@registered.Id · @registered.Endpoint</small></td>
                         <td>@(branch?.Name ?? "Unassigned branch")</td>
                         <td>@(registered.Location ?? "—")</td>
                         <td>@(registered.PushSerial ?? "—")</td>
                         <td>@(registered.PushAddress ?? "—")</td>
-                        <td><span class="badge">@(paired ? recent ? "Recent contact" : registered.LastPushSeenUtc == null ? "Waiting for terminal" : "No recent contact" : "Manual / CSV")</span></td>
+                        <td><span class="badge @(DevicesModel.ConnectionStatus(registered) == "Online" ? "status-positive" : "status-warning")">@DevicesModel.ConnectionStatus(registered)</span></td>
                         <td>@(registered.LastPushSeenUtc is DateTime contact ? OperationsPolicy.Local(contact).ToString("dd MMM yyyy, HH:mm") : "—")</td>
                         <td>@(registered.LastSuccess is DateTime uploaded ? OperationsPolicy.Local(uploaded).ToString("dd MMM yyyy, HH:mm") : "—")</td>
                         <td>@(registered.LastError ?? "—")</td>
-                        <td><a href="#device-@registered.Id">Manage device</a></td>
+                        <td><div class="actions"><a href="#device-@registered.Id">Edit / configure</a><form method="post" asp-page-handler="Delete" asp-route-id="@registered.Id" onsubmit="return confirm('Delete this unused device registration?')"><button class="secondary">Delete device</button></form></div></td>
                     </tr>
                 }
                 </tbody>
             </table>
         </div>
         <p><small>Recent contact means the terminal contacted the system within the last five minutes. Refresh to update.</small></p>
+        @if (!Model.ListedDevices.Any()) { <p>No devices match this connection filter.</p> }
     }
 </section>
 
@@ -55,7 +59,8 @@
     <details class="card workspace-tools" id="device-@device.Id"><summary>@device.Name · @(device.Location ?? device.Endpoint) · #@device.Id</summary><article>
         <h2>@device.Name <span class="badge">#@device.Id</span></h2>
         <p>@device.Endpoint · @(device.PushSerial == null ? "Manual / CSV" : "Paired for ADMS")</p>
-        <form method="post" asp-page-handler="Location" asp-route-id="@device.Id">
+        <form method="post" asp-page-handler="Edit" asp-route-id="@device.Id">
+            <div class="grid"><label>Device name<input name="name" value="@device.Name" required maxlength="200"/></label><label>Reference<input name="endpoint" value="@device.Endpoint"/></label></div>
             <div class="grid">
                 <label>Branch<select name="branchId" required><option value="">Choose branch</option>
                     @foreach (var branch in Model.Branches) {
@@ -64,7 +69,7 @@
                 </select></label>
                 <label>Office / location<input name="location" value="@device.Location" maxlength="250" /></label>
             </div>
-            <button class="secondary">Save branch and location</button>
+            <button class="secondary">Save device</button>
         </form>
         @if (device.PushSerial != null)
         {

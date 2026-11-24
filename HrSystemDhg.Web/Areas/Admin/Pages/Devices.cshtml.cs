@@ -10,6 +10,12 @@ namespace HrSystemDhg.Web.Pages.Admin;
 [Authorize(Roles = "Admin")]
 public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
 {
+    [BindProperty(SupportsGet = true)] public string? Connection { get; set; }
+    public static string ConnectionStatus(ZkDevice d) => d.PushSerial == null ? "Not paired" :
+        d.LastPushSeenUtc >= DateTime.UtcNow.AddMinutes(-5) ? "Online" : d.LastPushSeenUtc == null ? "Not connected" : "Offline";
+    public IEnumerable<ZkDevice> ListedDevices => Items.Where(d => Connection switch {
+        "online" => ConnectionStatus(d) == "Online", "offline" => ConnectionStatus(d) is "Offline" or "Not connected",
+        "unpaired" => d.PushSerial == null, _ => true }).OrderBy(d => d.Name);
     public List<Branch> Branches = [];
     public List<ZkDevice> Items = [];
     public List<Employee> Employees = [];
@@ -21,6 +27,32 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         Items = await db.ZkDevices.ToListAsync();
         Employees = await db.Employees.Where(e => e.ZkPin != null && e.ZkPin != "").OrderBy(e => e.FullName).ToListAsync();
         Commands = await db.ZkDeviceCommands.OrderByDescending(c => c.Id).Take(50).ToListAsync();
+    }
+
+    public async Task<IActionResult> OnPostEditAsync(int id, string? name, string? endpoint, int? branchId, string? location)
+    {
+        var device = await db.ZkDevices.FindAsync(id); if (device == null) return NotFound();
+        if (!ModelState.IsValid || string.IsNullOrWhiteSpace(name) || name.Length > 200 || location?.Length > 250 ||
+            !branchId.HasValue || !await db.Branchs.AnyAsync(b => b.Id == branchId))
+        { TempData["DeviceNotice"] = "Enter a name, valid branch and location up to 250 characters."; return RedirectToPage(null, null, $"device-{id}"); }
+        device.Name = name.Trim(); device.Endpoint = string.IsNullOrWhiteSpace(endpoint) ? "Manual import" : endpoint.Trim();
+        device.BranchId = branchId; device.DepartmentId = null; device.Location = string.IsNullOrWhiteSpace(location) ? null : location.Trim();
+        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Edited device {id}: {device.Name}, branch {branchId}" });
+        await db.SaveChangesAsync(); TempData["DeviceNotice"] = "Device updated.";
+        return RedirectToPage(null, null, $"device-{id}");
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync(int id)
+    {
+        var device = await db.ZkDevices.FindAsync(id); if (device == null) return NotFound();
+        if (await db.ZkPunchs.AnyAsync(p => p.DeviceId == id) || await db.ZkDeviceCommands.AnyAsync(c => c.DeviceId == id))
+        { TempData["DeviceNotice"] = "This device has attendance or command history and cannot be deleted. Disable automatic sync to disconnect it while retaining its records."; return RedirectToPage(null, null, $"device-{id}"); }
+        if (device.PushSerial != null)
+        { TempData["DeviceNotice"] = "Disable automatic sync before deleting this paired device."; return RedirectToPage(null, null, $"device-{id}"); }
+        db.ZkDevices.Remove(device);
+        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Deleted unused device {id}: {device.Name}" });
+        await db.SaveChangesAsync(); TempData["DeviceNotice"] = "Device deleted.";
+        return RedirectToPage(null, null, "devices-list");
     }
 
     public async Task<IActionResult> OnPostLocationAsync(int id, int? branchId, string? location)
