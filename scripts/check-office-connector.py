@@ -48,7 +48,8 @@ def run(root, database, sql):
                 except OSError:time.sleep(.2)
             else:raise AssertionError('Office connector did not start')
             local('/iclock/cdata?SN=UNKNOWN&options=all',expected=403)
-            assert b'GET OPTION FROM' in local('/iclock/cdata?SN=BRIDGETEST001&options=all')
+            options=local('/iclock/cdata?SN=BRIDGETEST001&options=all')
+            assert b'GET OPTION FROM' in options and b'TimeZone=3\r\n' in options
             assert sql('SELECT LastPushSeenUtc IS NOT NULL FROM '+database+'.ZkDevices WHERE Id='+str(device)).strip()=='1'
             timestamp=(datetime.now(timezone.utc)+timedelta(hours=3,minutes=-5)).strftime('%Y-%m-%d %H:%M:%S')
             payload=('BRIDGE-TEST\t'+timestamp+'\t0\t1\n').encode()

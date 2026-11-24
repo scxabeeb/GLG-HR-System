@@ -67,7 +67,7 @@ public static class ZkAttendancePush
             .ExecuteUpdateAsync(s => s.SetProperty(d => d.LastPushSeenUtc, now), context.RequestAborted);
         if (!context.Request.Query.ContainsKey("options")) return Reply("OK");
         var stamp = device.PushStamp ?? "0";
-        return Reply($"GET OPTION FROM: {context.Request.Query["SN"]}\r\nStamp={stamp}\r\nATTLOGStamp={stamp}\r\nOpStamp=0\r\nErrorDelay=30\r\nDelay=15\r\nTransInterval=1\r\nTransFlag=1000000000\r\nRealtime=1\r\nEncrypt=0\r\n");
+        return Reply($"GET OPTION FROM: {context.Request.Query["SN"]}\r\nStamp={stamp}\r\nATTLOGStamp={stamp}\r\nOpStamp=0\r\nTimeZone=3\r\nErrorDelay=30\r\nDelay=15\r\nTransInterval=1\r\nTransFlag=1000000000\r\nRealtime=1\r\nEncrypt=0\r\n");
     }
 
     private static IQueryable<ZkDeviceCommand> Commands(HrDbContext db, ZkDevice device) =>
