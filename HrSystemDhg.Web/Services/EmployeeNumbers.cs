@@ -21,4 +21,23 @@ public static class EmployeeNumbers
         await db.SaveChangesAsync();
         return number;
     }
+
+    public static async Task<string> AllocatePinAsync(HrDbContext db)
+    {
+        if (db.Database.CurrentTransaction == null) throw new InvalidOperationException("Terminal numbering requires a registration transaction.");
+        var counter = (await db.EmployeeNumberSequences.FromSqlRaw("SELECT * FROM `EmployeeNumberSequences` WHERE `Id` = 1 FOR UPDATE").ToListAsync()).Single();
+        string pin;
+        do
+        {
+            if (counter.NextPin > 999999999) throw new InvalidOperationException("Terminal numbering capacity reached.");
+            pin = counter.NextPin++.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        while (await db.Employees.IgnoreQueryFilters().AnyAsync(e => e.ZkPin == pin) ||
+               await db.ZkPunchs.AnyAsync(p => p.Pin == pin) ||
+               await db.ZkPunchReviews.AnyAsync(p => p.Pin == pin) ||
+               await db.ZkDeviceCommands.AnyAsync(c => c.Pin == pin));
+        await db.SaveChangesAsync();
+        return pin;
+    }
+
 }

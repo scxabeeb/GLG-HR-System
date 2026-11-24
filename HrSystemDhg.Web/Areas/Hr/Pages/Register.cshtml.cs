@@ -71,14 +71,13 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
     {
         ModelState.Remove(nameof(Number));
         ModelState.Remove(nameof(InitialPassword));
+        ModelState.Remove(nameof(Pin));
         await OnGetAsync();
         Number = Number?.Trim() ?? ""; Name = Name?.Trim() ?? ""; Email = Email?.Trim() ?? ""; Title = Title?.Trim() ?? "";
-        Pin = string.IsNullOrWhiteSpace(Pin) ? null : Pin.Trim();
+        Pin = null;
         var terminal = Terminals.SingleOrDefault(d => d.Id == TerminalId);
         if (TerminalId != null && terminal == null)
             ModelState.AddModelError(nameof(TerminalId), "Select a paired attendance terminal.");
-        if (terminal != null && Pin != null && !ZkEmployeeCommands.ValidPin(Pin))
-            ModelState.AddModelError(nameof(Pin), "Use a numeric terminal User ID of up to nine digits without leading zeros.");
         if (Hire == default) ModelState.AddModelError(nameof(Hire), "Select a valid hire date.");
         if (Hire > HrSystemDhg.Web.Services.BusinessClock.Today && !(await db.Settings.FirstOrDefaultAsync() ?? new()).AllowFutureHires)
             ModelState.AddModelError(nameof(Hire), "Future hire dates are disabled in System settings.");
@@ -111,6 +110,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
         {
             await using var tx = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync() : null;
             Number = await EmployeeNumbers.AllocateAsync(db);
+            Pin = await EmployeeNumbers.AllocatePinAsync(db);
             InitialPassword = Number + "123";
             var e = new Employee
             {
@@ -219,7 +219,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
             DepartmentId = row.Get<int>("DepartmentId");
             SubDepartmentId = row.Get<int?>("SubDepartmentId");
             Title = row.Get<string>("Title");
-            Pin = row.Optional("Pin");
+            Pin = null;
             TerminalId = row.Get<int?>("TerminalId");
             InitialPassword = "";
             var validation = new List<ValidationResult>();

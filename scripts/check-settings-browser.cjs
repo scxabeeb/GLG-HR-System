@@ -34,9 +34,11 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    try{
      const registrationPage=await registrationContext.newPage();await registrationPage.goto(base+'/Hr/Register');
      const csrf=await registrationPage.locator('form.employee-sheet [name="__RequestVerificationToken"]').inputValue();
-     const response=await registrationContext.request.post(base+'/Hr/Register',{form:{__RequestVerificationToken:csrf,Name:'Automatic employee '+n,Email:'auto'+n+'@example.test',Hire:new Date(Date.now()+3*3600000-86400000).toISOString().slice(0,10),BranchId:branchId,DepartmentId:departmentId,Title:'Officer',Number:'FORGED',InitialPassword:'FORGED'}});
-     const html=await response.text();const match=html.match(/<dt>Username<\/dt><dd>(EMP\d+)<\/dd>/);
+     if(await registrationPage.locator('#employee-login,input[name="Pin"],input[name="InitialPassword"]').count())throw Error('Registration still exposes manual credentials or terminal PIN');
+     const response=await registrationContext.request.post(base+'/Hr/Register',{form:{__RequestVerificationToken:csrf,Name:'Automatic employee '+n,Email:'auto'+n+'@example.test',Hire:new Date(Date.now()+3*3600000-86400000).toISOString().slice(0,10),BranchId:branchId,DepartmentId:departmentId,Title:'Officer',Number:'FORGED',InitialPassword:'FORGED',Pin:'FORGED'}});
+     const html=await response.text();const match=html.match(/Employee saved: <strong>(EMP\d+)<\/strong>/);
      if(!match)throw Error('Automatic employee registration failed: '+response.status());
+     if(html.includes('<dt>Initial password</dt>'))throw Error('Onboarding still displays login credentials');
      return match[1];
    }finally{await registrationContext.close();}
  }));
@@ -61,6 +63,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  const employeeExport=await page.request.get(base+'/Hr/Register?handler=Export');
  const exportText=await employeeExport.text();
  if(!exportText.includes('auto2@example.test') || exportText.includes(employeeIds[0]+'123'))throw Error('Employee export failed or exposed passwords');
+ const pinExport=await page.request.get(base+'/Hr/Register?handler=Export');
+ const csvLines=(await pinExport.text()).trim().split(/\r?\n/).map(line=>line.split(',').map(value=>value.replace(/^"|"$/g,'')));
+ const headers=csvLines[0];const automaticRows=csvLines.slice(1).filter(row=>/^auto[0-3]@example.test$/.test(row[headers.indexOf('Email')]));
+ const pins=automaticRows.map(row=>row[headers.indexOf('Pin')]);
+ if(pins.length!==4 || new Set(pins).size!==4 || pins.some(pin=>!(/^[1-9][0-9]{0,8}$/).test(pin)))throw Error('Automatic terminal PINs are missing or duplicated');
+ console.log('PASS automatic unique numeric terminal PINs and hidden registration credentials');
  console.log('PASS employee CSV import generates IDs and accounts, and export omits passwords');
  console.log('PASS concurrent sequential automatic EMP IDs, ignored supplied credentials, generated mobile login and mandatory password change');
  console.log('PASS branch create/edit with blank optional fields, duplicate code validation, department/sub-department creation and organization CSV import');

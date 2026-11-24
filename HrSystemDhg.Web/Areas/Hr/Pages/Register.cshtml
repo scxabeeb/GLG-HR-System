@@ -3,8 +3,8 @@
 @{ViewData["Title"]="Register employee";}
 <div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Register employee</h1>
 <partial name="/Pages/Shared/_EmployeeNavigation.cshtml" model='("register")' />
-<p>Imports also generate a new employee ID and login for every employee. Leave Number and InitialPassword blank in the sample.</p>
-<details id="employee-import" class="card workspace-tools"><summary>Import &amp; export employees</summary><partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("employees")' /></details>
+
+<details id="employee-import" class="card workspace-tools"><summary>Import &amp; export employees</summary><p>Employee IDs, terminal PINs and accounts are generated automatically. Leave Number, Pin and InitialPassword blank in the sample.</p><partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("employees")' /></details>
 
 @if(!Model.Branches.Any() || !Model.Departments.Any()){<div class="notice">Create an active branch and department in <a href="/Admin/Organization">Organization structure</a> before registration.</div>}
 <a class="hub-back" asp-page="./Employees">← Employee directory</a>
@@ -27,7 +27,6 @@
     <nav class="actions employee-sheet-nav" aria-label="Registration sections">
         <a href="#employee-work">Work information</a>
         <a href="#employee-attendance">Attendance</a>
-        <a href="#employee-login">Employee sign-in</a>
     </nav>
     <section class="employee-sheet-section" id="employee-work">
         <h2>Work information</h2>
@@ -48,7 +47,7 @@
     <section class="employee-sheet-section" id="employee-attendance">
         <h2>Attendance</h2>
         <div class="grid">
-            <label>ZKTeco PIN<input asp-for="Pin" inputmode="numeric" /></label>
+            <p>A unique numeric ZKTeco PIN is assigned automatically when you save.</p>
 @if (Model.Terminals.Count > 0)
 {
     <label>Attendance terminal
@@ -57,19 +56,13 @@
             @foreach (var terminal in Model.Terminals) { <option value="@terminal.Id">@terminal.Name</option> }
         </select>
     </label>
-    <p>With a terminal and PIN selected, the profile is sent automatically. Choose a PIN that is free on the terminal.</p>
+    <p>Select a terminal to send the employee profile automatically after saving. You can enroll their fingerprint afterward.</p>
 }
         </div>
     </section>
-<fieldset id="employee-login">
-    <legend>Employee sign-in</legend>
-    <p>The employee can sign in with their work email or employee number. Give them the temporary password privately. They’ll change it at first sign-in.</p>
-    <p>Sign-in credentials are created automatically when you save.</p>
-    <dl><dt>Username</dt><dd>Employee ID, for example EMP0001</dd><dt>Initial password</dt><dd>Employee ID followed by 123, for example EMP0001123</dd></dl>
-    <p>The employee must choose a new password at their first sign-in. Their work email also works for sign-in and password recovery.</p>
-</fieldset>
+
 <div class="actions employee-sheet-footer">
-    <button type="submit">Create employee and login</button>
+    <button type="submit">Save employee</button>
     <a class="button secondary" asp-page="./Employees">Cancel</a>
 </div>
 <p>After saving, you can add private information, education, work history, salary, and documents.</p>

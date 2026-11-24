@@ -765,6 +765,9 @@ namespace HrSystemDhg.Web.Migrations
                     b.Property<int>("NextNumber")
                         .HasColumnType("int");
 
+                    b.Property<int>("NextPin")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.ToTable("EmployeeNumberSequences");
@@ -773,7 +776,8 @@ namespace HrSystemDhg.Web.Migrations
                         new
                         {
                             Id = 1,
-                            NextNumber = 1
+                            NextNumber = 1,
+                            NextPin = 1
                         });
                 });
 
