@@ -89,6 +89,11 @@ public class OrgEditModel(HrDbContext db) : PageModel
     public async Task<IActionResult> OnPostAsync()
     {
         await Load();
+        if (!ModelState.IsValid) return Page();
+        Name = (Name ?? "").Trim(); Code = (Code ?? "").Trim();
+        City = (City ?? "").Trim(); Address = (Address ?? "").Trim();
+        Timezone = (Timezone ?? "").Trim();
+        if (Id < 0) return BadRequest();
         try
         {
             if (string.IsNullOrWhiteSpace(Name))
@@ -118,7 +123,7 @@ public class OrgEditModel(HrDbContext db) : PageModel
             }
             else if (Kind == "Department")
             {
-                if (!Branches.Any(x => x.Id == ParentId) || await db.Departments.AnyAsync(x => x.Id != Id && x.BranchId == ParentId && x.Code == Code))
+                if (string.IsNullOrWhiteSpace(Code) || !Branches.Any(x => x.Id == ParentId) || await db.Departments.AnyAsync(x => x.Id != Id && x.BranchId == ParentId && x.Code == Code))
                     throw new InvalidOperationException("Select a branch and unique department code.");
                 var d = Id == 0 ? new Department() : await db.Departments.SingleAsync(x => x.Id == Id);
                 if (Id > 0 && d.BranchId != ParentId && await db.EmployeeAssignments.AnyAsync(x => x.DepartmentId == Id))
@@ -135,6 +140,8 @@ public class OrgEditModel(HrDbContext db) : PageModel
             {
                 if (!Departments.Any(x => x.Id == ParentId))
                     throw new InvalidOperationException("Select a department.");
+                if (await db.SubDepartments.AnyAsync(x => x.Id != Id && x.DepartmentId == ParentId && x.Name == Name))
+                    throw new InvalidOperationException("A sub-department with this name already exists in the selected department.");
                 var s = Id == 0 ? new SubDepartment() : await db.SubDepartments.SingleAsync(x => x.Id == Id);
                 if (Id > 0 && s.DepartmentId != ParentId && await db.EmployeeAssignments.AnyAsync(x => x.SubDepartmentId == Id))
                     throw new InvalidOperationException("Sub-departments with history cannot move. Create a new unit.");
