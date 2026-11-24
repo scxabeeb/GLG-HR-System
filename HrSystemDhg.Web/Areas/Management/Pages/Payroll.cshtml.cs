@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 
 namespace HrSystemDhg.Web.Pages.Management;
-[Authorize(Roles = "Management,Admin")]
+[Authorize(Roles = "Management,Admin,HR,Finance,General Secretary")]
 public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
 {
     public List<PayrollPeriod> Periods = [];
@@ -27,6 +27,12 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
     public List<SalaryRow> SalaryRows { get; private set; } = [];
     public record SalaryRow(int Id, string Number, string Name, bool Complete, SalaryVersion? Salary);
     public bool Scoped => db.Scoped;
+    public bool CanGenerate => PayrollWorkflow.Generate(User);
+    public bool CanReview => PayrollWorkflow.Review(User);
+    public bool CanPublish => CanGenerate || CanReview;
+    public bool CanReport => User.IsInRole("HR") || User.IsInRole("Admin") || User.IsInRole("Management");
+    public bool CanDecide(string status, string action) => PayrollWorkflow.CanDecide(User, status, action);
+    public List<AuditLog> WorkflowHistory = [];
 
     public Dictionary<int, string> Names = [];
     public async Task OnGetAsync()
@@ -42,6 +48,8 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
                 .FirstOrDefault();
         if (SelectedPeriod is { } period)
         {
+            WorkflowHistory = await db.AuditLogs.AsNoTracking().Where(a => (a.Action.StartsWith("Payroll " + period.Id + ":") || a.Action.StartsWith("Calculated payroll " + period.Id + " revision ")))
+                .OrderByDescending(a => a.At).Take(50).ToListAsync();
             from = period.From;
             to = period.To;
             Lines = await db.PayrollLines.Where(l => l.PayrollPeriodId == period.Id && l.Revision == period.Revision).ToListAsync();
@@ -88,6 +96,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
 
     public async Task<IActionResult> OnPostCreateAsync(DateTime from, DateTime to, int days, int? branchId)
     {
+        if (!CanGenerate) return Forbid();
         await using var transaction = db.Database.CurrentTransaction == null
             ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable) : null;
         if (from == default || from > to || (to - from).TotalDays > 62 || days < 0 || days > 31 || (db.Scoped && branchId == null) || (branchId != null && !await db.Branchs.AnyAsync(x => x.Id == branchId && x.IsActive)) || await db.PayrollPeriods.IgnoreQueryFilters().AnyAsync(x => x.From <= to && x.To >= from && (x.BranchId == null || branchId == null || x.BranchId == branchId)))
@@ -115,6 +124,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
 
     public async Task<IActionResult> OnPostGenerateAsync()
     {
+        if (!CanGenerate) return Forbid();
         if (!ModelState.IsValid || !TryMonth(out var from, out var to) ||
             (db.Scoped && PayrollBranchId == null) || (PayrollBranchId != null &&
             !await db.Branchs.AnyAsync(b => b.Id == PayrollBranchId && b.IsActive)))
@@ -170,7 +180,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
     }
 
     public Task<IActionResult> OnPostCalculateAsync(int id, bool apply, bool firstGenerationOnly = false) =>
-        Calculate(id, apply, firstGenerationOnly);
+        !CanGenerate ? Task.FromResult<IActionResult>(Forbid()) : Calculate(id, apply, firstGenerationOnly);
 
     private Task<IActionResult> Calculate(int id, bool apply, bool firstGenerationOnly) => Attempt(async () =>
     {
@@ -190,16 +200,16 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
             throw;
         }
     });
-    public Task<IActionResult> OnPostMarkPaidAsync(int id, bool confirmed) => Attempt(async () =>
+    public Task<IActionResult> OnPostMarkPaidAsync(int id, bool confirmed) => !CanReview ? Task.FromResult<IActionResult>(Forbid()) : Attempt(async () =>
     {
         if (!confirmed || !await db.PayrollPeriods.AnyAsync(p => p.Id == id))
             throw new InvalidOperationException("Select a payroll you can manage and confirm payment has been made.");
-        await payroll.DecideAsync(id, "Paid", User.Identity!.Name!);
+        await payroll.DecideAsync(id, "Paid", User.Identity!.Name!, null, User);
     });
 
     public Task<IActionResult> OnPostTransitionAsync(int id, string action, string? reason) => action == "Paid"
         ? Task.FromResult<IActionResult>(BadRequest("Use Mark as paid and confirm payment."))
-        : Attempt(() => payroll.DecideAsync(id, action, User.Identity!.Name!, reason));
+        : Attempt(() => payroll.DecideAsync(id, action, User.Identity!.Name!, reason, User));
     public Task<IActionResult> OnPostWaiveAttendanceAsync(int id, int? employeeId, string? reason, string? dateScope, DateTime[] dates) =>
         Waive(id, employeeId, reason, dateScope: dateScope, dates: dates);
 
@@ -209,6 +219,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
     private Task<IActionResult> Waive(int id, int? employeeId, string? reason, bool absencesOnly = false,
         string? dateScope = null, DateTime[]? dates = null) => Attempt(async () =>
     {
+        if (!CanGenerate && !CanReview) throw new InvalidOperationException("Only HR or Admin/Finance can adjust attendance deductions.");
         PeriodId = id;
         if (!ModelState.IsValid || (!absencesOnly && employeeId is not >= 0))
             throw new InvalidOperationException("Choose a valid payroll and employee.");
@@ -219,9 +230,9 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
         TempData["PayrollNotice"] = count == 0 ? "No applied attendance deductions match your selection." : $"Waived {count} attendance deduction(s).";
     });
 
-    public Task<IActionResult> OnPostAdjustAsync(int deductionId, decimal amount, string reason) => Attempt(() => payroll.AdjustAsync(deductionId, amount, reason, User.Identity!.Name!));
-    public Task<IActionResult> OnPostPublishAsync(int id) => Attempt(() => payroll.PublishAsync(id, User.Identity!.Name!));
-    public Task<IActionResult> OnPostOverrideAsync(int lineId, decimal? amount, string reason) => Attempt(() => payroll.OverrideLineAsync(lineId, amount, reason, User.Identity!.Name!));
+    public Task<IActionResult> OnPostAdjustAsync(int deductionId, decimal amount, string reason) => !CanGenerate && !CanReview ? Task.FromResult<IActionResult>(Forbid()) : Attempt(() => payroll.AdjustAsync(deductionId, amount, reason, User.Identity!.Name!));
+    public Task<IActionResult> OnPostPublishAsync(int id) => !CanPublish ? Task.FromResult<IActionResult>(Forbid()) : Attempt(() => payroll.PublishAsync(id, User.Identity!.Name!));
+    public Task<IActionResult> OnPostOverrideAsync(int lineId, decimal? amount, string reason) => !CanGenerate && !CanReview ? Task.FromResult<IActionResult>(Forbid()) : Attempt(() => payroll.OverrideLineAsync(lineId, amount, reason, User.Identity!.Name!));
 
     private const string CsvColumns = "From,To,WorkingDays,BranchId";
 
@@ -240,6 +251,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
 
     public Task<IActionResult> OnPostImportAsync(IFormFile? upload)
     {
+        if (!CanGenerate) return Task.FromResult<IActionResult>(Forbid());
         return RegistrationCsv.ImportAsync(this, db, upload, CsvColumns, async row =>
         {
             return await OnPostCreateAsync(row.Get<DateTime>("From"), row.Get<DateTime>("To"),

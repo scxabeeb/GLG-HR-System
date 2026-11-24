@@ -57,9 +57,12 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
     public DbSet<SavedReportView> SavedReportViews => Set<SavedReportView>();
     public DbSet<SystemSettings> Settings => Set<SystemSettings>();
     public string? ActorId => http?.HttpContext?.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-    public bool EmployeeOnly => http?.HttpContext?.User.IsInRole("Employee") == true && !IsStaff &&
+    private bool PayrollWorkspace => http?.HttpContext?.GetRouteValue("area")?.ToString() == "Management" &&
+        http.HttpContext.GetRouteValue("page")?.ToString() == "/Payroll" &&
+        (http.HttpContext.User.IsInRole("Finance") || http.HttpContext.User.IsInRole("General Secretary"));
+    public bool EmployeeOnly => http?.HttpContext?.User.IsInRole("Employee") == true && !IsStaff && !PayrollWorkspace &&
         !((http?.HttpContext?.GetRouteValue("area")?.ToString() == "Hr" && http.HttpContext.GetRouteValue("page")?.ToString() == "/Leave") &&
-          (http.HttpContext.User.IsInRole("General Secretary")));
+          http.HttpContext.User.IsInRole("General Secretary"));
     public bool IsStaff => http?.HttpContext?.User.IsInRole("Admin") == true || http?.HttpContext?.User.IsInRole("HR") == true || http?.HttpContext?.User.IsInRole("Management") == true;
     public bool IsAdmin => http?.HttpContext?.User.IsInRole("Admin") == true;
 

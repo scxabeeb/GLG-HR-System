@@ -179,6 +179,10 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    console.log('PASS clock review correction and retained review history');
  }
  console.log('PASS saved branding/logo, report creation, selected columns, CSV/PDF/Excel, report disabling and device settings views');
+ await page.goto(base+'/Management/Payroll#payroll-manage');
+ if(!await page.getByRole('heading',{name:'Payroll approval workflow',exact:true}).isVisible())throw Error('Payroll workflow page failed');
+ if(!await page.getByRole('button',{name:'Generate payroll',exact:true}).count())throw Error('Administrator cannot prepare payroll');
+ console.log('PASS payroll workflow page, clear approval stages and administrator preparation controls');
  if(errors.length) throw Error(errors.join('; '));
  } finally { await browser.close(); }
 })().catch(error=>{ console.error(error.message);process.exit(1); });

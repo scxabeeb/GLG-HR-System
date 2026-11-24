@@ -5,7 +5,7 @@
 @inject ModuleAccess ModulePermissions
 @{
     var signedIn = User.Identity?.IsAuthenticated == true;
-    var portalRole = User.IsInRole("Admin") ? "Administrator" : User.IsInRole("Management") ? "Management" : User.IsInRole("HR") ? "Human resources" : "Employee workspace";
+    var portalRole = User.IsInRole("Admin") ? "Administrator" : User.IsInRole("Management") ? "Management" : User.IsInRole("HR") ? "Human resources" : User.IsInRole("Finance") ? "Finance" : User.IsInRole("General Secretary") ? "General Secretary" : "Employee workspace";
     var operationsActor = OperationsDb.ActorId;
     var isErrorPage = ViewContext.HttpContext.Request.Path.StartsWithSegments("/Error");
     var brand = isErrorPage ? new PortalBranding.Brand("Garowe City Management System", "Garowe City", "Management System", "Garowe Local Government", "/images/garowe-local-government.jpg") : await Branding.GetAsync();
@@ -15,6 +15,7 @@
     var isHr = User.IsInRole("HR") || isAdmin;
     var isManager = User.IsInRole("Management") || isAdmin;
     var staff = OperationsDb.IsStaff;
+    var payrollAccess = staff || User.IsInRole("Finance") || User.IsInRole("General Secretary");
     var area = ViewContext.RouteData.Values["area"]?.ToString();
     var page = ViewContext.RouteData.Values["page"]?.ToString();
     var adminDetail = isAdmin && area == "Admin" && page is not ("/Settings" or "/Dashboard");
@@ -37,7 +38,7 @@
             <a href="/Me/Agenda">My agenda</a>
         }
     </details>
-    @if ((isHr && Show("people")) || ((User.IsInRole("General Secretary")) && Show("leave")) || (staff && (Show("attendance") || Show("leave") || (Show("payroll") && (isHr || isManager || hrReports)))))
+    @if ((payrollAccess && Show("payroll")) || (isHr && Show("people")) || ((User.IsInRole("General Secretary")) && Show("leave")) || (staff && (Show("attendance") || Show("leave") || (Show("payroll") && (isHr || isManager || hrReports)))))
     {
         <details class="nav-group" data-menu="hr">
             <summary><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="7" r="4"/><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 3a4 4 0 0 1 0 8m3 10v-3a7 7 0 0 0-3-5"/></svg></span>HR</summary>
@@ -79,11 +80,11 @@
                     @if (hrReports) { <a href="/Reports?report=Salary">Salary reports</a> }
                 </details>
             }
-            @if (staff && Show("payroll") && (isManager || hrReports))
+            @if (payrollAccess && Show("payroll"))
             {
                 <details class="nav-subgroup" data-menu="finance">
                     <summary>Payroll</summary>
-                    @if (isManager) { <a href="/Management/Payroll">Manage payroll</a> }
+                    @if (payrollAccess) { <a href="/Management/Payroll">Manage payroll</a> }
                     @if (hrReports) { <a href="/Reports?report=Payroll">Payroll reports</a> }
                     @if (isAdmin) { <a href="/Admin/Rules">Attendance &amp; payroll rules</a> }
                 </details>

@@ -166,17 +166,33 @@ var deductions = await db.PayrollDeductions.Where(x => x.PayrollLineId == line.I
 Check(!deductions.Any(x => x.Date == r1.From || x.Date == r2.From), "paid and unpaid leave have no attendance deduction");
 Check(deductions.Any(x => x.Date == new DateTime(2026, 10, 7) && x.Calculated == decimal.Round(20 * 2200m / 30m / 480m, 2)), "late deduction applies after grace");
 Check(line.Net == line.Gross - line.UnpaidLeave - line.AttendanceApplied, "net matches gross minus applied deductions and leave");
+Check(line.Basic == 2200m && await db.SalaryVersions.AnyAsync(s => s.EmployeeId == e.Id && s.Basic == 2200m), "attendance deductions leave registered basic salary and full-month basic pay unchanged");
 await payroll.AdjustAsync(deductions[0].Id, 0, "waive test", "test");
-await payroll.DecideAsync(p.Id, "Review", "test");
+ClaimsPrincipal PayrollActor(string role) => new(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, role) }, "test"));
+await Reject(() => payroll.DecideAsync(p.Id, "Submit", "test", null, PayrollActor("HR")), "HR cannot submit its own payroll review");
+await Reject(() => payroll.DecideAsync(p.Id, "Approve", "test", null, PayrollActor("Admin")), "Admin cannot bypass General Secretary approval");
+await Reject(() => payroll.DecideAsync(p.Id, "Paid", "test", null, PayrollActor("Finance")), "unapproved payroll cannot be marked paid");
+await Reject(() => payroll.DecideAsync(p.Id, "Reject", "test", "", PayrollActor("Finance")), "payroll rejection requires a reason");
+var rejectedFixture = new PayrollPeriod { From = new(2025, 1, 1), To = new(2025, 1, 31), BranchId = b2.Id, Status = "Calculated" };
+db.PayrollPeriods.Add(rejectedFixture);await db.SaveChangesAsync();
+await payroll.DecideAsync(rejectedFixture.Id, "Reject", "test", "Return to HR for correction", PayrollActor("Finance"));
+Check(rejectedFixture.Status == "Draft", "Finance rejection returns to HR preparation");
+db.PayrollPeriods.Remove(rejectedFixture);await db.SaveChangesAsync();
+
+await payroll.DecideAsync(p.Id, "Submit", "test", null, new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, "Finance") }, "test")));
+await Reject(() => payroll.DecideAsync(p.Id, "Reject", "test", "Not allowed", PayrollActor("Finance")), "Finance cannot reject its own submitted run at the Secretary stage");
+await payroll.DecideAsync(p.Id, "Reject", "test", "Review totals before approval", PayrollActor("General Secretary"));
+Check((await db.PayrollPeriods.FindAsync(p.Id))!.Status == "Calculated", "Secretary rejection returns to Finance review");
+await payroll.DecideAsync(p.Id, "Submit", "test", null, PayrollActor("Finance"));
 var rule = await db.DeductionRules.SingleAsync(x => x.BranchId == b.Id);
 rule.LatePerMinute = 2;
 await db.SaveChangesAsync();
-await Reject(() => payroll.DecideAsync(p.Id, "Lock", "test"), "source changes block locking reviewed payroll");
+await Reject(() => payroll.DecideAsync(p.Id, "Approve", "test", null, new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, "General Secretary") }, "test"))), "source changes block locking reviewed payroll");
 db.ChangeTracker.Clear();
-await payroll.DecideAsync(p.Id, "Reopen", "test", "source changed");
+await payroll.DecideAsync(p.Id, "Reopen", "test", "source changed", new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, "HR") }, "test")));
 await payroll.CalculateAsync(p.Id, false, "test");
-await payroll.DecideAsync(p.Id, "Review", "test");
-await payroll.DecideAsync(p.Id, "Lock", "test");
+await payroll.DecideAsync(p.Id, "Submit", "test", null, new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, "Finance") }, "test")));
+await payroll.DecideAsync(p.Id, "Approve", "test", null, new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, "General Secretary") }, "test")));
 await payroll.PublishAsync(p.Id, "test");
 var current = await db.PayrollLines.SingleAsync(x => x.PayrollPeriodId == p.Id && x.Revision == 2);
 Check(current.AttendanceApplied == 0 && current.AttendanceCalculated > 0, "attendance can be waived while retaining calculated amounts");
@@ -291,6 +307,16 @@ await using (var own = new HrDbContext(options, http))
 }
 
 await AttendanceMinuteChecks.RunAsync(options, Check);
+if (Environment.GetEnvironmentVariable("DHG_PAYROLL_ONLY_CHECK") == "1")
+{
+    Console.WriteLine($"{passed} payroll, leave and attendance-minute integration checks passed.");
+    return;
+}
+if (Environment.GetEnvironmentVariable("DHG_PAYROLL_ONLY_CHECK") == "1")
+{
+    Console.WriteLine($"{passed} payroll, leave and attendance-minute checks passed in MySQL.");
+    return;
+}
 await AttendancePushChecks.RunAsync(options, suffix, e.Id, Check);
 await OperationsChecks.RunAsync(options, b.Id, b2.Id, Check);
 await PasswordRecoveryChecks.RunAsync(cs,Check);

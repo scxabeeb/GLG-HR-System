@@ -4,6 +4,7 @@
 @{ViewData["Title"]="Attendance & payroll rules"; var dayNames = new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };}
 <div class="eyebrow">MAIN SETTINGS · HR</div>
 <h1>Attendance &amp; payroll rules</h1>
+<p class="notice">Work and payroll rules calculate attendance deductions; they do not change the employee’s registered basic salary. Payroll shows the deduction separately and subtracts it from net pay.</p>
 <p class="page-intro">Manage work schedules, attendance windows and deduction rates. All times use East Africa Time (UTC+3).</p>
 <div class="grid">
 <partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("work rules")' />
@@ -42,6 +43,7 @@
 <p>Punches outside the windows remain in the raw log. A missing valid check-in or checkout follows the incomplete-punch policy below.</p>
 <hr /><h2>4. Deduction formula and rate</h2>
 <div class="grid">
+<p class="notice">These rules calculate attendance deductions; they never edit an employee’s registered basic salary. With salary-based calculation, the deduction is monthly basic salary ÷ salary days ÷ required daily minutes × missing minutes. Employment-date proration remains separate.</p>
 <label>Calculation method<select asp-for="Rule.MinuteRateMode"><option value="Salary">Monthly basic salary ÷ salary days ÷ daily minutes</option><option value="Fixed">Fixed amount per missing minute</option></select></label>
 <label>Salary days divisor (attendance and unpaid leave)<input asp-for="Rule.SalaryDivisor" type="number" min="1" max="366" step="1" required /></label>
 <label>Fixed rate per minute (employee salary currency)<input asp-for="Rule.FixedMinuteRate" type="number" min="0" step="0.000001" required /></label>

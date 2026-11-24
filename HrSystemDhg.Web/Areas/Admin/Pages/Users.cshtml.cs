@@ -46,6 +46,7 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         {
             "Admin",
             "Management",
+            "Finance",
             "HR",
             "General Secretary",
             "Chairman",
@@ -136,6 +137,7 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
             "Admin",
             "HR",
             "Management",
+            "Finance",
             "General Secretary",
             "Chairman",
             "Employee"

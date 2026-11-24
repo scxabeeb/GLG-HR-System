@@ -212,11 +212,20 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
         await tx.CommitAsync();
     }
 
-    public async Task DecideAsync(int id, string action, string actor, string? reason = null)
+    public async Task DecideAsync(int id, string action, string actor, string? reason, System.Security.Claims.ClaimsPrincipal principal)
     {
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var p = await db.PayrollPeriods.SingleAsync(x => x.Id == id);
-        if (action == "Reopen")
+        if (!PayrollWorkflow.CanDecide(principal, p.Status, action))
+            throw new InvalidOperationException("Your role cannot perform this action at the current payroll stage.");
+        var previous = p.Status;
+        if (action == "Reject")
+        {
+            if (string.IsNullOrWhiteSpace(reason) || reason.Length > 500)
+                throw new InvalidOperationException("Provide a rejection reason up to 500 characters.");
+            p.Status = p.Status == "Submitted" ? "Calculated" : "Draft";
+        }
+        else if (action == "Reopen")
         {
             if (p.Status == "Paid")
                 throw new InvalidOperationException("Paid payroll cannot be reopened; make a separate adjustment period.");
@@ -231,22 +240,18 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
         {
             if (p.Status == "Paid")
                 return;
-            if (p.Status is not ("Calculated" or "Reviewed" or "Locked"))
-                throw new InvalidOperationException("Calculate payroll before recording payment.");
-            if (p.Status != "Locked" && p.SourceHash != await HashAsync(p))
-                throw new InvalidOperationException("Source data changed. Recalculate payroll before recording payment.");
+            if (p.Status != "Locked")
+                throw new InvalidOperationException("General Secretary approval is required before recording payment.");
             p.Status = "Paid";
         }
         else
         {
-            if (action == "Review" && p.Status != "Calculated" || action == "Lock" && p.Status != "Reviewed" || action is not ("Review" or "Lock"))
-                throw new InvalidOperationException("Invalid payroll transition.");
             if (p.SourceHash != await HashAsync(p))
-                throw new InvalidOperationException("Source data changed. Reopen and recalculate payroll before review/lock.");
-            p.Status = action == "Review" ? "Reviewed" : "Locked";
+                throw new InvalidOperationException("Source data changed. Return the run to HR for recalculation before submitting or approving.");
+            p.Status = action == "Submit" ? "Submitted" : "Locked";
         }
 
-        db.AuditLogs.Add(new() { Actor = actor, Action = $"Payroll {id}: {action}; {reason}" });
+        db.AuditLogs.Add(new() { Actor = actor, Action = $"Payroll {id}: {previous} → {p.Status}; {action}; {reason}" });
         await db.SaveChangesAsync();
         await tx.CommitAsync();
     }
