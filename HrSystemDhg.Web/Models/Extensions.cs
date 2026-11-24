@@ -126,6 +126,7 @@ public partial class PayrollPeriod
 {
     public int? BranchId { get; set; }
     public string SourceHash { get; set; } = "";
+    public int? AttendanceSalaryDays { get; set; }
 }
 
 public partial class PayrollLine

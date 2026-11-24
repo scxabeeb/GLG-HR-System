@@ -31,19 +31,24 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             p.From,
             p.To,
             p.WorkingDays,
-            p.BranchId ?? 0
+            p.BranchId ?? 0,
+            p.AttendanceSalaryDays ?? 0,
+            "FullMonthlySalary-SalaryMinutes-v2"
         };
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data))));
     }
 
     public async Task GenerateAsync(int id, bool apply, string actor) => await CalculateAsync(id, apply, actor);
-    public async Task CalculateAsync(int id, bool apply, string actor, bool firstGenerationOnly = false)
+    public async Task CalculateAsync(int id, bool apply, string actor, bool firstGenerationOnly = false, int salaryDays = PayrollSalaryPolicy.DefaultSalaryDays)
     {
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var p = await db.PayrollPeriods.SingleAsync(x => x.Id == id);
         if (firstGenerationOnly && (p.Revision > 0 || p.Status != "Draft")) return;
         if (p.Status is not ("Draft" or "Calculated"))
             throw new InvalidOperationException("Reopen the period before recalculation.");
+        if (salaryDays is < 1 or > 366)
+            throw new InvalidOperationException("Choose a salary days divisor from 1 to 366.");
+        p.AttendanceSalaryDays = salaryDays;
         if (p.To < p.From || (p.To - p.From).TotalDays > 62)
             throw new InvalidOperationException("Use a valid payroll period of at most 63 days.");
         var employees = await db.Employees.Where(x => x.RegistrationComplete && x.HireDate <= p.To && (x.TerminationDate == null || x.TerminationDate >= p.From)).ToListAsync();
@@ -82,15 +87,14 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             var workingDays = workingDates.Count;
             if (workingDays == 0)
                 throw new InvalidOperationException($"Employee {e.EmployeeNumber} has no scheduled working days in this payroll period. Check the effective work rule and holidays.");
-            int eligible = 0;
             var deductions = new List<PayrollDeduction>();
+            decimal unroundedAttendance = 0;
+            decimal allocatedAttendance = 0;
             foreach (var (date, rule, branchId) in calendarDays)
             {
                 var working = workingDates.Contains(date);
                 if (date < e.HireDate.Date || (e.TerminationDate.HasValue && date > e.TerminationDate.Value.Date))
                     continue;
-                if (working)
-                    eligible++;
                 await attendance.RebuildAsync(e.Id, date);
                 var day = await db.AttendanceDays.SingleAsync(x => x.EmployeeId == e.Id && x.Date == date);
                 var leaveForDay = leaves.Where(x => x.From.Date <= date && x.To.Date >= date).ToList();
@@ -103,36 +107,35 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
 
                 leaveFraction = Math.Min(1, leaveFraction);
                 if (working)
-                    unpaidLeaveAmount += AttendanceMinutes.UnpaidLeaveDeduction(rule, salary.Basic, date,
-                        leaveForDay.Where(l => unpaidTypeIds.Contains(l.LeaveTypeId)));
+                    unpaidLeaveAmount += PayrollSalaryPolicy.UnpaidLeave(rule, salary.Basic, date,
+                        leaveForDay.Where(l => unpaidTypeIds.Contains(l.LeaveTypeId)), salaryDays);
                 if (working && leaveFraction < 1)
                 {
-                    var deductionRule = await db.DeductionRules.Where(x => x.EffectiveFrom <= date && (x.BranchId == null || x.BranchId == branchId)).OrderByDescending(x => x.BranchId != null).ThenByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).FirstOrDefaultAsync();
-                    var ruleDailyRate = AttendanceMinutes.Deduction(rule, salary.Basic, AttendanceMinutes.Required(rule));
+                    var ruleDailyRate = PayrollSalaryPolicy.Deduction(rule, salary.Basic, AttendanceMinutes.Required(rule), salaryDays);
                     decimal amount = 0;
                     var kind = "Late";
                     string? calculation = null;
                     if (day.Status == "Absent" || (day.FirstIn == null && day.LastOut == null && day.Status != "Incomplete punch"))
                     {
-                        amount = ruleDailyRate * (1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m);
+                        amount = ruleDailyRate * (1 - leaveFraction);
                         kind = "Absence";
-                        calculation = rule.UsePunchWindows ? $"{(int)(AttendanceMinutes.Required(rule) * (1 - leaveFraction))} absent min × {AttendanceMinutes.Rate(rule, salary.Basic):0.######} {salary.Currency}/min ({AttendanceMinutes.Formula(rule)})" : null;
+                        calculation = rule.UsePunchWindows ? $"{(int)(AttendanceMinutes.Required(rule) * (1 - leaveFraction))} absent min × {PayrollSalaryPolicy.Rate(rule, salary.Basic, salaryDays):0.######} {salary.Currency}/min ({PayrollSalaryPolicy.Formula(rule, salaryDays)})" : null;
                     }
                     else if (day.Status == "Incomplete punch" || day.FirstIn == null || day.LastOut == null)
                     {
                         kind = "Incomplete punch";
                         amount = rule.IncompletePolicy switch
                         {
-                            "Absent" => ruleDailyRate * (1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m),
-                            "Half day" => ruleDailyRate * Math.Min(.5m, 1 - leaveFraction) * (rule.UsePunchWindows ? 1m : deductionRule?.AbsenceMultiplier ?? 1m),
+                            "Absent" => ruleDailyRate * (1 - leaveFraction),
+                            "Half day" => ruleDailyRate * Math.Min(.5m, 1 - leaveFraction),
                             _ => throw new InvalidOperationException("Resolve incomplete punch for " + e.EmployeeNumber + " on " + date.ToString("yyyy-MM-dd"))};
                     }
                     else if (rule.UsePunchWindows)
                     {
                         var missing = AttendanceMinutes.Missing(rule, date, day.FirstIn, day.LastOut, leaveForDay);
-                        amount = AttendanceMinutes.Deduction(rule, salary.Basic, missing);
+                        amount = PayrollSalaryPolicy.Deduction(rule, salary.Basic, missing, salaryDays);
                         kind = "Missing minutes";
-                        calculation = $"{missing} missing min × {AttendanceMinutes.Rate(rule, salary.Basic):0.######} {salary.Currency}/min ({AttendanceMinutes.Formula(rule)})";
+                        calculation = $"{missing} missing min × {PayrollSalaryPolicy.Rate(rule, salary.Basic, salaryDays):0.######} {salary.Currency}/min ({PayrollSalaryPolicy.Formula(rule, salaryDays)})";
                     }
                     else
                     {
@@ -156,12 +159,19 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                         }
 
                         var chargeableMinutes = Math.Max(0, minutes);
-                        amount = AttendanceMinutes.Deduction(rule, salary.Basic, chargeableMinutes);
-                        calculation = $"{chargeableMinutes} chargeable min × {AttendanceMinutes.Rate(rule, salary.Basic):0.######} {salary.Currency}/min";
+                        amount = PayrollSalaryPolicy.Deduction(rule, salary.Basic, chargeableMinutes, salaryDays);
+                        calculation = $"{chargeableMinutes} chargeable min × {PayrollSalaryPolicy.Rate(rule, salary.Basic, salaryDays):0.######} {salary.Currency}/min";
                     }
 
                     if (amount > 0)
-                        deductions.Add(new() { Date = date, Type = kind, Calculated = decimal.Round(amount, 2), Applied = apply ? decimal.Round(amount, 2) : 0, Reason = apply ? calculation ?? "Automatic rule" : calculation == null ? "Waived at calculation" : $"Waived at calculation · {calculation}" });
+                    {
+                        // Carry rounding across daily entries so their sum equals the rounded monthly formula.
+                        unroundedAttendance += amount;
+                        var roundedTotal = decimal.Round(unroundedAttendance, 2);
+                        var dailyAmount = roundedTotal - allocatedAttendance;
+                        allocatedAttendance = roundedTotal;
+                        deductions.Add(new() { Date = date, Type = kind, Calculated = dailyAmount, Applied = apply ? dailyAmount : 0, Reason = apply ? calculation ?? "Automatic rule" : calculation == null ? "Waived at calculation" : $"Waived at calculation · {calculation}" });
+                    }
                 }
 
                 if (salary.OvertimeEligible && (working || rule.WeekendOvertime))
@@ -172,9 +182,8 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                 }
             }
 
-            var ratio = Math.Min(1m, (decimal)eligible / workingDays);
-            var basic = decimal.Round(salary.Basic * ratio, 2);
-            var allowance = decimal.Round((salary.Housing + salary.Transport + salary.Allowances) * ratio, 2);
+            var basic = decimal.Round(salary.Basic, 2);
+            var allowance = decimal.Round(salary.Housing + salary.Transport + salary.Allowances, 2);
             overtime = decimal.Round(overtime, 2);
             var gross = basic + allowance + overtime;
             var line = new PayrollLine
@@ -247,7 +256,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
         else
         {
             if (p.SourceHash != await HashAsync(p))
-                throw new InvalidOperationException("Source data changed. Return the run to HR for recalculation before submitting or approving.");
+                throw new InvalidOperationException("Source data or calculation policy changed. Return the run to HR for recalculation before submitting or approving.");
             p.Status = action == "Submit" ? "Submitted" : "Locked";
         }
 

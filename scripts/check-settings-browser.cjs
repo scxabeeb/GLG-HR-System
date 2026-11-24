@@ -182,6 +182,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  await page.goto(base+'/Management/Payroll#payroll-manage');
  if(!await page.getByRole('heading',{name:'Payroll approval workflow',exact:true}).isVisible())throw Error('Payroll workflow page failed');
  if(!await page.getByRole('button',{name:'Generate payroll',exact:true}).count())throw Error('Administrator cannot prepare payroll');
+ if(await page.locator('form[action*="handler=Generate"] input[name="SalaryDays"]').inputValue()!=='26')throw Error('Payroll default divisor is not 26');
  console.log('PASS payroll workflow page, clear approval stages and administrator preparation controls');
  if(errors.length) throw Error(errors.join('; '));
  } finally { await browser.close(); }

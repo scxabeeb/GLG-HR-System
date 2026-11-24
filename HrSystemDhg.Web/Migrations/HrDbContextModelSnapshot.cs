@@ -1427,6 +1427,9 @@ namespace HrSystemDhg.Web.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AttendanceSalaryDays")
+                        .HasColumnType("int");
+
                     b.Property<int?>("BranchId")
                         .HasColumnType("int");
 

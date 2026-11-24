@@ -19,7 +19,7 @@
     </form>
     <div asp-validation-summary="All"></div>
 
-    <p>Generation uses the displayed month and branch. The registered basic salary stays unchanged. Attendance deductions are calculated separately using basic salary ÷ the configured salary divisor ÷ required daily minutes × missing minutes, then subtracted when calculating net pay. Basic pay for the period is prorated only for employment dates, never for attendance. With a 30-day divisor and eight-hour day, the formula is basic ÷ 30 ÷ 480 × missing minutes.</p>
+    <p>Generation uses the displayed month and branch. The registered basic salary stays unchanged. Attendance deductions are calculated separately using basic salary ÷ the run’s salary days (default 26) ÷ required daily minutes × missing minutes, then subtracted when calculating net pay. Basic salary and registered allowances are paid in full; employment-date proration is not applied. Only scheduled days within employment dates are checked for attendance deductions. With 26 salary days and an eight-hour day, the formula is basic ÷ 26 ÷ 480 × missing minutes.</p>
 </section>
 @if (Model.MissingRule is { } missing)
 {
@@ -40,6 +40,7 @@
         }
         <form method="post" asp-page-handler="Calculate" class="actions">
             <input type="hidden" name="id" value="@Model.RulePeriodId" />
+            <input type="hidden" name="SalaryDays" value="@Model.SalaryDays" />
             <input type="hidden" name="firstGenerationOnly" value="@(Model.FirstGenerationOnly ? "true" : "false")" />
             <input type="hidden" name="Month" value="@Model.Month" />
             <input type="hidden" name="PayrollBranchId" value="@Model.PayrollBranchId" />
@@ -61,6 +62,10 @@
     if (Model.PayrollBranchId is int branch) selection["PayrollBranchId"] = branch.ToString();
     if (p != null) selection["PeriodId"] = p.Id.ToString();
 }
+@if(p is { Revision: > 0, AttendanceSalaryDays: null } && p.Status is "Draft" or "Calculated")
+{
+    <p class="notice">This run still shows the previous calculation. Open <a href="#payroll-manage">Generate &amp; manage</a> and choose <strong>Recalculate payroll</strong> with 26 salary days to apply full basic salary and minute deductions.</p>
+}
 <div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Payroll views"><a href="#payroll-register" data-workspace-link>Employee payroll</a><a href="#payroll-manage" data-workspace-link>Generate &amp; manage</a><a href="#payroll-waivers" data-workspace-link>Deduction waivers</a><a href="#payroll-import" data-workspace-link>Import &amp; export</a>@if(Model.CanReport){<a asp-area="" asp-page="/Reports/Index" asp-route-report="Payroll">Reports</a>}</nav>
 <section id="payroll-register" data-workspace-panel><section class="card workspace-list" id="@(p == null ? "employee-payroll" : $"payroll-{p.Id}")">
     <header class="workspace-list-heading"><h2>Employee payroll @if (p != null) { <span class="badge @(p.Status == "Paid" ? "status-positive" : "")">@PayrollWorkflow.Label(p.Status)</span> }</h2><small>@Model.SalaryRows.Count employees shown</small></header>
@@ -73,7 +78,7 @@
     {
         <div class="table-scroll">
             <table class="payroll-table workspace-table">
-                <thead><tr><th>Employee</th><th>Basic pay for period</th><th>Allowances</th><th>Gross</th><th>Attendance deducted</th><th>Unpaid leave</th><th>Net pay</th><th>Details &amp; payslip</th></tr></thead>
+                <thead><tr><th>Employee</th><th>Basic salary</th><th>Allowances</th><th>Gross</th><th>Attendance deducted</th><th>Unpaid leave</th><th>Net pay</th><th>Details &amp; payslip</th></tr></thead>
                 <tbody>
                 @foreach (var employee in Model.SalaryRows)
                 {
@@ -169,17 +174,19 @@
         <button class="secondary">Open payroll</button>
     </form>
 }
-<section class="card"><h2>Payroll approval workflow</h2><p>HR generates → Admin / Finance reviews and submits → General Secretary approves → Admin / Finance records payment.</p><p>A rejection returns the run to the previous stage and requires a reason.</p> @if(Model.CanGenerate){<form method="post" asp-page-handler="Generate" class="actions">
+<section class="card"><h2>Payroll approval workflow</h2><p>Recalculate an existing unapproved run to apply the full basic salary and the new minute formula. Approved and paid amounts are preserved until the normal correction process is used.</p><p>HR generates → Admin / Finance reviews and submits → General Secretary approves → Admin / Finance records payment.</p><p>A rejection returns the run to the previous stage and requires a reason.</p> @if(Model.CanGenerate){<form method="post" asp-page-handler="Generate" class="actions">
         <input type="hidden" name="Month" value="@Model.Month" />
         <input type="hidden" name="PayrollBranchId" value="@Model.PayrollBranchId" />
+        <label>Salary days divisor<input name="SalaryDays" type="number" min="1" max="366" value="@Model.SalaryDays" required /></label>
         <button type="submit">Generate payroll</button>
     </form>}    @if (p != null)
     {
-        <p>@p.From.ToString("dd MMM yyyy") – @p.To.ToString("dd MMM yyyy") · @(p.BranchId is int branchId ? Model.Branches.FirstOrDefault(b => b.Id == branchId)?.Name : "All branches")</p>
+        <p><strong>Deduction basis:</strong> @(p.AttendanceSalaryDays.HasValue ? p.AttendanceSalaryDays + " salary days; full basic salary." : "Legacy calculation snapshot. Recalculate an unapproved run to apply full salary and 26 days.")</p><p>@p.From.ToString("dd MMM yyyy") – @p.To.ToString("dd MMM yyyy") · @(p.BranchId is int branchId ? Model.Branches.FirstOrDefault(b => b.Id == branchId)?.Name : "All branches")</p>
         <div class="actions">
             @if (Model.CanGenerate && p.Status is "Draft" or "Calculated")
             {
                 <form method="post" asp-page-handler="Calculate" asp-all-route-data="selection" asp-route-id="@p.Id">
+                    <label>Salary days divisor<input name="SalaryDays" type="number" min="1" max="366" value="@Model.SalaryDays" required /></label>
                     @if(Model.CanReview){<label class="inline"><input type="checkbox" name="apply" value="true" checked /> Apply attendance deductions</label>}else{<input type="hidden" name="apply" value="true"/><span>Attendance deductions will be applied.</span>}
                     <button>@(p.Status == "Draft" ? "Calculate payroll" : "Recalculate payroll")</button>
                 </form>

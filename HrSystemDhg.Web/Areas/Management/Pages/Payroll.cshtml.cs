@@ -26,6 +26,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
     public Dictionary<(int EmployeeId, DateTime Date), AttendanceDay> Attendance { get; private set; } = [];
     public List<SalaryRow> SalaryRows { get; private set; } = [];
     public record SalaryRow(int Id, string Number, string Name, bool Complete, SalaryVersion? Salary);
+    [BindProperty, System.ComponentModel.DataAnnotations.Range(1, 366)] public int SalaryDays { get; set; } = PayrollSalaryPolicy.DefaultSalaryDays;
     public bool Scoped => db.Scoped;
     public bool CanGenerate => PayrollWorkflow.Generate(User);
     public bool CanReview => PayrollWorkflow.Review(User);
@@ -50,6 +51,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
         {
             WorkflowHistory = await db.AuditLogs.AsNoTracking().Where(a => (a.Action.StartsWith("Payroll " + period.Id + ":") || a.Action.StartsWith("Calculated payroll " + period.Id + " revision ")))
                 .OrderByDescending(a => a.At).Take(50).ToListAsync();
+            SalaryDays = period.AttendanceSalaryDays ?? PayrollSalaryPolicy.DefaultSalaryDays;
             from = period.From;
             to = period.To;
             Lines = await db.PayrollLines.Where(l => l.PayrollPeriodId == period.Id && l.Revision == period.Revision).ToListAsync();
@@ -125,7 +127,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
     public async Task<IActionResult> OnPostGenerateAsync()
     {
         if (!CanGenerate) return Forbid();
-        if (!ModelState.IsValid || !TryMonth(out var from, out var to) ||
+        if (!ModelState.IsValid || SalaryDays is < 1 or > 366 || !TryMonth(out var from, out var to) ||
             (db.Scoped && PayrollBranchId == null) || (PayrollBranchId != null &&
             !await db.Branchs.AnyAsync(b => b.Id == PayrollBranchId && b.IsActive)))
         {
@@ -184,13 +186,14 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
 
     private Task<IActionResult> Calculate(int id, bool apply, bool firstGenerationOnly) => Attempt(async () =>
     {
+        if (!ModelState.IsValid || SalaryDays is < 1 or > 366) throw new InvalidOperationException("Choose salary days between 1 and 366.");
         if (!await db.PayrollPeriods.AnyAsync(p => p.Id == id))
             throw new InvalidOperationException("Choose a payroll period you can manage.");
         if (!apply && !CanReview) throw new InvalidOperationException("Admin or Finance permission is required to waive attendance deductions.");
         PeriodId = id;
         try
         {
-            await payroll.CalculateAsync(id, apply, User.Identity!.Name!, firstGenerationOnly);
+            await payroll.CalculateAsync(id, apply, User.Identity!.Name!, firstGenerationOnly, SalaryDays);
         }
         catch (MissingWorkRuleException ex)
         {
