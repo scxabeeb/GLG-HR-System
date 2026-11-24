@@ -37,6 +37,7 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
     public DbSet<DeductionRule> DeductionRules => Set<DeductionRule>();
     public DbSet<ZkDeviceCommand> ZkDeviceCommands => Set<ZkDeviceCommand>();
     public DbSet<ZkDevice> ZkDevices => Set<ZkDevice>();
+    public DbSet<ZkPunchReview> ZkPunchReviews => Set<ZkPunchReview>();
     public DbSet<ZkPunch> ZkPunchs => Set<ZkPunch>();
     public DbSet<AttendanceDay> AttendanceDays => Set<AttendanceDay>();
     public DbSet<LeaveType> LeaveTypes => Set<LeaveType>();
@@ -133,6 +134,8 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
         b.Entity<Employee>().HasIndex(x => x.WorkEmail).IsUnique();
         b.Entity<Employee>().HasIndex(x => x.NationalId).IsUnique();
         b.Entity<Employee>().HasIndex(x => x.ZkPin).IsUnique();
+        b.Entity<ZkPunchReview>().HasIndex(x => new { x.DeviceId, x.Pin, x.RecordedTime }).IsUnique();
+        b.Entity<ZkPunchReview>().HasOne<ZkDevice>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ZkPunch>().HasIndex(x => new { x.DeviceId, x.Pin, x.PunchTime }).IsUnique();
         b.Entity<AttendanceDay>().HasIndex(x => new { x.EmployeeId, x.Date }).IsUnique();
         b.Entity<PayrollLine>().HasIndex(x => new { x.PayrollPeriodId, x.EmployeeId, x.Revision }).IsUnique();

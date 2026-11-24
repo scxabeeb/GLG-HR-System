@@ -58,6 +58,13 @@ def run(root, database, sql):
             diagnostic=json.loads(cloud('/status'))
             assert diagnostic['punchesToday']==1 and diagnostic['totalPunches']==1
             assert diagnostic['lastPunchLocalTime'].replace('T',' ')==timestamp
+            future=(datetime.now(timezone.utc)+timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')
+            mixed=("BRIDGE-FUTURE\t"+future+"\t0\t1\nBRIDGE-VALID\t"+timestamp+"\t0\t1\n").encode()
+            for _ in range(2):assert b'OK: 2' in local('/iclock/cdata?SN=BRIDGETEST001&table=ATTLOG&Stamp=101',mixed)
+            assert sql("SELECT COUNT(*) FROM "+database+".ZkPunchReviews WHERE DeviceId="+str(device)+" AND Pin='BRIDGE-FUTURE' AND ReviewedUtc IS NULL").strip()=='1'
+            assert sql("SELECT COUNT(*) FROM "+database+".ZkPunchs WHERE DeviceId="+str(device)+" AND Pin='BRIDGE-FUTURE'").strip()=='0'
+            diagnostic=json.loads(cloud('/status'))
+            assert diagnostic['punchesToday']==2 and diagnostic['pendingClockReviews']==1
             expires=(datetime.now(timezone.utc)+timedelta(minutes=3)).strftime('%Y-%m-%d %H:%M:%S')
             sql("INSERT INTO "+database+".ZkDeviceCommands (DeviceId,Serial,Address,Pin,Name,ExpiresUtc) VALUES ("+str(device)+",'BRIDGETEST001','127.0.0.1','999','Fixture','"+expires+"')")
             command=int(sql('SELECT MAX(Id) FROM '+database+'.ZkDeviceCommands WHERE DeviceId='+str(device)).strip())

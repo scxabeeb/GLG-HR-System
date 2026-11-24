@@ -12,6 +12,9 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
 {
     public sealed record PunchRow(DateTime Time, string Pin, string? Employee, string? Device);
     public List<PunchRow> TodayPunches = [];
+    public List<ZkPunchReview> ClockReviews = [];
+    [BindProperty(SupportsGet = true)] public bool ClockHistory { get; set; }
+    private IQueryable<ZkPunchReview> VisibleClockReviews() => db.ZkPunchReviews.Where(r => !db.Scoped || db.Employees.Any(e => e.ZkPin == r.Pin));
     public List<AttendanceDay> Items = [];
     public List<Employee> Employees = [];
     public List<ZkDevice> Devices = [];
@@ -26,6 +29,7 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
     public async Task OnGetAsync()
     {
         TodayPunches = await LoadTodayPunchesAsync();
+        ClockReviews = await VisibleClockReviews().AsNoTracking().Where(r => ClockHistory || r.ReviewedUtc == null).OrderByDescending(r => r.Id).Take(100).ToListAsync();
         Employees = await db.Employees.ToListAsync();
         Names = Employees.ToDictionary(x => x.Id, x => x.FullName);
         Devices = await db.ZkDevices.ToListAsync();
@@ -113,6 +117,46 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
         TempData["BulkPunchNotice"] = $"Processed punches for {pins.Count} employees at {timestamp:HH:mm:ss} Mogadishu time."
             + (skipped > 0 ? $" Skipped {skipped} without a terminal User ID." : "");
     });
+
+    public async Task<IActionResult> OnPostReviewClockAsync(int id, string resolution, DateTime? correctedTime, string reason)
+    {
+        if (!User.IsInRole("Admin") && !User.IsInRole("HR")) return Forbid();
+        return await Attempt(async () =>
+        {
+            if (!ModelState.IsValid || resolution is not ("correct" or "ignore") || string.IsNullOrWhiteSpace(reason) || reason.Length > 500 ||
+                resolution == "correct" && (correctedTime == null || correctedTime.Value.Year < 2000 || correctedTime > BusinessClock.Now.AddMinutes(15)))
+                throw new InvalidOperationException("Choose a resolution and provide a reason. Corrections require the confirmed actual time in EAT, not a future time.");
+            await using var tx = await db.Database.BeginTransactionAsync();
+            var row = await VisibleClockReviews().AsNoTracking().SingleOrDefaultAsync(r => r.Id == id);
+            if (row == null) throw new InvalidOperationException("Clock exception not found in your scope.");
+            var time = resolution == "correct" ? DateTime.SpecifyKind(correctedTime!.Value, DateTimeKind.Unspecified) : (DateTime?)null;
+            var result = resolution == "correct" ? "Corrected" : "Ignored";
+            var claimed = await db.ZkPunchReviews.Where(r => r.Id == id && r.ReviewedUtc == null).ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.ReviewedUtc, DateTime.UtcNow).SetProperty(r => r.CorrectedTime, time)
+                .SetProperty(r => r.Resolution, result).SetProperty(r => r.ReviewReason, reason.Trim()).SetProperty(r => r.Reviewer, User.Identity!.Name));
+            if (claimed == 0) { TempData["BulkPunchNotice"] = "This exception has already been reviewed."; return; }
+            var needsSetup = false;
+            if (time.HasValue)
+            {
+                if (!await db.ZkPunchs.AnyAsync(p => p.DeviceId == row.DeviceId && p.Pin == row.Pin && p.PunchTime == time.Value))
+                { db.ZkPunchs.Add(new() { DeviceId = row.DeviceId, Pin = row.Pin, PunchTime = time.Value }); await db.SaveChangesAsync(); }
+                var employee = await db.Employees.SingleOrDefaultAsync(e => e.ZkPin == row.Pin);
+                if (employee == null) needsSetup = true;
+                else
+                {
+                    try { await attendance.RebuildAsync(employee.Id, await attendance.WorkDateAsync(employee.Id, time.Value)); }
+                    catch (InvalidOperationException ex) when (ex.Message.StartsWith("No effective assignment for employee ", StringComparison.Ordinal) || ex.Message == "Configure an effective work rule first.") { needsSetup = true; }
+                }
+            }
+            db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Clock review {id}: {result}; device {row.DeviceId}; original {row.RecordedTime:yyyy-MM-dd HH:mm:ss}; confirmed {time:yyyy-MM-dd HH:mm:ss}; {reason.Trim()}" });
+            await db.SaveChangesAsync();
+            var pending = await db.ZkPunchReviews.AnyAsync(r => r.DeviceId == row.DeviceId && r.ReviewedUtc == null);
+            if (!pending) await db.ZkDevices.Where(d => d.Id == row.DeviceId && d.LastError != null && d.LastError.Contains("clock errors"))
+                .ExecuteUpdateAsync(s => s.SetProperty(d => d.LastError, (string?)null));
+            await tx.CommitAsync();
+            TempData["BulkPunchNotice"] = result + ". Original terminal timestamp retained in the review history." + (needsSetup ? " Map the PIN or configure work rules, then rebuild attendance." : "");
+        });
+    }
 
     private const string PunchColumns = "DeviceId,Pin,Timestamp";
 

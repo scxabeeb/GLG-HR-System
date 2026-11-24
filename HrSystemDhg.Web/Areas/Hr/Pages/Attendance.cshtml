@@ -17,6 +17,7 @@
 <a href="#attendance-daily" data-workspace-link>Daily attendance</a>
 <a href="#attendance-live" data-workspace-link>Live punches</a>
 <a href="#attendance-import" data-workspace-link>Import &amp; manual entry</a>
+<a href="#attendance-clock" data-workspace-link>Clock review (@Model.ClockReviews.Count(r => r.ReviewedUtc == null))</a>
 <a href="#attendance-review" data-workspace-link>Corrections &amp; device mapping</a>
 </nav>
 <section id="attendance-daily" data-workspace-panel aria-label="Daily attendance"><section class="card workspace-list">
@@ -79,4 +80,15 @@
 </form>
 </div></section>
 <section id="attendance-review" data-workspace-panel aria-label="Corrections and device mapping"><div class="grid"><form method="post" asp-page-handler="Correct" class="card"><h2>Attendance correction</h2><label>Employee<select name="employeeId">@foreach(var e in Model.Employees){<option value="@e.Id">@e.FullName</option>}</select></label><label>Work date<input name="date" type="date" required/></label><label>First in<input name="first" type="datetime-local" required/></label><label>Last out<input name="last" type="datetime-local" required/></label><label>Reason<input name="reason" required/></label><button>Save audited correction</button></form><form method="post" asp-page-handler="Overtime" class="card"><h2>Approve overtime</h2><label>Employee<select name="employeeId">@foreach(var e in Model.Employees){<option value="@e.Id">@e.FullName</option>}</select></label><label>Work date<input name="date" type="date" required/></label><label>Approved hours<input name="hours" type="number" min="0" max="16" step="0.25" required/></label><label>Reason<input name="reason" required/></label><button>Approve overtime</button></form></div><div class="card"><h2>Unmapped PIN queue</h2><p>Unmapped punches: @Model.Unmapped.Count. Map a PIN to an employee, then rebuild summaries.</p>@foreach(var pin in Model.Unmapped){<form method="post" asp-page-handler="Map" class="inline"><input type="hidden" name="pin" value="@pin"/><strong>@pin</strong><select name="employeeId">@foreach(var e in Model.Employees){<option value="@e.Id">@e.FullName</option>}</select><button>Map PIN & rebuild</button></form>}</div><form method="post" asp-page-handler="Rebuild" class="card"><h2>Rebuild attendance summaries</h2><div class="grid"><label>From<input name="from" type="date" required/></label><label>To<input name="to" type="date" required/></label></div><button>Rebuild date range</button></form>
-</section></div>
+</section><section id="attendance-clock" data-workspace-panel aria-label="Terminal clock review"><section class="card"><h2>Terminal clock exceptions</h2><p>These records were stamped in the future by the terminal. They are preserved separately and excluded from attendance and payroll until HR confirms an actual time. Valid scans continue uploading.</p>
+<div class="actions"><a asp-page="./Attendance" asp-route-clockHistory="@(!Model.ClockHistory)" asp-fragment="attendance-clock">@(Model.ClockHistory ? "Show pending only" : "Show review history")</a></div>
+@if(Model.ClockReviews.Count == 0){<p>No clock exceptions in this view.</p>}
+else { <p>Latest @Model.ClockReviews.Count exceptions shown.</p><div class="table-scroll"><table><thead><tr><th>Employee / PIN</th><th>Device</th><th>Original terminal time (EAT)</th><th>Received (EAT)</th><th>Review</th></tr></thead><tbody>
+@foreach(var review in Model.ClockReviews){<tr><td>@(Model.Employees.FirstOrDefault(e => e.ZkPin == review.Pin)?.FullName ?? "Unmapped")<br/>PIN @review.Pin</td><td>@Model.Devices.FirstOrDefault(d=>d.Id==review.DeviceId)?.Name</td><td>@review.RecordedTime.ToString("dd MMM yyyy HH:mm:ss")<br/>@review.Reason</td><td>@HrSystemDhg.Web.Services.OperationsPolicy.Local(review.ReceivedUtc).ToString("dd MMM yyyy HH:mm:ss")</td><td>
+@if(review.ReviewedUtc != null){<strong>@review.Resolution</strong><p>@review.CorrectedTime?.ToString("dd MMM yyyy HH:mm:ss") · @review.Reviewer<br/>@review.ReviewReason</p>}
+else if(User.IsInRole("Admin") || User.IsInRole("HR")){
+<form method="post" asp-page-handler="ReviewClock" asp-route-id="@review.Id"><label>Confirmed actual time (EAT)<input type="datetime-local" name="correctedTime" step="1"/></label><label>Review reason<input name="reason" maxlength="500" required/></label><div class="actions"><button name="resolution" value="correct">Save confirmed time</button><button class="secondary" name="resolution" value="ignore">Ignore invalid punch</button></div></form>
+}else{<span>Awaiting HR review</span>}
+</td></tr>}
+</tbody></table></div>}
+</section></section></div>

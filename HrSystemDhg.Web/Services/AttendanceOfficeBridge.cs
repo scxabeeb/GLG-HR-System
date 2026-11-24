@@ -31,6 +31,7 @@ public static class AttendanceOfficeBridge
             return Results.Ok(new { deviceId = id, todayEastAfrica = today.ToString("yyyy-MM-dd"),
                 punchesToday = await punches.CountAsync(p => p.PunchTime >= today && p.PunchTime < today.AddDays(1), context.RequestAborted),
                 totalPunches = await punches.CountAsync(context.RequestAborted), lastPunchLocalTime = latest,
+                pendingClockReviews = await db.ZkPunchReviews.CountAsync(p => p.DeviceId == id && p.ReviewedUtc == null, context.RequestAborted),
                 terminalLastContactUtc = device.LastPushSeenUtc, lastUploadUtc = device.LastSuccess, serverUtc = now });
         }
         context.Items[typeof(AttendanceOfficeBridge)] = new Identity(device.Id, device.OfficeConnectorKeyHash!, device.PushAddress);

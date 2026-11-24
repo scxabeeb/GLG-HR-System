@@ -27,7 +27,7 @@ public static class ZkAttendancePush
             bytes[0] == 192 && bytes[1] == 168) ? address.ToString() : null;
     }
 
-    public static List<(string Pin, DateTime Time)>? Parse(string body, DateTime localNow)
+    public static List<(string Pin, DateTime Time)>? Parse(string body, DateTime localNow, bool allowFutureForReview = false)
     {
         var rows = new List<(string, DateTime)>();
         foreach (var line in body.Split('\n'))
@@ -37,7 +37,7 @@ public static class ZkAttendancePush
             if (rows.Count == 2000 || fields.Length < 2 || fields[0].Length is < 1 or > 64 ||
                 !Regex.IsMatch(fields[0], @"\A[A-Za-z0-9._-]+\z") ||
                 !DateTime.TryParseExact(fields[1], "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture,
-                    DateTimeStyles.None, out var date) || date.Year < 2000 || date > localNow.AddMinutes(15))
+                    DateTimeStyles.None, out var date) || date.Year < 2000 || !allowFutureForReview && date > localNow.AddMinutes(15))
                 return null;
             rows.Add((fields[0], date));
         }
@@ -140,7 +140,7 @@ public static class ZkAttendancePush
         }
         if (length > MaxBytes) return Results.StatusCode(413);
         List<(string Pin, DateTime Time)>? rows;
-        try { rows = Parse(new UTF8Encoding(false, true).GetString(bytes, 0, length).TrimStart('\uFEFF'), BusinessClock.Now); }
+        try { rows = Parse(new UTF8Encoding(false, true).GetString(bytes, 0, length).TrimStart('\uFEFF'), BusinessClock.Now, allowFutureForReview: true); }
         catch (DecoderFallbackException) { return Results.BadRequest(); }
         if (rows == null) return Results.BadRequest();
         if (!await Uploads.WaitAsync(TimeSpan.FromSeconds(4), ct)) return Results.StatusCode(503);
@@ -154,18 +154,27 @@ public static class ZkAttendancePush
             var last = rows.Max(r => r.Time);
             var existing = await db.ZkPunchs.AsNoTracking().Where(p => p.DeviceId == current.Id && p.PunchTime >= first &&
                 p.PunchTime <= last && pins.Contains(p.Pin)).Select(p => new { p.Pin, p.PunchTime }).ToListAsync(ct);
-            var seen = existing.Select(p => (p.Pin.ToUpperInvariant(), p.PunchTime)).ToHashSet();
+            var reviewed = await db.ZkPunchReviews.AsNoTracking().Where(p => p.DeviceId == current.Id && p.RecordedTime >= first && p.RecordedTime <= last && pins.Contains(p.Pin))
+                .Select(p => new { p.Pin, p.RecordedTime }).ToListAsync(ct);
+            var seen = existing.Select(p => (p.Pin.ToUpperInvariant(), p.PunchTime))
+                .Concat(reviewed.Select(p => (p.Pin.ToUpperInvariant(), p.RecordedTime))).ToHashSet();
             var unique = rows.Where(r => seen.Add((r.Pin.ToUpperInvariant(), r.Time))).ToList();
-            foreach (var row in unique)
+            var limit = BusinessClock.Now.AddMinutes(15);
+            var future = unique.Where(r => r.Time > limit).ToList();
+            var valid = unique.Where(r => r.Time <= limit).ToList();
+            foreach (var row in valid)
                 db.ZkPunchs.Add(new() { DeviceId = current.Id, Pin = row.Pin, PunchTime = row.Time });
-            if (unique.Count != 0)
-                db.AuditLogs.Add(new() { Actor = "Attendance device", Action = $"Automatic push: device {current.Id}; {unique.Count} new punches" });
+            foreach (var row in future)
+                db.ZkPunchReviews.Add(new() { DeviceId = current.Id, Pin = row.Pin, RecordedTime = row.Time, ReceivedUtc = DateTime.UtcNow,
+                    Reason = "Terminal timestamp was more than 15 minutes ahead of East Africa Time at receipt. Check terminal clock/timezone." });
+            if (valid.Count != 0 || future.Count != 0)
+                db.AuditLogs.Add(new() { Actor = "Attendance device", Action = $"Automatic push: device {current.Id}; {valid.Count} valid punches; {future.Count} clock exceptions saved for review" });
             await db.SaveChangesAsync(ct);
             var employees = await db.Employees.Where(e => e.ZkPin != null && pins.Contains(e.ZkPin)).Select(e => new { e.Id, e.ZkPin }).ToListAsync(ct);
             var map = employees.ToDictionary(e => e.ZkPin!, e => e.Id, StringComparer.OrdinalIgnoreCase);
             var days = new HashSet<(int Employee, DateTime Day)>();
             var incomplete = false;
-            foreach (var row in unique)
+            foreach (var row in valid)
             {
                 if (!map.TryGetValue(row.Pin, out var employee)) { incomplete = true; continue; }
                 try { days.Add((employee, await attendance.WorkDateAsync(employee, row.Time))); }
@@ -177,8 +186,9 @@ public static class ZkAttendancePush
                 catch (InvalidOperationException ex) when (MissingSchedule(ex)) { incomplete = true; }
             }
             current.LastPushSeenUtc = current.LastSuccess = DateTime.UtcNow;
-            if (unique.Count != 0)
-                current.LastError = incomplete ? "Punches saved; map missing PINs or configure work rules and rebuild attendance." : null;
+            var pendingClock = await db.ZkPunchReviews.CountAsync(p => p.DeviceId == current.Id && p.ReviewedUtc == null, ct);
+            current.LastError = pendingClock > 0 ? $"{pendingClock} punch(es) have clock errors and are excluded from attendance/payroll. Review under HR → Attendance → Clock review." :
+                incomplete ? "Punches saved; map missing PINs or configure work rules and rebuild attendance." : null;
             if (stampValid && (current.PushStamp == null ||
                 System.Numerics.BigInteger.Parse(stamp, CultureInfo.InvariantCulture) >= System.Numerics.BigInteger.Parse(current.PushStamp, CultureInfo.InvariantCulture)))
                 current.PushStamp = stamp;

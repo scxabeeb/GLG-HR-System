@@ -45,7 +45,7 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
     public async Task<IActionResult> OnPostDeleteAsync(int id)
     {
         var device = await db.ZkDevices.FindAsync(id); if (device == null) return NotFound();
-        if (await db.ZkPunchs.AnyAsync(p => p.DeviceId == id) || await db.ZkDeviceCommands.AnyAsync(c => c.DeviceId == id))
+        if (await db.ZkPunchs.AnyAsync(p => p.DeviceId == id) || await db.ZkPunchReviews.AnyAsync(p => p.DeviceId == id) || await db.ZkDeviceCommands.AnyAsync(c => c.DeviceId == id))
         { TempData["DeviceNotice"] = "This device has attendance or command history and cannot be deleted. Disable automatic sync to disconnect it while retaining its records."; return RedirectToPage(null, null, $"device-{id}"); }
         if (device.PushSerial != null)
         { TempData["DeviceNotice"] = "Disable automatic sync before deleting this paired device."; return RedirectToPage(null, null, $"device-{id}"); }

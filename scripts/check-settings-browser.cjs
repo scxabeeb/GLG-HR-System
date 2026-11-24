@@ -115,6 +115,17 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  }
  const script=await page.request.get(base+'/Admin/Devices?handler=ConnectorScript');if(script.status()!==200 || !(await script.text()).includes('Private-LAN ADMS receiver'))throw Error('Connector script download failed');
  console.log('PASS admin connector configuration download, device-scoped key issuance/revocation and script download');
+ await page.goto(base+'/Hr/Attendance#attendance-clock');
+ const clockForm=page.locator('form[action*="handler=ReviewClock"]').first();
+ if(await clockForm.count()){
+   const actual=new Date(Date.now()+3*3600000-10*60000).toISOString().slice(0,19);
+   await clockForm.locator('[name="correctedTime"]').fill(actual);
+   await clockForm.locator('[name="reason"]').fill('Confirmed timestamp from synthetic integration fixture');
+   await Promise.all([page.waitForNavigation(),clockForm.locator('button[value="correct"]').click()]);
+   await page.goto(base+'/Hr/Attendance?ClockHistory=true#attendance-clock');
+   if(!await page.locator('#attendance-clock').getByText('Corrected',{exact:true}).count())throw Error('Clock exception correction was not saved');
+   console.log('PASS clock review correction and retained review history');
+ }
  console.log('PASS saved branding/logo, report creation, selected columns, CSV/PDF/Excel, report disabling and device settings views');
  if(errors.length) throw Error(errors.join('; '));
  } finally { await browser.close(); }
