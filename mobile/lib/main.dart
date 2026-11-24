@@ -362,14 +362,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextFormField(
                       controller: username,
                       decoration: const InputDecoration(
-                        labelText: 'Email or employee number',
+                        labelText: 'Employee ID or email',
+                        hintText: 'EMP0001',
                         prefixIcon: Icon(Icons.person_outline),
                       ),
                       autofillHints: const [AutofillHints.username],
                       textInputAction: TextInputAction.next,
                       validator: (value) =>
                           value == null || value.trim().isEmpty
-                          ? 'Enter your email or employee number.'
+                          ? 'Enter your employee ID or email.'
                           : null,
                     ),
                     const SizedBox(height: 16),
@@ -601,7 +602,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
     canBack: !widget.requiredChange,
     children: [
       if (widget.requiredChange)
-        const Text('Choose a new password before entering your workspace.'),
+        const Text('Choose your own password before entering your workspace. Your initial password is your employee ID followed by 123.'),
       for (final entry in [
         (current, 'Current password'),
         (password, 'New password'),

@@ -34,3 +34,5 @@ The arm64 APK supports the Infinix. Release builds currently use the project's e
 For the iOS simulator and a local server, debug builds allow `--dart-define=GAROWE_HR_URL=http://127.0.0.1:5189`. Physical devices require reachable HTTPS.
 
 Version 2.2 adds native administrator task and meeting reports with search, status and date filters, report pagination, and per-employee task completion/overdue summaries on the dashboard. Reports require administrator and module/report permissions; employees keep their personal dashboard.
+
+Version 2.3 supports automatic employee ID sign-in (for example EMP0001). New registrations receive EMPID123 as their initial password and must change it before using the workspace. Email sign-in and email password recovery remain supported.

@@ -754,6 +754,29 @@ namespace HrSystemDhg.Web.Migrations
                     b.ToTable("EmployeeDocuments");
                 });
 
+            modelBuilder.Entity("HrSystemDhg.Web.Models.EmployeeNumberSequence", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("NextNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("EmployeeNumberSequences");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            NextNumber = 1
+                        });
+                });
+
             modelBuilder.Entity("HrSystemDhg.Web.Models.FleetExpense", b =>
                 {
                     b.Property<int>("Id")

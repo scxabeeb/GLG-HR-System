@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HrSystemDhg.Web.Pages.Hr;
 [Authorize(Roles = "HR,Admin")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class OnboardingModel(HrDbContext db, CalendarService calendar, DocumentService documents) : PageModel
 {
     public string[] Labels = ["Assignment", "Personal", "Education", "Experience", "Salary", "Documents"];

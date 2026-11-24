@@ -27,6 +27,7 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
     public DbSet<Branch> Branchs => Set<Branch>();
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<SubDepartment> SubDepartments => Set<SubDepartment>();
+    public DbSet<EmployeeNumberSequence> EmployeeNumberSequences => Set<EmployeeNumberSequence>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<EmployeeAssignment> EmployeeAssignments => Set<EmployeeAssignment>();
     public DbSet<Education> Educations => Set<Education>();
@@ -73,6 +74,7 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EmployeeNumberSequence>().HasData(new EmployeeNumberSequence { Id = 1, NextNumber = 1 });
         b.Entity<MeetingAgendaItem>().HasOne<WorkMeeting>().WithMany().HasForeignKey(x => x.MeetingId);
         b.Entity<AgendaItem>().HasIndex(x => new { x.OwnerId, x.Completed, x.Date });
         b.Entity<AgendaItem>().HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.OwnerId);

@@ -3,6 +3,7 @@
 @{ViewData["Title"]="Register employee";}
 <div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Register employee</h1>
 <partial name="/Pages/Shared/_EmployeeNavigation.cshtml" model='("register")' />
+<p>Imports also generate a new employee ID and login for every employee. Leave Number and InitialPassword blank in the sample.</p>
 <details id="employee-import" class="card workspace-tools"><summary>Import &amp; export employees</summary><partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("employees")' /></details>
 
 @if(!Model.Branches.Any() || !Model.Departments.Any()){<div class="notice">Create an active branch and department in <a href="/Admin/Organization">Organization structure</a> before registration.</div>}
@@ -13,7 +14,7 @@
         <div>
             <label class="employee-sheet-name">Full name<input asp-for="Name" placeholder="Employee name" required /></label>
             <div class="grid">
-                <label>Employee number<input asp-for="Number" required /></label>
+                <label>Employee ID<input value="Automatic — EMP0001, EMP0002…" readonly /><small>Assigned when the employee is saved.</small></label>
                 <label>Work email<input asp-for="Email" type="email" autocomplete="off" required /></label>
             </div>
         </div>
@@ -63,13 +64,9 @@
 <fieldset id="employee-login">
     <legend>Employee sign-in</legend>
     <p>The employee can sign in with their work email or employee number. Give them the temporary password privately. They’ll change it at first sign-in.</p>
-    <label>Temporary password<input asp-for="InitialPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="128" /></label>
-    <p>Use at least 10 characters, including an uppercase letter, a lowercase letter, a number, and a symbol.</p>
-    <div class="actions">
-        <button class="secondary" type="button" id="generate-employee-password" hidden>Generate temporary password</button>
-        <button class="secondary" type="button" id="copy-employee-password" hidden>Copy temporary password</button>
-        <span id="employee-password-status" role="status"></span>
-    </div>
+    <p>Sign-in credentials are created automatically when you save.</p>
+    <dl><dt>Username</dt><dd>Employee ID, for example EMP0001</dd><dt>Initial password</dt><dd>Employee ID followed by 123, for example EMP0001123</dd></dl>
+    <p>The employee must choose a new password at their first sign-in. Their work email also works for sign-in and password recovery.</p>
 </fieldset>
 <div class="actions employee-sheet-footer">
     <button type="submit">Create employee and login</button>
@@ -97,5 +94,5 @@ photo.addEventListener('change', () => {
     preview.src = previewUrl;
 });
 </script>
-<script src="~/js/employee-credentials.js" asp-append-version="true" defer></script>
+
 }

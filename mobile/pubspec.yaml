@@ -1,7 +1,7 @@
 name: garowe_hr_mobile
 description: Native employee app for Garowe City Management System.
 publish_to: none
-version: 2.2.0+4
+version: 2.3.0+5
 
 environment:
   sdk: ^3.10.0

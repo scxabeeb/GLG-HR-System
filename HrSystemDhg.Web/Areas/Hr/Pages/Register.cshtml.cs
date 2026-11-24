@@ -12,7 +12,7 @@ namespace HrSystemDhg.Web.Pages.Hr;
 public class RegisterModel(HrDbContext db, DocumentService? documents = null) : PageModel
 {
     [BindProperty]
-    [Required, StringLength(50)]
+    [StringLength(50)]
     public string Number { get; set; } = "";
 
     [BindProperty]
@@ -38,7 +38,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
     public string? Pin { get; set; }
 
     [BindProperty]
-    [Required, StringLength(128, MinimumLength = 10)]
+    [StringLength(128)]
     public string InitialPassword { get; set; } = "";
 
     [BindProperty]
@@ -69,6 +69,8 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
     public async Task<IActionResult> OnGetSubDepartmentsAsync(int departmentId) => new JsonResult(await db.SubDepartments.Where(x => x.DepartmentId == departmentId && x.IsActive).Select(x => new { x.Id, x.Name }).ToListAsync());
     public async Task<IActionResult> OnPostAsync([FromServices] Microsoft.AspNetCore.Identity.UserManager<ApplicationUser> users)
     {
+        ModelState.Remove(nameof(Number));
+        ModelState.Remove(nameof(InitialPassword));
         await OnGetAsync();
         Number = Number?.Trim() ?? ""; Name = Name?.Trim() ?? ""; Email = Email?.Trim() ?? ""; Title = Title?.Trim() ?? "";
         Pin = string.IsNullOrWhiteSpace(Pin) ? null : Pin.Trim();
@@ -84,13 +86,13 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
             ModelState.AddModelError(nameof(Email), "An account already uses this email address.");
         if (!ModelState.IsValid) return Page();
         var dept = await db.Departments.SingleOrDefaultAsync(x => x.Id == DepartmentId && x.IsActive);
-        if (dept == null || dept.BranchId != BranchId || (dept.RequiresSubDepartment && SubDepartmentId == null) || (SubDepartmentId != null && !await db.SubDepartments.AnyAsync(x => x.Id == SubDepartmentId && x.DepartmentId == DepartmentId && x.IsActive)) || !await db.Branchs.AnyAsync(x => x.Id == dept.BranchId && x.IsActive) || (Hire > HrSystemDhg.Web.Services.BusinessClock.Today && !(await db.Settings.FirstOrDefaultAsync() ?? new()).AllowFutureHires) || string.IsNullOrWhiteSpace(Number) || string.IsNullOrWhiteSpace(Name) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(Email))
+        if (dept == null || dept.BranchId != BranchId || (dept.RequiresSubDepartment && SubDepartmentId == null) || (SubDepartmentId != null && !await db.SubDepartments.AnyAsync(x => x.Id == SubDepartmentId && x.DepartmentId == DepartmentId && x.IsActive)) || !await db.Branchs.AnyAsync(x => x.Id == dept.BranchId && x.IsActive) || (Hire > HrSystemDhg.Web.Services.BusinessClock.Today && !(await db.Settings.FirstOrDefaultAsync() ?? new()).AllowFutureHires) || string.IsNullOrWhiteSpace(Name) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(Email))
         {
             ModelState.AddModelError("", "Valid active department, employee details and hire date are required.");
             return Page();
         }
 
-        if (await db.Employees.IgnoreQueryFilters().AnyAsync(x => x.EmployeeNumber == Number || x.WorkEmail == Email || (Pin != null && x.ZkPin == Pin)))
+        if (await db.Employees.IgnoreQueryFilters().AnyAsync(x => x.WorkEmail == Email || (Pin != null && x.ZkPin == Pin)))
         {
             ModelState.AddModelError("", "Employee number, email or PIN already exists.");
             return Page();
@@ -108,6 +110,8 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
         try
         {
             await using var tx = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync() : null;
+            Number = await EmployeeNumbers.AllocateAsync(db);
+            InitialPassword = Number + "123";
             var e = new Employee
             {
                 EmployeeNumber = Number,
@@ -122,12 +126,15 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
             db.EmployeeAssignments.Add(new() { EmployeeId = e.Id, BranchId = dept.BranchId, DepartmentId = dept.Id, SubDepartmentId = SubDepartmentId, JobTitle = Title, EffectiveFrom = Hire });
             var u = new ApplicationUser
             {
-                UserName = Email,
+                UserName = Number,
                 Email = Email,
                 EmployeeId = e.Id,
                 MustChangePassword = true
             };
-            var result = await users.CreateAsync(u, InitialPassword);
+            // Only this generated first-login credential uses the requested EMPID123 format.
+            // Password changes/resets continue through the normal Identity password policy.
+            u.PasswordHash = users.PasswordHasher.HashPassword(u, InitialPassword);
+            var result = await users.CreateAsync(u);
             if (!result.Succeeded)
             {
                 foreach (var error in result.Errors)
@@ -186,7 +193,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
 
     public IActionResult OnGetSample()
     {
-        return RegistrationCsv.Download("employees-sample", CsvColumns, [["EMP-001", "Example employee", "employee@example.com", BusinessClock.Today, 1, 1, null, "Officer", null, null, null]]);
+        return RegistrationCsv.Download("employees-sample", CsvColumns, [[null, "Example employee", "employee@example.com", BusinessClock.Today, 1, 1, null, "Officer", null, null, null]]);
     }
 
     public async Task<IActionResult> OnGetExportAsync()
@@ -202,7 +209,9 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
     {
         return RegistrationCsv.ImportAsync(this, db, upload, CsvColumns, async row =>
         {
-            Number = row.Get<string>("Number");
+            ModelState.Clear();
+            ModelState.Clear();
+            Number = "";
             Name = row.Get<string>("Name");
             Email = row.Get<string>("Email");
             Hire = row.Get<DateTime>("Hire");
@@ -212,7 +221,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
             Title = row.Get<string>("Title");
             Pin = row.Optional("Pin");
             TerminalId = row.Get<int?>("TerminalId");
-            InitialPassword = row.Get<string>("InitialPassword");
+            InitialPassword = "";
             var validation = new List<ValidationResult>();
             Validator.TryValidateObject(this, new ValidationContext(this), validation, validateAllProperties: true);
             foreach (var error in validation)

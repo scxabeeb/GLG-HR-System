@@ -9,10 +9,12 @@
     <section class="card" aria-labelledby="employee-login-created">
         <h2 id="employee-login-created">Employee login created</h2>
         <dl>
+            <dt>Username</dt><dd>@Model.Employee.EmployeeNumber</dd>
+            <dt>Initial password</dt><dd>@(Model.Employee.EmployeeNumber + "123")</dd>
             <dt>Work email</dt><dd>@Model.Employee.WorkEmail</dd>
             <dt>Employee number</dt><dd>@Model.Employee.EmployeeNumber</dd>
         </dl>
-        <p>Share either username and the temporary password privately. The employee must change their password at first sign-in.</p>
+        <p>Share the employee ID and initial password privately. The employee must change their password at first sign-in.</p>
         <a asp-area="Identity" asp-page="/Account/Login">Employee sign-in page</a>
     </section>
 }
