@@ -81,6 +81,11 @@ class Connector:
             return content, content_type
         except Exception as error:
             message = 'Cloud returned HTTP ' + str(error.code) if isinstance(error, urllib.error.HTTPError) else 'Cloud connection failed (' + type(error).__name__ + ')'
+            if isinstance(error, urllib.error.HTTPError) and error.code == 400 and operation == 'cdata' and body:
+                fields = body.decode('utf-8', errors='replace').splitlines()[0].split('\t')
+                timestamp = fields[1] if len(fields) > 1 and re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', fields[1]) else 'unrecognized timestamp format'
+                now_eat = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)).strftime('%Y-%m-%d %H:%M:%S')
+                message += '; record time=' + timestamp + '; current EAT=' + now_eat
             with self.lock:
                 self.status[terminal['id']].update(cloud_connected=False, last_error=message)
             raise ConnectionError(message) from None

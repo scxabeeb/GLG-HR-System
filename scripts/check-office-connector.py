@@ -54,6 +54,9 @@ def run(root, database, sql):
             payload=('BRIDGE-TEST\t'+timestamp+'\t0\t1\n').encode()
             for _ in range(2):assert b'OK: 1' in local('/iclock/cdata?SN=BRIDGETEST001&table=ATTLOG&Stamp=100',payload)
             assert sql("SELECT COUNT(*) FROM "+database+".ZkPunchs WHERE DeviceId="+str(device)+" AND Pin='BRIDGE-TEST'").strip()=='1'
+            diagnostic=json.loads(cloud('/status'))
+            assert diagnostic['punchesToday']==1 and diagnostic['totalPunches']==1
+            assert diagnostic['lastPunchLocalTime'].replace('T',' ')==timestamp
             expires=(datetime.now(timezone.utc)+timedelta(minutes=3)).strftime('%Y-%m-%d %H:%M:%S')
             sql("INSERT INTO "+database+".ZkDeviceCommands (DeviceId,Serial,Address,Pin,Name,ExpiresUtc) VALUES ("+str(device)+",'BRIDGETEST001','127.0.0.1','999','Fixture','"+expires+"')")
             command=int(sql('SELECT MAX(Id) FROM '+database+'.ZkDeviceCommands WHERE DeviceId='+str(device)).strip())
