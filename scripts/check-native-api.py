@@ -16,7 +16,18 @@ try:
     testcs=re.sub(r'(?i)Database=[^;]+','Database='+database,cs)
     appenv=os.environ.copy();appenv.update({'ConnectionStrings__DefaultConnection':testcs,'Bootstrap__Email':email,'Bootstrap__Password':password,'ASPNETCORE_ENVIRONMENT':'Development','ASPNETCORE_URLS':'http://127.0.0.1:5199','Logging__LogLevel__Default':'Warning'})
     dll=root/'HrSystemDhg.Web/bin/Debug/net8.0/HrSystemDhg.Web.dll'
+    if os.environ.get('DHG_DEVICE_MIGRATION_CHECK') == '1':
+        subprocess.run([os.environ.get('DOTNET_EF','dotnet-ef'),'database','update','BrandingAndSavedReportViews','--project',str(root/'HrSystemDhg.Web'),'--no-build'],env=appenv,cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+        sql("INSERT INTO "+database+".Branchs (Name,Code,City,Address,Timezone,IsActive) VALUES ('Legacy branch','LEGACY','','','Africa/Mogadishu',1)")
+        sql("INSERT INTO "+database+".Departments (Name,Code,BranchId,IsActive,RequiresSubDepartment) SELECT 'Legacy department','LEGACYD',Id,1,0 FROM "+database+".Branchs WHERE Code='LEGACY'")
+        sql("INSERT INTO "+database+".ZkDevices (Name,Endpoint,DepartmentId,Location,PushSerial,PushAddress) SELECT 'Legacy terminal','Fixture',Id,'Legacy office','LEGACY-SERIAL','192.168.50.2' FROM "+database+".Departments WHERE Code='LEGACYD'")
+        sql("INSERT INTO "+database+".ZkPunchs (DeviceId,Pin,PunchTime) SELECT Id,'777','2026-01-01 08:00:00' FROM "+database+".ZkDevices WHERE Name='Legacy terminal'")
     subprocess.run(['dotnet',str(dll),'--migrate'],env=appenv,cwd=root/'HrSystemDhg.Web',stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)
+    if os.environ.get('DHG_DEVICE_MIGRATION_CHECK') == '1':
+        assert sql("SELECT COUNT(*) FROM "+database+".ZkDevices d JOIN "+database+".Branchs b ON b.Id=d.BranchId WHERE b.Code='LEGACY' AND d.PushSerial='LEGACY-SERIAL' AND d.PushAddress='192.168.50.2' AND d.Location='Legacy office'").strip()=='1'
+        assert sql("SELECT COUNT(*) FROM "+database+".ZkPunchs WHERE Pin='777'").strip()=='1'
+        print('PASS device migration derives branch from department and preserves pairing, location and punches')
+
     log=open(os.devnull,'w')
     process=subprocess.Popen(['dotnet',str(dll)],env=appenv,cwd=root/'HrSystemDhg.Web',stdout=log,stderr=log)
     token=None

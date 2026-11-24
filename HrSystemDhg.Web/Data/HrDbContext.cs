@@ -106,6 +106,8 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
         b.Entity<TaskActivity>().HasIndex(a => new { a.TaskId, a.RecordedUtc });
         b.Entity<UserModuleRestriction>().HasKey(r => new { r.UserId, r.Module });
         b.Entity<UserModuleRestriction>().HasOne<ApplicationUser>().WithMany().HasForeignKey(r => r.UserId);
+        b.Entity<ZkDevice>().HasOne<Branch>().WithMany()
+            .HasForeignKey(d => d.BranchId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ZkDevice>().HasOne<Department>().WithMany()
             .HasForeignKey(d => d.DepartmentId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ZkDevice>().HasIndex(d => d.PushSerial).IsUnique();

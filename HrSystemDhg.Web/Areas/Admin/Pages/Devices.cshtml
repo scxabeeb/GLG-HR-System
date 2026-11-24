@@ -6,7 +6,7 @@
 <h1>Attendance devices</h1>
 
 
-<p>Register one terminal for each department or location. All paired terminals upload into the shared attendance register. Use a unique employee PIN consistently on every terminal.</p>
+<p>Register one terminal for each branch or location. All paired terminals upload into the shared attendance register. Use a unique employee PIN consistently on every terminal.</p>
 <p>Pair a compatible ZKTeco ADMS terminal for automatic punches, or register a device for manual and CSV imports.</p>
 @if (TempData["DeviceNotice"] is string message) { <p class="notice" role="status">@message</p> }
 <div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Device settings views"><a href="#devices-list" data-workspace-link>Registered devices</a><a href="#devices-register" data-workspace-link>Register device</a><a href="#devices-config" data-workspace-link>Device configuration</a><a href="#devices-setup" data-workspace-link>Connection guide</a><a href="#devices-import" data-workspace-link>Import &amp; export</a></nav>
@@ -17,16 +17,16 @@
     {
         <div class="table-scroll">
             <table>
-                <thead><tr><th>Device</th><th>Department</th><th>Office / location</th><th>Serial number</th><th>IP address</th><th>Status</th><th>Last contact (EAT)</th><th>Last upload (EAT)</th><th>Error</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Device</th><th>Branch</th><th>Office / location</th><th>Serial number</th><th>IP address</th><th>Status</th><th>Last contact (EAT)</th><th>Last upload (EAT)</th><th>Error</th><th>Actions</th></tr></thead>
                 <tbody>
                 @foreach (var registered in Model.Items.OrderBy(d => d.Name))
                 {
-                    var department = Model.Departments.FirstOrDefault(d => d.Id == registered.DepartmentId);
+                    var branch = Model.Branches.FirstOrDefault(b => b.Id == registered.BranchId);
                     var paired = registered.PushSerial != null;
                     var recent = registered.LastPushSeenUtc >= DateTime.UtcNow.AddMinutes(-5);
                     <tr>
                         <td><strong>@registered.Name</strong><br /><small>#@registered.Id · @registered.Endpoint</small></td>
-                        <td>@(department?.Name ?? "Shared / no department")</td>
+                        <td>@(branch?.Name ?? "Unassigned branch")</td>
                         <td>@(registered.Location ?? "—")</td>
                         <td>@(registered.PushSerial ?? "—")</td>
                         <td>@(registered.PushAddress ?? "—")</td>
@@ -46,9 +46,9 @@
 
 </section><section id="devices-register" data-workspace-panel><form method="post" class="card">
     <h2>Register a terminal</h2>
-    <div class="grid"><label>Device name<input name="name" required /></label><label>Reference / location<input name="endpoint" /></label></div>
+    <div class="grid"><label>Device name<input name="name" required maxlength="200" /></label><label>Branch<select name="branchId" required><option value="">Choose branch</option>@foreach(var branch in Model.Branches){<option value="@branch.Id">@branch.Name</option>}</select></label><label>Reference<input name="endpoint" /></label><label>Office / location<input name="location" maxlength="250" /></label></div>
     <button>Add device</button>
-</form></section><section id="devices-config" data-workspace-panel><h2>Device configuration</h2><p>Expand a registered device to manage its department, network pairing, employee sync and enrollment commands.</p>
+</form></section><section id="devices-config" data-workspace-panel><h2>Device configuration</h2><p>Expand a registered device to manage its branch, network pairing, employee sync and enrollment commands.</p>
 @if(Model.Items.Count == 0){<p class="notice">No devices registered. <a href="#devices-register">Register a device</a> to configure its connection.</p>}
 <div class="device-configurations">@foreach (var device in Model.Items)
 {
@@ -57,14 +57,14 @@
         <p>@device.Endpoint · @(device.PushSerial == null ? "Manual / CSV" : "Paired for ADMS")</p>
         <form method="post" asp-page-handler="Location" asp-route-id="@device.Id">
             <div class="grid">
-                <label>Department<select name="departmentId"><option value="">Shared / no department</option>
-                    @foreach (var department in Model.Departments) {
-                        <option value="@department.Id" selected="@(department.Id == device.DepartmentId)">@department.Name · #@department.Id</option>
+                <label>Branch<select name="branchId" required><option value="">Choose branch</option>
+                    @foreach (var branch in Model.Branches) {
+                        <option value="@branch.Id" selected="@(branch.Id == device.BranchId)">@branch.Name · #@branch.Id</option>
                     }
                 </select></label>
                 <label>Office / location<input name="location" value="@device.Location" maxlength="250" /></label>
             </div>
-            <button class="secondary">Save department and location</button>
+            <button class="secondary">Save branch and location</button>
         </form>
         @if (device.PushSerial != null)
         {

@@ -2091,6 +2091,9 @@ namespace HrSystemDhg.Web.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BranchId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("DepartmentId")
                         .HasColumnType("int");
 
@@ -2128,6 +2131,8 @@ namespace HrSystemDhg.Web.Migrations
                         .HasColumnType("varchar(32)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
 
                     b.HasIndex("DepartmentId");
 
@@ -2730,6 +2735,11 @@ namespace HrSystemDhg.Web.Migrations
 
             modelBuilder.Entity("HrSystemDhg.Web.Models.ZkDevice", b =>
                 {
+                    b.HasOne("HrSystemDhg.Web.Models.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("HrSystemDhg.Web.Models.Department", null)
                         .WithMany()
                         .HasForeignKey("DepartmentId")

@@ -10,35 +10,36 @@ namespace HrSystemDhg.Web.Pages.Admin;
 [Authorize(Roles = "Admin")]
 public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
 {
-    public List<Department> Departments = [];
+    public List<Branch> Branches = [];
     public List<ZkDevice> Items = [];
     public List<Employee> Employees = [];
     public List<ZkDeviceCommand> Commands = [];
 
     public async Task OnGetAsync()
     {
-        Departments = await db.Departments.AsNoTracking().OrderBy(d => d.Name).ToListAsync();
+        Branches = await db.Branchs.AsNoTracking().OrderBy(b => b.Name).ToListAsync();
         Items = await db.ZkDevices.ToListAsync();
         Employees = await db.Employees.Where(e => e.ZkPin != null && e.ZkPin != "").OrderBy(e => e.FullName).ToListAsync();
         Commands = await db.ZkDeviceCommands.OrderByDescending(c => c.Id).Take(50).ToListAsync();
     }
 
-    public async Task<IActionResult> OnPostLocationAsync(int id, int? departmentId, string? location)
+    public async Task<IActionResult> OnPostLocationAsync(int id, int? branchId, string? location)
     {
         var device = await db.ZkDevices.FindAsync(id);
         if (device == null) return NotFound();
         if (!ModelState.IsValid || location?.Trim().Length > 250 ||
-            (departmentId.HasValue && !await db.Departments.AnyAsync(d => d.Id == departmentId)))
+            (!branchId.HasValue || !await db.Branchs.AnyAsync(b => b.Id == branchId)))
         {
-            TempData["DeviceNotice"] = "Choose a valid department and a location of up to 250 characters.";
+            TempData["DeviceNotice"] = "Choose a valid branch and a location of up to 250 characters.";
             return RedirectToPage();
         }
-        device.DepartmentId = departmentId;
+        device.BranchId = branchId;
+        device.DepartmentId = null;
         device.Location = string.IsNullOrWhiteSpace(location) ? null : location.Trim();
-        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Device {id}: department {departmentId}, location {device.Location}" });
+        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Device {id}: branch {branchId}, location {device.Location}" });
         await db.SaveChangesAsync();
-        TempData["DeviceNotice"] = "Device department and location saved.";
-        return RedirectToPage();
+        TempData["DeviceNotice"] = "Device branch and location saved.";
+        return RedirectToPage(null, null, $"device-{id}");
     }
 
     public async Task<IActionResult> OnPostEmployeeAsync(int id, int employeeId, string operation, int fingerSlot)
@@ -68,14 +69,20 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         TempData["DeviceNotice"] = "Command queued. Refresh this page to check the terminal’s response.";
         return RedirectToPage();
     }
-    public async Task<IActionResult> OnPostAsync(string name, string? endpoint)
+    public async Task<IActionResult> OnPostAsync(string name, string? endpoint, int? branchId, string? location)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return BadRequest();
-        db.ZkDevices.Add(new() { Name = name, Endpoint = endpoint ?? "Manual import" });
-        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = "Added attendance device " + name });
+        if (!ModelState.IsValid || string.IsNullOrWhiteSpace(name) || name.Length > 200 || location?.Length > 250 ||
+            !branchId.HasValue || !await db.Branchs.AnyAsync(b => b.Id == branchId))
+        {
+            const string message = "Enter a device name, choose a valid branch, and use a location up to 250 characters.";
+            ModelState.AddModelError("", message); TempData["DeviceNotice"] = message;
+            return RedirectToPage(null, null, "devices-register");
+        }
+        db.ZkDevices.Add(new() { Name = name.Trim(), Endpoint = string.IsNullOrWhiteSpace(endpoint) ? "Manual import" : endpoint.Trim(), BranchId = branchId, Location = string.IsNullOrWhiteSpace(location) ? null : location.Trim() });
+        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Added attendance device {name} for branch {branchId}" });
         await db.SaveChangesAsync();
-        return RedirectToPage();
+        TempData["DeviceNotice"] = "Attendance device registered for the selected branch.";
+        return RedirectToPage(null, null, "devices-list");
     }
     public async Task<IActionResult> OnPostPushAsync(int id, string? serial, string? address, bool disable)
     {
@@ -116,18 +123,19 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         return RedirectToPage();
     }
 
-    private const string CsvColumns = "Name,Endpoint";
+    private const string CsvColumns = "Name,Endpoint,BranchId,Location";
 
-    public IActionResult OnGetSample()
+    public async Task<IActionResult> OnGetSampleAsync()
     {
-        return RegistrationCsv.Download("attendance-devices-sample", CsvColumns, [["Example terminal", "Manual import"]]);
+        var branch = await db.Branchs.AsNoTracking().OrderBy(b => b.Id).Select(b => (int?)b.Id).FirstOrDefaultAsync();
+        return RegistrationCsv.Download("attendance-devices-sample", CsvColumns, [["Example terminal", "Manual import", branch, "Main office"]]);
     }
 
     public async Task<IActionResult> OnGetExportAsync()
     {
         var records = await db.ZkDevices.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
         Response.Headers.CacheControl = "no-store";
-        return RegistrationCsv.Download("attendance-devices", CsvColumns, records.Select(x => new object?[] { x.Name, x.Endpoint }));
+        return RegistrationCsv.Download("attendance-devices", CsvColumns, records.Select(x => new object?[] { x.Name, x.Endpoint, x.BranchId, x.Location }));
     }
 
     public Task<IActionResult> OnPostImportAsync(IFormFile? upload)
@@ -137,7 +145,7 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
             var name = row.Get<string>("Name");
             if (await db.ZkDevices.AnyAsync(x => x.Name == name))
                 throw new FormatException("A device with this name already exists.");
-            return await OnPostAsync(name, row.Optional("Endpoint"));
+            return await OnPostAsync(name, row.Optional("Endpoint"), row.Get<int?>("BranchId"), row.Optional("Location"));
         });
     }
 }

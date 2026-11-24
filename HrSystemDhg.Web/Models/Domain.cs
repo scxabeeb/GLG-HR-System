@@ -123,6 +123,7 @@ public partial class DeductionRule
 
 public partial class ZkDevice
 {
+    public int? BranchId { get; set; }
     public int? DepartmentId { get; set; }
     [System.ComponentModel.DataAnnotations.MaxLength(250)] public string? Location { get; set; }
     public int Id { get; set; }

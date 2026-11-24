@@ -137,3 +137,7 @@ Administrators use **Main Settings → General** to change the organization name
 Database migration `BrandingAndSavedReportViews` adds branding fields and the report-definition table; existing organization names, device records and policies are retained.
 
 To include the settings browser checks in `scripts/check-native-api.py`, set `DHG_SETTINGS_BROWSER_CHECK=1`, provide a Node Playwright module via `PLAYWRIGHT_MODULE` and, optionally, a Chrome executable via `CHROME_PATH`. The runner creates synthetic credentials and a disposable database from `DHG_NATIVE_TEST_CONNECTION`; the browser check refuses non-loopback servers.
+
+Attendance terminals are assigned to a **branch**, with an optional office/location. Choose the branch when registering or configuring a device. The device CSV now contains `Name,Endpoint,BranchId,Location`; download a fresh sample before importing. Migration `DeviceBranchOwnership` derives each existing terminal’s branch from its former department, retaining pairing and punch history. Unassigned legacy terminals can be assigned through Device configuration.
+
+To verify upgrades from department-based device records, set `DHG_DEVICE_MIGRATION_CHECK=1` in the native test runner and provide the EF CLI via `DOTNET_EF` if it is not on PATH. The isolated upgrade fixture checks retained branch mapping, pairing and punch data.
