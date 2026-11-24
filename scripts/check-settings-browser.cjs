@@ -33,6 +33,15 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    const registrationContext=await browser.newContext({storageState:adminState});
    try{
      const registrationPage=await registrationContext.newPage();await registrationPage.goto(base+'/Hr/Register');
+     if(n===0 && process.env.REGISTRATION_SCREENSHOT){
+       for(const width of [1440,768,390,320]){
+         await registrationPage.setViewportSize({width,height:1000});
+         await registrationPage.waitForTimeout(300);
+         if(await registrationPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Registration overflows at '+width);
+         if(width===390 && await registrationPage.locator('#workspace-nav').evaluate(el=>el.getBoundingClientRect().right>1))throw Error('Mobile navigation obscures registration');
+         if(width===1440 || width===390)await registrationPage.screenshot({path:process.env.REGISTRATION_SCREENSHOT+'-'+width+'.png',fullPage:true});
+       }
+     }
      const csrf=await registrationPage.locator('form.employee-sheet [name="__RequestVerificationToken"]').inputValue();
      if(await registrationPage.locator('#employee-login,input[name="Pin"],input[name="InitialPassword"]').count())throw Error('Registration still exposes manual credentials or terminal PIN');
      const response=await registrationContext.request.post(base+'/Hr/Register',{form:{__RequestVerificationToken:csrf,Name:'Automatic employee '+n,Email:'auto'+n+'@example.test',Hire:new Date(Date.now()+3*3600000-86400000).toISOString().slice(0,10),BranchId:branchId,DepartmentId:departmentId,Title:'Officer',Number:'FORGED',InitialPassword:'FORGED',Pin:'FORGED'}});

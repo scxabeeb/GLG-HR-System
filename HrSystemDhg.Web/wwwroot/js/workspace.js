@@ -56,7 +56,7 @@
     window.addEventListener('hashchange', revealLinkedDetails);
     // Long module pages get a consistent section index without hiding records or actions.
     const content = document.querySelector('.civic-content');
-    if (content && !content.querySelector('[data-page-workspace]') && !document.body.classList.contains('civic-auth')) {
+    if (content && !content.querySelector('[data-page-workspace], [data-no-section-index]') && !document.body.classList.contains('civic-auth')) {
         const headings = [...content.querySelectorAll('h2')].filter(heading =>
             !heading.closest('dialog, details, [hidden]') && heading.textContent.trim());
         if (headings.length >= 3) {
