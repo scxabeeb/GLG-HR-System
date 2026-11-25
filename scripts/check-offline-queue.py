@@ -90,3 +90,49 @@ with patch.object(m,'computer_addresses',return_value=[]),patch('builtins.input'
 with patch.object(m.os,'name','nt'),patch.object(m.subprocess,'check_output',side_effect=OSError()),patch.object(m.socket,'gethostbyname_ex',return_value=('test',[],['192.168.5.10','127.0.0.1'])):
     assert m.computer_addresses()==[{'address':'192.168.5.10','interface':'Local adapter','prefix':None}]
 print('Computer IP checks passed: Windows adapter names/prefixes, private-address filtering, deduplication, numbered selection, rescanning and manual fallback.')
+
+with tempfile.TemporaryDirectory() as folder:
+    path=pathlib.Path(folder)/'attendance-connector-1.json'
+    original={'server':'https://example.invalid','listen':'192.168.50.1','port':5190,'terminals':[{'id':1,'serial':'TEST','address':'192.168.50.2','key':'0'*64}]}
+    path.write_text(json.dumps(original))
+    with patch.object(m.socket,'socket'):
+        changed=m.save_listen_address(str(path),'192.168.50.10')
+    assert changed['listen']=='192.168.50.10' and json.loads(path.read_text())['terminals']==original['terminals']
+    before=path.read_bytes()
+    try:m.save_listen_address(str(path),'8.8.8.8')
+    except ValueError:pass
+    else:raise AssertionError('Public listen address accepted')
+    assert path.read_bytes()==before and not list(path.parent.glob('.attendance-*.json'))
+
+# Exercise the actual setup-window callbacks without requiring a desktop display.
+import types,sys,time
+fake_tk=types.ModuleType('tkinter');fake_tk.ttk=MagicMock();fake_tk.messagebox=MagicMock()
+class Variable:
+    def __init__(self,value=''):self.value=value
+    def set(self,value):self.value=value
+    def get(self):return self.value
+fake_tk.StringVar=Variable
+ui_spec=importlib.util.spec_from_file_location('windows_setup',pathlib.Path(__file__).resolve().parents[1]/'HrSystemDhg.Web/Connectors/Windows/windows_setup.py')
+ui=importlib.util.module_from_spec(ui_spec)
+with patch.dict(sys.modules,{'tkinter':fake_tk,'attendance_connector':m}):
+    ui_spec.loader.exec_module(ui)
+    window=ui.SetupWindow(MagicMock())
+    with patch.object(m,'computer_addresses',return_value=addresses):
+        window.scan()
+        for _ in range(100):
+            if not window.results.empty():break
+            time.sleep(.01)
+        window.poll_results()
+    assert window.rows==addresses and not window.scanning
+    window.table.selection.return_value=['1'];window.use_selected();assert window.address.get()=='192.168.50.1'
+    buttons={call.kwargs.get('text'):call.kwargs.get('command') for call in fake_tk.ttk.Button.call_args_list}
+    assert buttons['Scan computer IP']==window.scan and buttons['Use selected IP']==window.use_selected and buttons['Save & start connector']==window.start
+with tempfile.TemporaryDirectory() as folder:
+    window.folder=pathlib.Path(folder);config_path=window.folder/'attendance-connector-1.json';config_path.write_text('{}')
+    window.config.set(config_path.name)
+    with patch.object(m,'save_listen_address',return_value={'port':5190}) as save,patch.object(ui.socket,'create_connection',side_effect=OSError()),patch.object(ui.subprocess,'Popen') as launch:
+        window.start()
+        save.assert_called_once_with(str(config_path),'192.168.50.1')
+        command=launch.call_args.args[0]
+        assert command[-2:]==['--config',str(config_path)] and command[2]==str(window.folder/'attendance_connector.py')
+print('Windows setup checks passed: clickable scan/select/start callbacks, async results, selected address and atomic private configuration updates.')

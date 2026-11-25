@@ -7,6 +7,7 @@ import socket
 import concurrent.futures
 import glob
 import subprocess
+import tempfile
 import datetime
 import http.server
 import ipaddress
@@ -315,20 +316,29 @@ def choose_computer_address(terminals):
         if choice.isdigit() and 1<=int(choice)<=len(rows):return rows[int(choice)-1]['address']
         print('Choose a listed adapter number, R or M.')
 
+def save_listen_address(path,address):
+    discovery_network(address+'/32')
+    with socket.socket() as listener:
+        listener.bind((address,0)) # Verify this computer owns the selected address.
+    with open(path,encoding='utf-8') as source:
+        config=json.load(source)
+    config['listen']=address
+    temporary=None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=os.path.dirname(os.path.abspath(path)),prefix='.attendance-',suffix='.json',delete=False) as target:
+            temporary=target.name
+            json.dump(config,target,indent=2)
+        load_config(temporary) # Validate the entire configuration before replacing it.
+        os.replace(temporary,path)
+    finally:
+        if temporary and os.path.exists(temporary):os.unlink(temporary)
+    return config
+
 def setup_windows(path):
     with open(path,encoding='utf-8') as source:
         config=json.load(source)
     address=choose_computer_address(config.get('terminals',[]))
-    ip=ipaddress.ip_address(address)
-    if ip.version!=4 or not ip.is_private or ip.is_loopback:
-        raise ValueError('Choose the computer private Ethernet IPv4 address')
-    with socket.socket() as listener:
-        listener.bind((address,0)) # Verify the chosen address belongs to this computer.
-    config['listen']=address
-    temporary=path+'.tmp'
-    with open(temporary,'w',encoding='utf-8') as target:
-        json.dump(config,target,indent=2)
-    os.chmod(temporary,0o600);os.replace(temporary,path)
+    config=save_listen_address(path,address)
     print('On each configured terminal: ADMS server address =',address,', port =',config['port'],', HTTPS OFF, domain mode OFF.')
     print('Allow this connector on the trusted private office network if Windows Firewall asks. Keep this window open and the computer awake.')
 

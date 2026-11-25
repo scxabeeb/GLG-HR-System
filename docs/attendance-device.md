@@ -55,3 +55,5 @@ Railway deployments resolve the public source using edge-replaced `X-Real-IP` an
 
 ### Detect the current Windows computer IP
 The Windows package includes **Show computer IP.cmd**, which lists current private IPv4 addresses with adapter names and subnet prefixes. **Start connector.cmd** performs the same local detection and lets you select an adapter by number; choose Ethernet connected to the terminal. `R` rescans after plugging in a cable and `M` permits manual entry. Detection does not change Windows network settings. A missing Ethernet address must be configured in Windows first. The web server cannot detect a remote Windows computer's private adapter addresses; run this tool on that computer.
+
+**Button-based setup:** open `Open Windows setup.cmd` from the Windows ZIP. The setup window provides **Scan computer IP**, **Use selected IP**, and **Save & start connector** buttons. Select the Ethernet adapter and a downloaded device configuration. The GUI needs Python Tcl/Tk; the existing command-line tools remain available.
