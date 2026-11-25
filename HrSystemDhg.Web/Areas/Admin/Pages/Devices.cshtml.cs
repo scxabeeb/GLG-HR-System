@@ -138,6 +138,7 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
             var pending = await db.ZkDeviceCommands.Where(c => c.DeviceId == id && c.Result == null && c.ExpiresUtc > DateTime.UtcNow).ToListAsync();
             foreach (var command in pending) command.ExpiresUtc = DateTime.UtcNow;
             device.OfficeConnectorKeyHash = null; device.LastOfficeConnectorSeenUtc = null;
+            device.DirectCloudEnabled=false;device.DirectCloudPublicAddress=null;
             device.PushStamp = null;
             device.LastPushSeenUtc = null;
             device.LastSuccess = null;
@@ -156,7 +157,22 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostConnectorAsync(int id, bool revoke = false)
+    public async Task<IActionResult> OnPostDirectCloudAsync(int id,bool enabled=false,string? publicAddress=null)
+    {
+        var device=await db.ZkDevices.FindAsync(id);if(device==null)return NotFound();
+        var address=AttendanceDirectCloud.PublicAddress(publicAddress);
+        if(enabled && (device.PushSerial==null || device.PushAddress==null || address==null))
+        {
+            TempData["DeviceNotice"]="Save ADMS pairing and enter the office router's public IPv4 address first. A private terminal IP cannot be used as the public allowlist.";
+            return RedirectToPage(null,null,$"device-{id}");
+        }
+        device.DirectCloudEnabled=enabled;device.DirectCloudPublicAddress=enabled?address:null;
+        db.AuditLogs.Add(new(){Actor=User.Identity!.Name!,Action=$"Device {id}: direct HTTPS attendance {(enabled?"enabled for office "+address:"disabled")}"});
+        await db.SaveChangesAsync();TempData["DeviceNotice"]=enabled?"Direct HTTPS mode saved. Configure the terminal using the router connection instructions and make a real test scan.":"Direct router mode disabled. The Windows connector remains available.";
+        return RedirectToPage(null,null,$"device-{id}");
+    }
+
+    public async Task<IActionResult> OnPostConnectorAsync(int id, bool revoke = false, bool windowsBundle = false)
     {
         var device = await db.ZkDevices.FindAsync(id); if (device == null) return NotFound();
         if (revoke)
@@ -175,7 +191,27 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         var origin = $"{(env.IsDevelopment() ? Request.Scheme : "https")}://{Request.Host}";
         var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { server = origin, listen = "192.168.50.1", port = 5190,
             terminals = new[] { new { id, serial = device.PushSerial, address = device.PushAddress, key } } }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-        return File(bytes, "application/json", $"attendance-connector-{id}.json");
+        return windowsBundle ? WindowsBundle(bytes,id) : File(bytes, "application/json", $"attendance-connector-{id}.json");
+    }
+    public IActionResult OnGetWindowsTools() => WindowsBundle();
+    private IActionResult WindowsBundle(byte[]? config = null, int? deviceId = null)
+    {
+        Response.Headers.CacheControl = "no-store";
+        using var output = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(output,System.IO.Compression.ZipArchiveMode.Create,true))
+        {
+            var source = Path.Combine(env.ContentRootPath,"Connectors");
+            foreach (var path in Directory.GetFiles(Path.Combine(source,"Windows")).Append(Path.Combine(source,"attendance_connector.py")))
+            {
+                using var entry = archive.CreateEntry(Path.GetFileName(path)).Open();
+                using var input = System.IO.File.OpenRead(path);input.CopyTo(entry);
+            }
+            if (config != null)
+            {
+                using var entry = archive.CreateEntry($"attendance-connector-{deviceId}.json").Open();entry.Write(config);
+            }
+        }
+        return File(output.ToArray(),"application/zip",config==null?"garowe-windows-attendance-tools.zip":$"garowe-windows-device-{deviceId}.zip");
     }
     public IActionResult OnGetConnectorScript() => PhysicalFile(Path.Combine(env.ContentRootPath, "Connectors", "attendance_connector.py"), "application/octet-stream", "attendance_connector.py");
 

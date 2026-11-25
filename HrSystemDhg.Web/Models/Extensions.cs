@@ -227,3 +227,9 @@ public class SystemSettings
     public bool ManagerApproval { get; set; }
     public string CompanyName { get; set; } = "Garowe Local Government";
 }
+
+public partial class ZkDevice
+{
+    public bool DirectCloudEnabled { get; set; }
+    public string? DirectCloudPublicAddress { get; set; }
+}

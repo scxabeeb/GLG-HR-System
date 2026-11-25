@@ -165,16 +165,27 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  const connectorRow=page.locator('#devices-list tbody tr').filter({hasText:'Legacy terminal'});
  if(await connectorRow.count()){
    const anchor=await connectorRow.getByRole('link',{name:'Edit / configure',exact:true}).getAttribute('href');await page.goto(base+'/Admin/Devices'+anchor);
+   const directForm=page.locator(anchor+' form[action*="handler=DirectCloud"]');const directToken=await directForm.locator('input[name="__RequestVerificationToken"]').inputValue();const directUrl=new URL(await directForm.getAttribute('action'),base).href;
+   let directResponse=await page.request.post(directUrl,{form:{__RequestVerificationToken:directToken,enabled:'true',publicAddress:'192.168.4.2'}});if(!(await directResponse.text()).includes('public IPv4 address first'))throw Error('Private IP enabled direct cloud mode');
+   directResponse=await page.request.post(directUrl,{form:{__RequestVerificationToken:directToken,enabled:'true',publicAddress:'8.8.8.8'}});if(!(await directResponse.text()).includes('Direct HTTPS mode saved'))throw Error('Direct HTTPS mode could not be saved');
+   directResponse=await page.request.post(directUrl,{form:{__RequestVerificationToken:directToken,enabled:'false'}});if(!(await directResponse.text()).includes('Direct router mode disabled'))throw Error('Direct HTTPS mode could not be revoked');
    const connectorForm=page.locator(anchor+' form[action*="handler=Connector"]');const connectorToken=await connectorForm.locator('input[name="__RequestVerificationToken"]').inputValue();
    const connectorUrl=new URL(await connectorForm.getAttribute('action'),base).href;
    const download=await page.request.post(connectorUrl,{form:{__RequestVerificationToken:connectorToken}});if(download.status()!==200)throw Error('Connector configuration download failed');
    const config=await download.json();const terminal=config.terminals[0];if(terminal.key.length!==64 || !download.headers()['cache-control'].includes('no-store'))throw Error('Invalid connector configuration security');
    const bridgeUrl=base+'/api/attendance/bridge/'+terminal.id+'/heartbeat';const bridgeHeaders={Authorization:'Bearer '+terminal.key,'X-Terminal-Serial':terminal.serial,'X-Terminal-Address':terminal.address};
    if((await page.request.get(bridgeUrl,{headers:bridgeHeaders})).status()!==200)throw Error('Issued connector key was not accepted');
+   const windows=await page.request.post(connectorUrl,{form:{__RequestVerificationToken:connectorToken,windowsBundle:'true'}});
+   if(windows.status()!==200 || !windows.headers()['content-type'].includes('zip') || !windows.headers()['cache-control'].includes('no-store'))throw Error('Windows device bundle failed');
+   require('child_process').execFileSync('python3',['-c',"import sys,io,zipfile,json;z=zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read()));names=set(z.namelist());assert {'attendance_connector.py','Start connector.cmd','Scan office network.cmd','README.txt'}<=names;config=json.loads(z.read(next(n for n in names if n.endswith('.json'))));assert len(config['terminals'])==1 and len(config['terminals'][0]['key'])==64"],{input:await windows.body()});
+   if((await page.request.get(bridgeUrl,{headers:bridgeHeaders})).status()!==401)throw Error('Windows bundle did not rotate the old device key');
    await page.request.post(connectorUrl,{form:{__RequestVerificationToken:connectorToken,revoke:'true'}});
    if((await page.request.get(bridgeUrl,{headers:bridgeHeaders})).status()!==401)throw Error('Revoked connector key still works');
  }
  const script=await page.request.get(base+'/Admin/Devices?handler=ConnectorScript');if(script.status()!==200 || !(await script.text()).includes('Private-LAN ADMS receiver'))throw Error('Connector script download failed');
+ const windowsTools=await page.request.get(base+'/Admin/Devices?handler=WindowsTools');if(windowsTools.status()!==200)throw Error('Windows discovery tools failed');
+ require('child_process').execFileSync('python3',['-c',"import sys,io,zipfile;z=zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read()));assert 'Start connector.cmd' in z.namelist() and not any(n.endswith('.json') for n in z.namelist())"],{input:await windowsTools.body()});
+ console.log('PASS Windows tools and per-device setup ZIP, launchers, config isolation and key rotation');
  console.log('PASS admin connector configuration download, device-scoped key issuance/revocation and script download');
  await page.goto(base+'/Hr/Attendance#attendance-clock');
  const clockForm=page.locator('form[action*="handler=ReviewClock"]').first();

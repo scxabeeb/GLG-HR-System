@@ -51,6 +51,10 @@ public static class ZkAttendancePush
         if (context.Items[typeof(AttendanceOfficeBridge)] is AttendanceOfficeBridge.Identity connector)
             return sn == null ? null : await db.ZkDevices.AsNoTracking().SingleOrDefaultAsync(d => d.Id == connector.DeviceId &&
                 d.OfficeConnectorKeyHash == connector.Hash && d.PushSerial == sn && d.PushAddress == connector.Address, context.RequestAborted);
+        var publicAddress = AttendanceDirectCloud.Source(context,!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("RAILWAY_PROJECT_ID")));
+        if (sn != null && publicAddress != null)
+            return await db.ZkDevices.AsNoTracking().SingleOrDefaultAsync(d => d.PushSerial == sn && d.PushAddress != null &&
+                d.DirectCloudEnabled && d.DirectCloudPublicAddress == publicAddress, context.RequestAborted);
         var address = LocalAddress(context.Connection.RemoteIpAddress, env.IsDevelopment());
         if (sn == null || address == null) return null;
         return await db.ZkDevices.AsNoTracking().SingleOrDefaultAsync(d => d.PushSerial == sn && d.PushAddress == address, context.RequestAborted);

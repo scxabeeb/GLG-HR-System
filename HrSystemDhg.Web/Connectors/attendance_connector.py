@@ -4,6 +4,8 @@ import argparse
 import hashlib
 import sqlite3
 import socket
+import concurrent.futures
+import glob
 import datetime
 import http.server
 import ipaddress
@@ -241,13 +243,80 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.command == 'POST':
             print(utc(), 'device', terminal['id'], operation, 'forwarded successfully', flush=True)
 
+def discovery_network(value):
+    network = ipaddress.ip_network(value, strict=False)
+    if network.version != 4 or network.prefixlen < 24 or not any(network.subnet_of(ipaddress.ip_network(block)) for block in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16','169.254.0.0/16')):
+        raise ValueError('Enter a private IPv4 office subnet of /24 or smaller, for example 192.168.1.0/24')
+    return network
+
+def scan_network(value):
+    network = discovery_network(value)
+    def probe(address):
+        try:
+            with socket.create_connection((str(address),4370),timeout=0.5):
+                return str(address)
+        except OSError:
+            return None
+    print('Checking', network, 'for reachable TCP/4370 candidates. No settings or attendance records are changed.')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=24) as pool:
+        found = [address for address in pool.map(probe,network.hosts()) if address]
+    for address in found:
+        print(address, 'TCP/4370 reachable; verify ZKTeco model and serial on the terminal before pairing.')
+    if not found:
+        print('No TCP/4370 candidates found. This does not prove devices are offline: UDP-only devices or blocked ports may not appear. Read the IP from COMM / Ethernet on the terminal.')
+    print('Discovery does not pair devices. Register each verified IP and serial in Admin / Attendance devices, assign its branch, then configure ADMS.')
+    return found
+
+def setup_windows(path):
+    with open(path,encoding='utf-8') as source:
+        config=json.load(source)
+    addresses=sorted({a for a in socket.gethostbyname_ex(socket.gethostname())[2] if ipaddress.ip_address(a).is_private and not ipaddress.ip_address(a).is_loopback})
+    print('This computer local IPv4 addresses:', ', '.join(addresses) or 'Use ipconfig to find the Ethernet IPv4 address')
+    print('Use the address on the SAME office network as the attendance terminal. Reserve this address in your office router.')
+    address=input('Office computer IPv4 address: ').strip()
+    ip=ipaddress.ip_address(address)
+    if ip.version!=4 or not ip.is_private or ip.is_loopback:
+        raise ValueError('Choose the computer private Ethernet IPv4 address')
+    with socket.socket() as listener:
+        listener.bind((address,0)) # Verify the chosen address belongs to this computer.
+    config['listen']=address
+    temporary=path+'.tmp'
+    with open(temporary,'w',encoding='utf-8') as target:
+        json.dump(config,target,indent=2)
+    os.chmod(temporary,0o600);os.replace(temporary,path)
+    print('On each configured terminal: ADMS server address =',address,', port =',config['port'],', HTTPS OFF, domain mode OFF.')
+    print('Allow this connector on the trusted private office network if Windows Firewall asks. Keep this window open and the computer awake.')
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--config', required=True)
+    parser.add_argument('--config')
+    parser.add_argument('--scan', nargs='?', const='prompt', help='Find TCP/4370 candidates on a private office subnet; does not pair or modify terminals')
+    parser.add_argument('--setup', action='store_true', help='Choose this office computer IP before starting; select a downloaded configuration if omitted')
     parser.add_argument('--check', action='store_true', help='Check cloud authentication without reporting a terminal connection')
     parser.add_argument('--allow-loopback-test', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.scan is not None:
+        try:
+            scan_network(input('Office network, e.g. 192.168.1.0/24: ').strip() if args.scan=='prompt' else args.scan)
+        except ValueError as error:
+            parser.error(str(error))
+        return
+    if args.setup and not args.config:
+        choices=sorted(glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)),'attendance-connector-*.json')))
+        if not choices:
+            parser.error('Download the device connector configuration from Admin / Attendance devices and save it in this folder.')
+        if len(choices)>1:
+            for index,path in enumerate(choices,1):print(index,os.path.basename(path))
+            try:
+                selected=int(input('Choose this office configuration number: '))
+                if not 1<=selected<=len(choices):raise ValueError('Invalid selection')
+                args.config=choices[selected-1]
+            except (ValueError,IndexError):parser.error('Choose a listed configuration number')
+        else:args.config=choices[0]
+    if not args.config:
+        parser.error('--config is required to run the connector; use --scan for network discovery')
     try:
+        if args.setup:setup_windows(args.config)
         config = load_config(args.config, args.allow_loopback_test)
     except (ValueError, OSError) as error:
         parser.error(str(error))

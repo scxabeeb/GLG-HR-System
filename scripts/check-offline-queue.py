@@ -56,3 +56,16 @@ with tempfile.TemporaryDirectory() as folder:
         assert send(body.replace(b'06:35',b'06:36'))[0]==503 and c.queued_counts()=={1:1}
     finally:server.shutdown();server.server_close();thread.join()
 print('HTTP offline checks passed: ACK follows durable save; malformed, biometric and authentication failures are not acknowledged.')
+
+from unittest.mock import patch,MagicMock
+assert str(m.discovery_network('192.168.50.9/24'))=='192.168.50.0/24'
+for invalid in ('8.8.8.0/24','192.168.0.0/16','127.0.0.0/24','240.0.0.0/24','::1/128'):
+    try:m.discovery_network(invalid)
+    except ValueError:pass
+    else:raise AssertionError('Invalid discovery scope accepted: '+invalid)
+def fake_connection(target,timeout):
+    if target==('192.168.50.1',4370):return MagicMock()
+    raise OSError('closed')
+with patch.object(m.socket,'create_connection',side_effect=fake_connection):
+    assert m.scan_network('192.168.50.0/30')==['192.168.50.1']
+print('Discovery checks passed: bounded private subnets, candidate-only results and no device writes.')

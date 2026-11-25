@@ -2140,6 +2140,12 @@ namespace HrSystemDhg.Web.Migrations
                     b.Property<int?>("DepartmentId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("DirectCloudEnabled")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("DirectCloudPublicAddress")
+                        .HasColumnType("longtext");
+
                     b.Property<string>("Endpoint")
                         .IsRequired()
                         .HasColumnType("longtext");

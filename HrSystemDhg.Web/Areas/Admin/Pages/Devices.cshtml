@@ -13,6 +13,7 @@
 <div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Device settings views"><a href="#devices-list" data-workspace-link>Registered devices</a><a href="#devices-register" data-workspace-link>Register device</a><a href="#devices-config" data-workspace-link>Device configuration</a><a href="#devices-setup" data-workspace-link>Connection guide</a><a href="#devices-import" data-workspace-link>Import &amp; export</a></nav>
 <section id="devices-list" data-workspace-panel><section class="card">
     <h2>Registered devices <span class="badge">@Model.Items.Count</span></h2>
+    <section class="card"><h3>Connect offices: Windows connector or direct router</h3><p>Choose the connection mode under each device configuration. For the Windows option, use one connector in each separate office network. Direct HTTPS mode can send through the router without an office computer. Both offices send attendance to this system; assign each terminal to its branch. Download these tools to scan each office locally, then confirm each terminal's serial and IP before pairing.</p><a class="button secondary" asp-page-handler="WindowsTools">Download Windows scan &amp; setup tools</a><p class="hint">The scan finds TCP/4370 candidates on a chosen private subnet. It cannot scan another office across the internet, and some terminals may require reading the IP directly from COMM → Ethernet.</p></section>
     <p>@Model.Items.Count(d => DevicesModel.ConnectionStatus(d) == "Online") online · @Model.Items.Count(d => DevicesModel.ConnectionStatus(d) is "Offline" or "Not connected") offline / waiting · @Model.Items.Count(d => d.PushSerial == null) not paired</p>
     <form method="get" class="actions"><label>Connection status<select asp-for="Connection"><option value="">All devices</option><option value="online">Online</option><option value="offline">Offline / not connected</option><option value="unpaired">Not paired</option></select></label><button class="secondary">Apply</button><a asp-page="./Devices" asp-route-connection="@Model.Connection" class="button secondary">Refresh status</a></form>
     <p class="muted">Only registered terminals appear here. Online means the paired terminal contacted the server within the last five minutes. Not paired devices support manual and CSV imports.</p>
@@ -21,7 +22,7 @@
     {
         <div class="table-scroll">
             <table>
-                <thead><tr><th>Device</th><th>Branch</th><th>Office / location</th><th>Serial number</th><th>IP address</th><th>Status</th><th>Last contact (EAT)</th><th>Last upload (EAT)</th><th>Error</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Device</th><th>Branch</th><th>Office / location</th><th>Serial number</th><th>Connection / IP</th><th>Status</th><th>Last contact (EAT)</th><th>Last upload (EAT)</th><th>Error</th><th>Actions</th></tr></thead>
                 <tbody>
                 @foreach (var registered in Model.ListedDevices)
                 {
@@ -32,7 +33,7 @@
                         <td>@(branch?.Name ?? "Unassigned branch")</td>
                         <td>@(registered.Location ?? "—")</td>
                         <td>@(registered.PushSerial ?? "—")</td>
-                        <td>@(registered.PushAddress ?? "—")</td>
+                        <td>@(registered.DirectCloudEnabled ? "Direct HTTPS" : "Office connector / LAN")<br /><small>@(registered.PushAddress ?? "—")</small>@if(registered.DirectCloudEnabled){<br /><small>Office WAN: @registered.DirectCloudPublicAddress</small>}</td>
                         <td><span class="badge @(DevicesModel.ConnectionStatus(registered) == "Online" ? "status-positive" : "status-warning")">@DevicesModel.ConnectionStatus(registered)</span></td>
                         <td>@(registered.LastPushSeenUtc is DateTime contact ? OperationsPolicy.Local(contact).ToString("dd MMM yyyy, HH:mm") : "—")</td>
                         <td>@(registered.LastSuccess is DateTime uploaded ? OperationsPolicy.Local(uploaded).ToString("dd MMM yyyy, HH:mm") : "—")</td>
@@ -87,13 +88,19 @@
         </form>
         @if (device.PushSerial != null)
         {
-            <section class="card"><h3>Office connector → online system</h3><p>For the Railway system, run the connector on the office computer connected to the terminal. It forwards punches and enrollment commands over HTTPS.</p><p class="hint"><strong>Offline attendance:</strong> the terminal stores scans while disconnected. Reconnect its Ethernet cable to upload them. If the Mac receives punches during an internet outage, the updated connector saves them locally and retries every 10 seconds. Keep the connector running and preserve attendance-queue.sqlite3 during updates. Original scan times are retained.</p>
+            <section class="card"><h3>Router → internet → system (no office computer)</h3>
+            <p>Use direct mode only if this terminal can connect using HTTPS. Connect it by Ethernet to the office router. Enter that office's public IPv4 address below, not the terminal's private IP. A stable public IP is needed; update this allowlist whenever it changes.</p>
+            <form method="post" asp-page-handler="DirectCloud" asp-route-id="@device.Id"><label>Office router public IPv4<input name="publicAddress" value="@device.DirectCloudPublicAddress" placeholder="Public WAN IPv4 supplied by your office IT" /></label><div class="actions"><button name="enabled" value="true">Enable direct HTTPS mode</button><button class="secondary" name="enabled" value="false">Disable direct mode</button></div></form>
+            <p>Direct mode: <strong>@(device.DirectCloudEnabled ? "Enabled" : "Disabled")</strong>. Device serial and office public IP must match; HTTP uploads are rejected.</p>
+            <ol><li>On the terminal, enable DHCP or configure an address, subnet, router gateway and working DNS for this office.</li><li>Open COMM → Cloud Server / ADMS. Turn domain name ON. Server address: <strong>@Request.Host.Host</strong> (hostname only). Port: <strong>443</strong>. HTTPS: <strong>ON</strong>. Proxy: OFF.</li><li>Save, return to this page and refresh status. Make a real fingerprint scan and check HR → Attendance.</li></ol>
+            <p class="hint">No router port forwarding is needed. If the terminal cannot negotiate HTTPS, use the Windows connector below. Each separate office needs its own WAN allowlist. Discovery runs locally and cannot scan devices across the internet.</p></section>
+            <section class="card"><h3>Office connector → online system</h3><p>For the Railway system, run the connector on the office computer connected to the terminal. It forwards punches and enrollment commands over HTTPS.</p><p class="hint"><strong>Offline attendance:</strong> the terminal stores scans while disconnected. Reconnect its Ethernet cable to upload them. If the office computer receives punches during an internet outage, the updated connector saves them locally and retries every 10 seconds. Keep the connector running and preserve attendance-queue.sqlite3 during updates. Original scan times are retained.</p>
             <p>Connector: @(device.OfficeConnectorKeyHash == null ? "Not configured" : device.LastOfficeConnectorSeenUtc >= DateTime.UtcNow.AddMinutes(-2) ? "Online" : "Waiting / offline") · Last heartbeat: @(device.LastOfficeConnectorSeenUtc is DateTime beat ? OperationsPolicy.Local(beat).ToString("dd MMM yyyy HH:mm:ss") + " EAT" : "—")</p>
             <a class="button secondary" asp-page-handler="ConnectorScript">Download connector script</a>
-            <form method="post" asp-page-handler="Connector" asp-route-id="@device.Id"><button>Download / rotate connector configuration</button>@if(device.OfficeConnectorKeyHash != null){<button class="secondary" name="revoke" value="true">Revoke connector</button>}</form>
+            <form method="post" asp-page-handler="Connector" asp-route-id="@device.Id"><button>Download / rotate connector configuration</button><button name="windowsBundle" value="true" class="secondary">Download Windows setup for this device</button>@if(device.OfficeConnectorKeyHash != null){<button class="secondary" name="revoke" value="true">Revoke connector</button>}</form>
             <p class="muted">The configuration contains a device-specific secret. Keep it on the office computer. Downloading a new configuration replaces the previous key.</p>
             <code>python3 attendance_connector.py --config attendance-connector-@(device.Id).json</code>
-            <p>On the terminal: ADMS, server address = office computer’s Ethernet IP, port = 5190, HTTPS = OFF for this private LAN connector. The terminal’s own IP stays unchanged.</p></section>
+            <p>On the terminal: ADMS, server address = office computer’s Ethernet IP, port = 5190, HTTPS = OFF for this private LAN connector. The terminal’s own IP stays unchanged.</p><details><summary>Windows connected directly by Ethernet cable</summary><p>Keep Windows online using Wi-Fi. For a dedicated cable link, set Windows Ethernet to 192.168.50.1 and terminal Ethernet to 192.168.50.2, both subnet 255.255.255.0. Leave the Windows Ethernet gateway blank. Set terminal ADMS server to 192.168.50.1, port 5190, domain OFF, HTTPS OFF. Run Start connector.cmd and choose 192.168.50.1. Use different addresses if this subnet is already in use.</p></details></section>
         }
         @if (device.PushSerial != null)
         {

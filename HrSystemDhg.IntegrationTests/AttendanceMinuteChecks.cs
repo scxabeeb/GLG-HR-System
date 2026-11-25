@@ -250,6 +250,28 @@ public static class AttendanceMinuteChecks
         check(registrationLine.AttendanceApplied==8.21m,"delayed terminal punches rebuild their original date and replace absence with actual missing minutes");
 
 
+        var directDevice=new ZkDevice{Name="Direct fixture",Endpoint="fixture",PushSerial="DIRECT"+key.ToUpperInvariant(),PushAddress="192.168.4.20",DirectCloudEnabled=true,DirectCloudPublicAddress="8.8.8.8"};
+        db.Add(directDevice);await db.SaveChangesAsync();
+        var directContext=new Microsoft.AspNetCore.Http.DefaultHttpContext();directContext.Request.Scheme="https";directContext.Connection.RemoteIpAddress=System.Net.IPAddress.Parse("8.8.8.8");
+        directContext.Request.QueryString=new("?SN="+directDevice.PushSerial);
+        var environment=new DirectTestEnvironment();
+        check(await ZkAttendancePush.Poll(directContext,db,environment) is Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult,"direct router mode accepts only paired serial over HTTPS from the saved office public IP");
+        directContext.Connection.RemoteIpAddress=System.Net.IPAddress.Parse("1.1.1.1");
+        check(await ZkAttendancePush.Poll(directContext,db,environment) is Microsoft.AspNetCore.Http.HttpResults.NotFound,"other offices cannot impersonate a paired direct terminal");
+        directContext.Connection.RemoteIpAddress=System.Net.IPAddress.Parse("8.8.8.8");directContext.Request.Scheme="http";
+        check(await ZkAttendancePush.Poll(directContext,db,environment) is Microsoft.AspNetCore.Http.HttpResults.NotFound,"unencrypted direct terminal requests are rejected");
+        directContext.Request.Scheme="https";directContext.Request.QueryString=new("?SN="+directDevice.PushSerial+"&table=ATTLOG");
+        var directBody=System.Text.Encoding.UTF8.GetBytes($"{registered.ZkPin}\t2026-11-24 08:59:00\t0\t1\n{registered.ZkPin}\t2026-11-24 12:43:00\t1\t1\n");
+        for(var attempt=0;attempt<2;attempt++)
+        {
+            directContext.Request.Body=new MemoryStream(directBody);directContext.Request.ContentLength=directBody.Length;
+            check(await ZkAttendancePush.Upload(directContext,db,environment,attendance) is Microsoft.AspNetCore.Http.HttpResults.ContentHttpResult,"direct HTTPS upload is acknowledged after the shared attendance receiver saves it");
+        }
+        check(await db.ZkPunchs.CountAsync(p=>p.DeviceId==directDevice.Id)==2,"direct router retries keep original timestamps and deduplicate punches");
+        directDevice.DirectCloudEnabled=false;await db.SaveChangesAsync();
+        check(await ZkAttendancePush.Poll(directContext,db,environment) is Microsoft.AspNetCore.Http.HttpResults.NotFound,"disabling direct mode revokes public terminal access immediately");
+
+
 
     }
 }
@@ -264,4 +286,14 @@ public sealed class NavigationTempDataProvider : Microsoft.AspNetCore.Mvc.ViewFe
 {
     public IDictionary<string,object> LoadTempData(Microsoft.AspNetCore.Http.HttpContext context) => new Dictionary<string,object>();
     public void SaveTempData(Microsoft.AspNetCore.Http.HttpContext context,IDictionary<string,object> values) { }
+}
+
+public sealed class DirectTestEnvironment : Microsoft.AspNetCore.Hosting.IWebHostEnvironment
+{
+    public string EnvironmentName {get;set;}="Production";
+    public string ApplicationName {get;set;}="Test";
+    public string WebRootPath {get;set;}="";
+    public string ContentRootPath {get;set;}="";
+    public Microsoft.Extensions.FileProviders.IFileProvider WebRootFileProvider {get;set;}=new Microsoft.Extensions.FileProviders.NullFileProvider();
+    public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider {get;set;}=new Microsoft.Extensions.FileProviders.NullFileProvider();
 }
