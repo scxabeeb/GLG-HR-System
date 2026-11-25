@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace HrSystemDhg.Web.Services;
 public class AttendanceService(HrDbContext db, CalendarService calendar, TimeProvider? timeProvider = null)
 {
-    public const int CalculationVersion = 2;
+    public const int CalculationVersion = 3;
     public static readonly DateTime ActualMinutesEffectiveFrom = new(2026, 11, 1);
     public DateTime LocalNow => TimeZoneInfo.ConvertTime((timeProvider ?? TimeProvider.System).GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Africa/Mogadishu")).DateTime;
     public bool DayClosed(WorkRule rule, DateTime date) => LocalNow >= AttendanceMinutes.CheckoutDeadline(rule, date);
@@ -13,6 +13,22 @@ public class AttendanceService(HrDbContext db, CalendarService calendar, TimePro
     public async Task RebuildAsync(int employeeId, DateTime date)
     {
         var e = await db.Employees.SingleAsync(x => x.Id == employeeId);
+        var attendanceStart = AttendanceEligibility.StartDate(e);
+        if (date.Date < attendanceStart)
+        {
+            var exempt = await db.AttendanceDays.SingleOrDefaultAsync(x=>x.EmployeeId==employeeId && x.Date==date.Date);
+            if (exempt==null) { exempt=new(){EmployeeId=employeeId,Date=date.Date};db.AttendanceDays.Add(exempt); }
+            if (!exempt.IsCorrected)
+            {
+                var records=await db.ZkPunchs.Where(p=>p.Pin==e.ZkPin && p.PunchTime>=date.Date && p.PunchTime<date.Date.AddDays(1)).OrderBy(p=>p.PunchTime).ToListAsync();
+                exempt.FirstIn=records.FirstOrDefault()?.PunchTime;exempt.LastOut=records.Count>1?records.Last().PunchTime:null;
+            }
+            exempt.WorkedHours=AttendanceMinutes.Worked(exempt.FirstIn,exempt.LastOut)/60m;
+            exempt.ExpectedHours=0;exempt.MissingMinutes=exempt.LateMinutes=exempt.EarlyMinutes=0;
+            exempt.Status=date.Date==AttendanceEligibility.RegistrationDate(e)?"Registration day":"Not yet due";
+            exempt.StatusMessage=$"Attendance starts {attendanceStart:dd MMM yyyy}. No absence or attendance deduction before this date.";
+            exempt.CalculationVersion=CalculationVersion;await db.SaveChangesAsync();return;
+        }
         var rule = await calendar.RuleAsync(employeeId, date);
         var window = CalendarService.Window(rule, date);
         var from = rule.UsePunchWindows ? date.Date : window.Start.AddHours(-3);
@@ -151,6 +167,8 @@ public class AttendanceService(HrDbContext db, CalendarService calendar, TimePro
     public async Task<DateTime> WorkDateAsync(int employeeId, DateTime localTime)
     {
         var date = localTime.Date;
+        var employee=await db.Employees.SingleAsync(e=>e.Id==employeeId);
+        if (date<AttendanceEligibility.StartDate(employee)) return date;
         var rule = await calendar.RuleAsync(employeeId, date);
         if (CalendarService.Window(rule, date.AddDays(-1)).End > date && localTime < date.AddHours(rule.StartHour - 3))
             return date.AddDays(-1);

@@ -139,6 +139,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
         }
 
         int periodId;
+        var created = false;
         try
         {
             await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
@@ -157,15 +158,19 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
                     .Select(p => (int?)p.Id).FirstOrDefaultAsync();
                 if (visible == null)
                     throw new InvalidOperationException("An existing payroll covers this month. Ask an administrator to open it.");
-                TempData["PayrollNotice"] = "Opened an existing payroll that covers part or all of your selection.";
-                return RedirectToPage(null, null, new { Month, PayrollBranchId, PeriodId = visible }, $"payroll-{visible}");
+                TempData["PayrollNotice"] = "Existing payroll opened successfully. Review the selected period below.";
+                TempData["PayrollNoticePanel"] = "payroll-manage";
+                return RedirectToPage(null, null, new { Month, PayrollBranchId, PeriodId = visible }, "payroll-manage");
             }
             if (period == null)
             {
                 // Zero selects the effective work calendar for each employee.
-                period = new PayrollPeriod { From = from, To = to, BranchId = PayrollBranchId };
+                period = new PayrollPeriod { From = from, To = to, BranchId = PayrollBranchId, AttendanceSalaryDays = SalaryDays };
                 db.PayrollPeriods.Add(period);
                 await db.SaveChangesAsync();
+                db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Payroll {period.Id}: generated draft for {Month}; awaiting HR calculation" });
+                await db.SaveChangesAsync();
+                created = true;
             }
             periodId = period.Id;
             await transaction.CommitAsync();
@@ -180,7 +185,11 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
             return Page();
         }
         PeriodId = periodId;
-        return await Calculate(periodId, true, true);
+        TempData["PayrollNotice"] = created
+            ? "Payroll period generated successfully. Choose Calculate payroll below to calculate employee salaries and attendance deductions."
+            : "Existing payroll opened successfully. Use Calculate or Recalculate payroll below when needed.";
+        TempData["PayrollNoticePanel"] = "payroll-manage";
+        return RedirectToPage(null, null, new { Month, PayrollBranchId, PeriodId }, "payroll-manage");
     }
 
     public Task<IActionResult> OnPostCalculateAsync(int id, bool apply, bool firstGenerationOnly = false) =>
@@ -200,6 +209,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
             Month = calculated.From.ToString("yyyy-MM");
             PayrollBranchId = calculated.BranchId;
             TempData["PayrollNotice"] = "Payroll calculated. The updated employee payroll is shown below.";
+            TempData["PayrollNoticePanel"] = "payroll-register";
         }
         catch (MissingWorkRuleException ex)
         {

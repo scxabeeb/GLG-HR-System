@@ -637,6 +637,9 @@ namespace HrSystemDhg.Web.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<DateTime?>("RegisteredUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<bool>("RegistrationComplete")
                         .HasColumnType("tinyint(1)");
 

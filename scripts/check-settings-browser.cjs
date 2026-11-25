@@ -204,6 +204,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  if(process.env.E2E_PAYROLL_PERIOD){
    await page.setViewportSize({width:1280,height:1000});
    await page.goto(base+'/Management/Payroll?PeriodId='+process.env.E2E_PAYROLL_PERIOD+'#payroll-register');
+   const deductionButton=page.locator('.payroll-deduction-link').first();
+   async function deductionContrast(){const ratio=await deductionButton.evaluate(el=>{const s=getComputedStyle(el);const luminance=c=>{const v=c.match(/[\d.]+/g).slice(0,3).map(Number).map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4;});return .2126*v[0]+.7152*v[1]+.0722*v[2];};const a=luminance(s.color),b=luminance(s.backgroundColor);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);});if(ratio<4.5)throw Error('Attendance deduction text has insufficient contrast');}
+   await deductionContrast();await deductionButton.hover();await deductionContrast();await deductionButton.focus();await deductionContrast();
    await page.locator('[data-payroll-details="payroll-detail-'+process.env.E2E_PAYROLL_LINE+'"]').first().click();
    const dialog=page.locator('dialog[open]');
    if(!await dialog.locator('.payroll-deduction-table').isVisible() || !(await dialog.textContent()).includes('15.38') || !(await dialog.textContent()).includes('check-out missing'))throw Error('Payroll deduction table did not render saved causes and amounts');
@@ -323,6 +326,25 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  const available=await linkForm.locator('select option[value]:not([value=""])').first().getAttribute('value');
  if(available){const linked=await page.request.post(base+'/Admin/Users?handler=Link',{form:{__RequestVerificationToken:linkToken,id:accountId,employeeId:available}});if(linked.status()!==200 || !(await linked.text()).includes('Employee profile linked'))throw Error('Cannot link profile after creating account');}
  console.log('PASS optional employee profiles, General Secretary inherits Management on web/mobile without Admin access, and post-registration profile linking');
+
+ await page.goto(base+'/Management/Payroll?PeriodId='+process.env.E2E_PAYROLL_PERIOD+'#payroll-manage');
+ await page.getByRole('button',{name:'Generate payroll',exact:true}).click();await page.waitForURL(url=>url.pathname==='/Management/Payroll' && url.hash==='#payroll-manage');
+ if(!await page.locator('#payroll-manage .payroll-success').isVisible())throw Error('Generate did not show its success message in management');
+ await page.goto(base+'/Hr/Attendance');const options=await page.locator('#EmployeeFilter option[value]:not([value=""])').evaluateAll(nodes=>nodes.map(n=>({value:n.value,text:n.textContent})));
+ if(options.length){await page.locator('#EmployeeFilter').selectOption(options[0].value);await page.getByRole('button',{name:'Apply filters',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('#EmployeeFilter').inputValue()!==options[0].value)throw Error('Employee filter selection was lost');const refresh=await page.locator('#today-punches').getAttribute('data-refresh-url');if(!refresh.includes('EmployeeFilter='+options[0].value))throw Error('Live refresh drops employee filter');}
+ console.log('PASS Generate stays in management with success, readable deduction buttons and employee-filtered attendance/live refresh');
+ await page.goto(base+'/Operations/Meetings?mode=manage#meetings-create');
+ // Exercise the actual picker component with a synthetic 300-account directory, without sending invitations.
+ await page.locator('[data-invite-picker]').evaluate(picker=>{const clone=picker.cloneNode(true);const list=clone.querySelector('.meeting-invite-options');const template=list.querySelector('label').cloneNode(true);list.replaceChildren();for(let i=0;i<300;i++){const row=template.cloneNode(true);const name='Employee '+String(i).padStart(3,'0');row.dataset.search=name+' EMP'+i+' employee'+i+'@example.test';const input=row.querySelector('input');input.value='synthetic-'+i;input.checked=false;input.dataset.inviteName=name;row.querySelector('strong').textContent=name;if(row.querySelector('small'))row.querySelector('small').textContent='EMP'+i+' · employee'+i+'@example.test';list.append(row);}clone.querySelector('.meeting-invite-directory summary span').textContent='300 available';picker.replaceWith(clone);});
+ await page.addScriptTag({path:require('path').join(__dirname,'../HrSystemDhg.Web/wwwroot/js/meeting-invites.js')});
+ await page.locator('.meeting-invite-directory summary').click();await page.locator('[data-invite-search]').fill('Employee 299');await page.locator('input[value="synthetic-299"]').check();await page.locator('[data-invite-search]').fill('Employee 001');await page.locator('input[value="synthetic-1"]').check();
+ if(await page.locator('[data-invite-count]').textContent()!=='2')throw Error('Picker loses selection across searches');
+ if(await page.locator('.meeting-invite-options').evaluate(el=>el.getBoundingClientRect().height)>300)throw Error('Large employee directory expands the meeting form');
+ const picked=await page.locator('form.workspace-editor').evaluate(form=>new FormData(form).getAll('Input.Guests'));if(!picked.includes('synthetic-299') || !picked.includes('synthetic-1'))throw Error('Hidden search results are not submitted');
+ await page.setViewportSize({width:390,height:1000});await page.waitForTimeout(350);await fit('Meeting invite picker');await page.locator('.meeting-invite-field').scrollIntoViewIfNeeded();await page.screenshot({path:'/private/tmp/garowe-meeting-invites-mobile.png',fullPage:false});
+ await page.locator('[data-clear-invites]').click();if(await page.locator('[data-invite-count]').textContent()!=='0')throw Error('Clear selection failed');
+ await page.setViewportSize({width:1280,height:1000});
+ console.log('PASS searchable compact 300-account invitation picker, persistent checkboxes, selected count and mobile layout');
  console.log('PASS payroll workflow page, clear approval stages and administrator preparation controls');
 
  await page.goto(base+'/Admin/OrgEdit?kind=Branch');await page.locator('[name="Name"]').fill('Inline delete fixture');await page.locator('[name="Code"]').fill('INLINEDEL');await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL(url=>url.hash==='#organization-list');

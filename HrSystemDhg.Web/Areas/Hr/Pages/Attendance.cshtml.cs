@@ -20,6 +20,7 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
         var minutes = (int)Math.Round(Math.Max(0,hours) * 60m);
         return $"{minutes / 60}h {minutes % 60:00}m";
     }
+    [BindProperty(SupportsGet = true)] public int? EmployeeFilter { get; set; }
     public List<AttendanceDay> Items = [];
     public List<Employee> Employees = [];
     public List<ZkDevice> Devices = [];
@@ -33,12 +34,15 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
 
     public async Task OnGetAsync()
     {
+        Employees = await db.Employees.OrderBy(e=>e.FullName).ThenBy(e=>e.EmployeeNumber).ToListAsync();
+        if (EmployeeFilter.HasValue && !Employees.Any(e=>e.Id==EmployeeFilter))
+            ModelState.AddModelError("", "Select an employee within your authorized scope.");
+        if (From.Date>To.Date) ModelState.AddModelError("", "The start date must be on or before the end date.");
         TodayPunches = await LoadTodayPunchesAsync();
         ClockReviews = await VisibleClockReviews().AsNoTracking().Where(r => ClockHistory || r.ReviewedUtc == null).OrderByDescending(r => r.Id).Take(100).ToListAsync();
-        Employees = await db.Employees.ToListAsync();
         Names = Employees.ToDictionary(x => x.Id, x => x.FullName);
         Devices = await db.ZkDevices.ToListAsync();
-        Items = await db.AttendanceDays.Where(x => x.Date >= From && x.Date <= To).OrderByDescending(x => x.Date).Take(500).ToListAsync();
+        Items = await db.AttendanceDays.Where(x => x.Date >= From && x.Date <= To && (!EmployeeFilter.HasValue || x.EmployeeId==EmployeeFilter)).OrderByDescending(x => x.Date).Take(500).ToListAsync();
         if (!db.Scoped)
             Unmapped = await db.ZkPunchs.Where(x => !db.Employees.Any(e => e.ZkPin == x.Pin)).Select(x => x.Pin).Distinct().ToListAsync();
     }
@@ -58,7 +62,7 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
                 where punch.PunchTime >= today && punch.PunchTime < tomorrow
                 join employee in db.Employees on punch.Pin equals employee.ZkPin into matches
                 from employee in matches.DefaultIfEmpty()
-                where !scoped || employee != null
+                where (!scoped || employee != null) && (!EmployeeFilter.HasValue || (employee != null && employee.Id == EmployeeFilter))
                 join device in db.ZkDevices on punch.DeviceId equals device.Id into terminals
                 from device in terminals.DefaultIfEmpty()
                 orderby punch.PunchTime descending, punch.Id descending
@@ -175,7 +179,8 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
         var end = To.Date.AddDays(1);
         var scoped = db.Scoped;
         var punches = await db.ZkPunchs.AsNoTracking().Where(p => p.PunchTime >= From.Date && p.PunchTime < end &&
-            (!scoped || db.Employees.Any(e => e.ZkPin == p.Pin))).OrderBy(p => p.PunchTime).ThenBy(p => p.Id).ToListAsync();
+            (!scoped || db.Employees.Any(e => e.ZkPin == p.Pin)) &&
+            (!EmployeeFilter.HasValue || db.Employees.Any(e => e.Id == EmployeeFilter && e.ZkPin == p.Pin))).OrderBy(p => p.PunchTime).ThenBy(p => p.Id).ToListAsync();
         Response.Headers.CacheControl = "no-store";
         return RegistrationCsv.Download("attendance-punches", PunchColumns,
             punches.Select(p => new object?[] { p.DeviceId, p.Pin, p.PunchTime }));

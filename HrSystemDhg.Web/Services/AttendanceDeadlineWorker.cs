@@ -42,8 +42,12 @@ public sealed class AttendanceDeadlineWorker(IServiceScopeFactory scopes, IConfi
             db.ChangeTracker.Clear();
             try
             {
-                var rule = await calendar.RuleAsync(candidate.EmployeeId, candidate.Date);
-                if (!rule.UsePunchWindows && !(candidate.Date >= actualMinutesFrom && candidate.CalculationVersion < AttendanceService.CalculationVersion)) continue;
+                var upgrade = candidate.Date >= actualMinutesFrom && candidate.CalculationVersion < AttendanceService.CalculationVersion;
+                if (!upgrade)
+                {
+                    var rule = await calendar.RuleAsync(candidate.EmployeeId,candidate.Date);
+                    if (!rule.UsePunchWindows) continue;
+                }
                 await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
                 // Serialize with device/correction updates, then rebuild from the latest raw punches.
                 var locked = await db.AttendanceDays.FromSqlInterpolated($"SELECT * FROM AttendanceDays WHERE Id = {candidate.Id} FOR UPDATE").IgnoreQueryFilters().ToListAsync(cancellationToken);

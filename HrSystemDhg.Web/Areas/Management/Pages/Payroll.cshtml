@@ -1,7 +1,7 @@
 @page
 @using HrSystemDhg.Web.Services
 @model HrSystemDhg.Web.Pages.Management.PayrollModel
-@{ViewData["Title"]="Payroll workspace";}
+@{ViewData["Title"]="Payroll workspace"; var noticeMessage=TempData["PayrollNotice"] as string; var noticePanel=TempData["PayrollNoticePanel"] as string;}
 <div class="eyebrow">GAROWE HR WORKSPACE</div><h1>Payroll workspace</h1>
 
 <div asp-validation-summary="All" role="alert"></div>
@@ -34,10 +34,6 @@
     </section>
 }
 
-@if (TempData["PayrollNotice"] is string notice)
-{
-    <p class="notice" role="status">@notice</p>
-}
 @{
     var p = Model.SelectedPeriod;
     var lines = Model.Lines.ToDictionary(l => l.EmployeeId);
@@ -52,7 +48,9 @@
 }
 <nav class="workspace-shortcuts" aria-label="Payroll shortcuts"><a href="#payroll-runs"><strong>@Model.Periods.Count payroll periods</strong><span>Choose a run to view or manage</span></a><a href="#payroll-register"><strong>Employee payroll</strong><span>Salaries, deductions and payslips</span></a><a href="#payroll-manage"><strong>Generate / recalculate</strong><span>Prepare and approve payroll</span></a><a href="#payroll-waivers"><strong>Deduction waivers</strong><span>Review employee or selected-day waivers</span></a></nav>
 <div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Payroll views"><a href="#payroll-runs" data-workspace-link>Payroll periods</a><a href="#payroll-register" data-workspace-link>Employee payroll</a><a href="#payroll-manage" data-workspace-link>Generate &amp; manage</a><a href="#payroll-waivers" data-workspace-link>Deduction waivers</a><a href="#payroll-import" data-workspace-link>Import &amp; export</a>@if(Model.CanReport){<a asp-area="" asp-page="/Reports/Index" asp-route-report="Payroll">Reports</a>}</nav>
-<section id="payroll-register" data-workspace-panel><section class="card">
+<section id="payroll-register" data-workspace-panel>
+@if(noticeMessage!=null && noticePanel!="payroll-manage"){<p class="notice payroll-success" role="status">@noticeMessage</p>}
+<section class="card">
     <h2>Select payroll</h2>
     <p><strong>Approval workflow:</strong> HR generates → Admin / Finance reviews and submits → General Secretary approves → Admin / Finance records payment. Rejections return to the previous stage with a reason.</p>
     <form method="get" class="actions">
@@ -154,6 +152,8 @@
 @foreach(var run in Model.Periods){<tr data-payroll-period="@run.Id"><td>@run.From.ToString("dd MMM yyyy") – @run.To.ToString("dd MMM yyyy")</td><td>@(run.BranchId.HasValue?Model.Branches.FirstOrDefault(b=>b.Id==run.BranchId)?.Name:"All branches")</td><td><span class="badge">@PayrollWorkflow.Label(run.Status)</span></td><td>@run.Revision</td><td><div class="actions"><a asp-page="./Payroll" asp-route-PeriodId="@run.Id" asp-route-Month="@run.From.ToString("yyyy-MM")" asp-route-PayrollBranchId="@run.BranchId" asp-fragment="payroll-register">Employee payroll</a><a asp-page="./Payroll" asp-route-PeriodId="@run.Id" asp-route-Month="@run.From.ToString("yyyy-MM")" asp-route-PayrollBranchId="@run.BranchId" asp-fragment="payroll-manage">Manage</a></div></td></tr>}
 </tbody></table></div>@if(Model.Periods.Count==0){<p>No payroll periods yet. <a href="#payroll-manage">Generate the first payroll</a>.</p>}</section>
 <section id="payroll-manage" data-workspace-panel>
+@if(noticeMessage!=null && noticePanel=="payroll-manage"){<p class="notice payroll-success" role="status" aria-live="polite"><strong>Success</strong> @noticeMessage</p>}
+
     <div class="payroll-manage-heading"><div><div class="eyebrow">MONTHLY PAYROLL</div><h2>Payroll approval workflow</h2><p>Prepare the month, review employee amounts, then follow the approval steps.</p></div><a class="button secondary" href="#payroll-runs">Browse payroll periods</a></div>
     @{
         var stage = p?.Status switch { "Calculated" or "Reviewed" => 1, "Submitted" => 2, "Locked" or "Paid" => 3, _ => 0 };
@@ -165,7 +165,7 @@
     <div class="payroll-manage-grid @(!Model.CanGenerate?"payroll-manage-single":"")">
         @if(Model.CanGenerate){
         <section class="card payroll-generate-card" aria-labelledby="generate-payroll-title">
-            <div class="eyebrow">01 / PREPARE A MONTH</div><h3 id="generate-payroll-title">Generate monthly payroll</h3><p>Select the payroll month and workplace. Review the employee payroll after generation.</p>
+            <div class="eyebrow">01 / PREPARE A MONTH</div><h3 id="generate-payroll-title">Generate monthly payroll</h3><p>Select the payroll month and workplace. Generate the period first, then calculate employee amounts from the selected payroll card.</p>
             <form method="post" asp-page-handler="Generate" class="payroll-generation-form">
                 <label for="generate-month">Payroll month<input id="generate-month" name="Month" type="month" value="@Model.Month" required/></label>
                 <label for="generate-branch">Branch<select id="generate-branch" name="PayrollBranchId" required="@Model.Scoped">

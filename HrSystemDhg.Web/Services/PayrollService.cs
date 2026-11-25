@@ -33,7 +33,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             p.WorkingDays,
             p.BranchId ?? 0,
             p.AttendanceSalaryDays ?? 0,
-            "FullMonthlySalary-ActualAttendanceMinutes-v5"
+            "FullMonthlySalary-ActualMinutes-AfterRegistration-v6"
         };
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data))));
     }
@@ -73,10 +73,13 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             var leaves = await db.LeaveRequests.Where(x => x.EmployeeId == e.Id && x.Status == "Approved" && x.From <= p.To && x.To >= p.From).ToListAsync();
             decimal overtime = 0;
             decimal unpaidLeaveAmount = 0;
+            var attendanceStart = AttendanceEligibility.StartDate(e);
             var workingDates = new HashSet<DateTime>();
             var calendarDays = new List<(DateTime Date, WorkRule Rule, int BranchId)>();
             for (var date = p.From.Date; date <= p.To.Date; date = date.AddDays(1))
             {
+                // No work rule is needed for exempt pre-registration dates unless approved unpaid leave must be valued.
+                if (date < attendanceStart && !leaves.Any(l=>unpaidTypeIds.Contains(l.LeaveTypeId) && l.From.Date<=date && l.To.Date>=date)) continue;
                 var calendarDate = date < e.HireDate ? e.HireDate : date;
                 var rule = await calendar.RuleAsync(e.Id, calendarDate);
                 var dayOrg = await calendar.AssignmentAsync(e.Id, calendarDate);
@@ -85,7 +88,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                     workingDates.Add(date);
             }
             var workingDays = workingDates.Count;
-            if (workingDays == 0)
+            if (workingDays == 0 && attendanceStart <= p.To.Date)
                 throw new InvalidOperationException($"Employee {e.EmployeeNumber} has no scheduled working days in this payroll period. Check the effective work rule and holidays.");
             var deductions = new List<PayrollDeduction>();
             decimal unroundedAttendance = 0;
@@ -95,6 +98,12 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                 var working = workingDates.Contains(date);
                 if (date < e.HireDate.Date || (e.TerminationDate.HasValue && date > e.TerminationDate.Value.Date))
                     continue;
+                if (date < attendanceStart)
+                {
+                    if (working) unpaidLeaveAmount += PayrollSalaryPolicy.UnpaidLeave(rule,salary.Basic,date,
+                        leaves.Where(l=>unpaidTypeIds.Contains(l.LeaveTypeId) && l.From.Date<=date && l.To.Date>=date),salaryDays);
+                    continue;
+                }
                 await attendance.RebuildAsync(e.Id, date);
                 var day = await db.AttendanceDays.SingleAsync(x => x.EmployeeId == e.Id && x.Date == date);
                 var leaveForDay = leaves.Where(x => x.From.Date <= date && x.To.Date >= date).ToList();

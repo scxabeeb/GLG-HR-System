@@ -12,7 +12,7 @@ public static class AttendanceMinuteChecks
         var date = new DateTime(2026, 11, 23);
         var key = Guid.NewGuid().ToString("N")[..8];
         var branch = new Branch { Name = "Minute checks", Code = key };
-        var employee = new Employee { FullName = "Minute fixture", EmployeeNumber = key, ZkPin = key, HireDate = date, RegistrationComplete = true };
+        var employee = new Employee { RegisteredUtc = new DateTime(2025,1,1,0,0,0,DateTimeKind.Utc), FullName = "Minute fixture", EmployeeNumber = key, ZkPin = key, HireDate = date, RegistrationComplete = true };
         var device = new ZkDevice { Name = "Minute fixture", Endpoint = "fixture" };
         db.AddRange(branch, employee, device); await db.SaveChangesAsync();
         var department = new Department { Name = "Minute checks", Code = key, BranchId = branch.Id };
@@ -41,7 +41,7 @@ public static class AttendanceMinuteChecks
         var fullSalaryDept = new Department { Name = "Full salary", Code = "FULL" + key, BranchId = fullSalaryBranch.Id };
         db.Departments.Add(fullSalaryDept); await db.SaveChangesAsync();
         var hire = new DateTime(2026, 11, 24);
-        var fullSalaryEmployee = new Employee { EmployeeNumber = "FULL" + key, FullName = "Full monthly basic fixture", WorkEmail = "full" + key + "@example.test", HireDate = hire, RegistrationComplete = true, ZkPin = "FULL" + key };
+        var fullSalaryEmployee = new Employee { RegisteredUtc = new DateTime(2025,1,1,0,0,0,DateTimeKind.Utc), EmployeeNumber = "FULL" + key, FullName = "Full monthly basic fixture", WorkEmail = "full" + key + "@example.test", HireDate = hire, RegistrationComplete = true, ZkPin = "FULL" + key };
         db.Employees.Add(fullSalaryEmployee); await db.SaveChangesAsync();
         db.EmployeeAssignments.Add(new() { EmployeeId = fullSalaryEmployee.Id, BranchId = fullSalaryBranch.Id, DepartmentId = fullSalaryDept.Id, EffectiveFrom = hire });
         db.SalaryVersions.Add(new() { EmployeeId = fullSalaryEmployee.Id, Basic = 400m, EffectiveFrom = hire, IsDraft = false });
@@ -76,7 +76,7 @@ public static class AttendanceMinuteChecks
         db.Branchs.Add(creditBranch);await db.SaveChangesAsync();
         var creditDept = new Department { Name = "Window credit", Code = "CREDIT" + key, BranchId = creditBranch.Id };
         db.Departments.Add(creditDept);await db.SaveChangesAsync();
-        var creditEmployee = new Employee { EmployeeNumber="CREDIT"+key, FullName="Window credit fixture", WorkEmail="credit"+key+"@example.test", HireDate=creditDate, RegistrationComplete=true, ZkPin="CREDIT"+key };
+        var creditEmployee = new Employee { RegisteredUtc = new DateTime(2025,1,1,0,0,0,DateTimeKind.Utc), EmployeeNumber="CREDIT"+key, FullName="Window credit fixture", WorkEmail="credit"+key+"@example.test", HireDate=creditDate, RegistrationComplete=true, ZkPin="CREDIT"+key };
         db.Employees.Add(creditEmployee);await db.SaveChangesAsync();
         db.EmployeeAssignments.Add(new(){EmployeeId=creditEmployee.Id,BranchId=creditBranch.Id,DepartmentId=creditDept.Id,EffectiveFrom=creditDate});
         db.SalaryVersions.Add(new(){EmployeeId=creditEmployee.Id,Basic=400m,EffectiveFrom=creditDate,IsDraft=false});
@@ -147,7 +147,7 @@ public static class AttendanceMinuteChecks
         var actualBranch=new Branch{Name="Actual minutes "+key,Code="ACT"+key};db.Add(actualBranch);await db.SaveChangesAsync();
         var actualDept=new Department{Name="Actual minutes",Code="ACT"+key,BranchId=actualBranch.Id};db.Add(actualDept);await db.SaveChangesAsync();
         var actualDate=new DateTime(2026,11,25);
-        var actualEmployee=new Employee{EmployeeNumber="ACT"+key,FullName="Actual minute fixture",WorkEmail="actual"+key+"@example.test",HireDate=actualDate,RegistrationComplete=true,ZkPin="ACT"+key};db.Add(actualEmployee);await db.SaveChangesAsync();
+        var actualEmployee=new Employee{RegisteredUtc=new DateTime(2025,1,1,0,0,0,DateTimeKind.Utc),EmployeeNumber="ACT"+key,FullName="Actual minute fixture",WorkEmail="actual"+key+"@example.test",HireDate=actualDate,RegistrationComplete=true,ZkPin="ACT"+key};db.Add(actualEmployee);await db.SaveChangesAsync();
         db.EmployeeAssignments.Add(new(){EmployeeId=actualEmployee.Id,BranchId=actualBranch.Id,DepartmentId=actualDept.Id,EffectiveFrom=actualDate});
         db.SalaryVersions.Add(new(){EmployeeId=actualEmployee.Id,Basic=400m,EffectiveFrom=actualDate,IsDraft=false});
         db.WorkRules.Add(new(){BranchId=actualBranch.Id,EffectiveFrom=new(2026,11,1),UsePunchWindows=true,DailyHours=8,BreakMinutes=0,WorkingWeekdays="0,1,2,3,4,6"});
@@ -224,6 +224,32 @@ public static class AttendanceMinuteChecks
             Convert.ToInt32(result.RouteValues!["PeriodId"])==leavePeriod.Id && (string)result.RouteValues["Month"]! == "2026-11" &&
             Convert.ToInt32(result.RouteValues["PayrollBranchId"])==branch.Id,
             "recalculation returns to updated employee payroll with the selected run, correct month and branch");
+        navigation.Month="2026-12";navigation.PayrollBranchId=actualBranch.Id;navigation.PeriodId=null;
+        var generatedResult=await navigation.OnPostGenerateAsync();
+        var generated=await db.PayrollPeriods.SingleAsync(p=>p.BranchId==actualBranch.Id && p.From==new DateTime(2026,12,1));
+        check(generatedResult is Microsoft.AspNetCore.Mvc.RedirectToPageResult{Fragment:"payroll-manage"} && generated.Status=="Draft" && generated.Revision==0 && !await db.PayrollLines.AnyAsync(l=>l.PayrollPeriodId==generated.Id) && navigation.TempData["PayrollNotice"]!.ToString()!.Contains("successfully"),"Generate stays in management with a success message and leaves calculation as the next explicit step");
+        await navigation.OnPostGenerateAsync();
+        check(await db.PayrollPeriods.CountAsync(p=>p.BranchId==actualBranch.Id && p.From==new DateTime(2026,12,1))==1,"repeated Generate opens the saved draft without creating duplicates or recalculating amounts");
+
+        var registered = new Employee { EmployeeNumber="REG"+key,WorkEmail="reg"+key+"@example.test",FullName="Registered today",ZkPin="REG"+key,HireDate=date,RegisteredUtc=date.AddHours(5),RegistrationComplete=true };
+        db.Add(registered);await db.SaveChangesAsync();
+        await attendance.RebuildAsync(registered.Id,date); // Exempt even before an assignment/rule exists.
+        var registrationDay=await db.AttendanceDays.SingleAsync(d=>d.EmployeeId==registered.Id && d.Date==date);
+        check(registrationDay.Status=="Registration day" && registrationDay.ExpectedHours==0 && registrationDay.MissingMinutes==0,"registration day requires no work rule and has no absence or attendance penalty");
+        db.EmployeeAssignments.Add(new(){EmployeeId=registered.Id,BranchId=branch.Id,DepartmentId=department.Id,EffectiveFrom=date});
+        db.SalaryVersions.Add(new(){EmployeeId=registered.Id,Basic=400,EffectiveFrom=date,IsDraft=false});
+        var registrationPeriod=new PayrollPeriod{BranchId=branch.Id,From=date,To=date.AddDays(1)};
+        db.Add(registrationPeriod);await db.SaveChangesAsync();
+        await new PayrollService(db,calendar,attendance).CalculateAsync(registrationPeriod.Id,true,"registration-fixture");
+        var registrationLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==registrationPeriod.Id && l.EmployeeId==registered.Id && l.Revision==1);
+        check(registrationLine.Basic==400 && registrationLine.AttendanceApplied==15.38m,"full basic salary stays unchanged and absence begins only the day after registration");
+        db.ZkPunchs.AddRange(new(){DeviceId=device.Id,Pin=registered.ZkPin!,PunchTime=date.AddDays(1).AddHours(8).AddMinutes(59)},new(){DeviceId=device.Id,Pin=registered.ZkPin!,PunchTime=date.AddDays(1).AddHours(12).AddMinutes(43)});
+        await db.SaveChangesAsync();await attendance.RebuildAsync(registered.Id,date.AddDays(1));
+        await new PayrollService(db,calendar,attendance).CalculateAsync(registrationPeriod.Id,true,"registration-fixture");
+        registrationLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==registrationPeriod.Id && l.EmployeeId==registered.Id && l.Revision==2);
+        check(registrationLine.AttendanceApplied==8.21m,"delayed terminal punches rebuild their original date and replace absence with actual missing minutes");
+
+
 
     }
 }

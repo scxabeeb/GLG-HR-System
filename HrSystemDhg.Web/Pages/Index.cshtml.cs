@@ -29,7 +29,8 @@ public class IndexModel(HrDbContext db) : PageModel
         Leave = await db.LeaveRequests.CountAsync(x => x.Status == "Pending" || x.Status == "Manager approved" || x.Status == HrSystemDhg.Web.Services.LeaveService.Submitted);
         Branches = await db.Branchs.CountAsync(x => x.IsActive);
         var today = HrSystemDhg.Web.Services.BusinessClock.Today;
-        Expected = await db.Employees.CountAsync(x => x.HireDate <= today && (x.TerminationDate == null || x.TerminationDate >= today));
+        var registrationCutoffUtc=today.AddHours(-3);
+        Expected = await db.Employees.CountAsync(x => x.HireDate <= today && (x.RegisteredUtc.HasValue ? x.RegisteredUtc.Value < registrationCutoffUtc : x.HireDate < today) && (x.TerminationDate == null || x.TerminationDate >= today));
         Present = await db.AttendanceDays.CountAsync(x => x.Date == today && (x.Status == "Present" || x.Status == "Late" || x.Status == "Short hours" || x.Status == "On leave (partial)" || x.Status == "On leave"));
         AttendancePercent = Expected == 0 ? 0 : 100m * Present / Expected;
         var assignments = await db.EmployeeAssignments.Where(x => x.EffectiveFrom <= today && (x.EffectiveTo == null || x.EffectiveTo >= today)).ToListAsync();

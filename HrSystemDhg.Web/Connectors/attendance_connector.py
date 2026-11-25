@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Private-LAN ADMS receiver forwarding only paired terminals to the online ERP over HTTPS."""
 import argparse
+import hashlib
+import sqlite3
+import socket
 import datetime
 import http.server
 import ipaddress
@@ -13,6 +16,11 @@ import urllib.parse
 import urllib.request
 
 MAX_BODY = 256 * 1024
+
+class CloudUnavailable(ConnectionError):
+    def __init__(self, message, retryable=False):
+        super().__init__(message)
+        self.retryable = retryable
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -45,6 +53,7 @@ def load_config(path, allow_test=False):
             raise ValueError('Each terminal needs a unique ID, serial and IP address')
         serials.add(terminal['serial']); addresses.add(terminal['address']); ids.add(terminal['id'])
     config['server'] = config['server'].rstrip('/')
+    config['_queue_path'] = os.path.join(os.path.dirname(os.path.abspath(path)), 'attendance-queue.sqlite3')
     if os.name != 'nt':
         os.chmod(path, 0o600)
     return config
@@ -59,6 +68,75 @@ class Connector:
         self.lock = threading.Lock()
         self.status = {t['id']: {'cloud_connected': False, 'last_cloud_utc': None, 'last_terminal_utc': None, 'last_error': None} for t in config['terminals']}
         self.stop = threading.Event()
+        self.queue_lock = threading.Lock()
+        self.queue_path = config.get('_queue_path')
+        if self.queue_path:
+            descriptor = os.open(self.queue_path, os.O_CREAT | os.O_RDWR, 0o600)
+            os.close(descriptor)
+            os.chmod(self.queue_path, 0o600)
+            with sqlite3.connect(self.queue_path) as queue:
+                queue.execute('CREATE TABLE IF NOT EXISTS uploads (id INTEGER PRIMARY KEY, device INTEGER, serial TEXT, address TEXT, query TEXT, body BLOB, checksum TEXT UNIQUE, records INTEGER, created TEXT)')
+
+    def enqueue(self, terminal, query, body):
+        if not self.queue_path or not body:
+            return None
+        try:
+            fields = urllib.parse.parse_qs(query)
+            if fields.get('table') != ['ATTLOG']:
+                return None
+            lines = body.decode('utf-8').strip().splitlines()
+            for line in lines:
+                values = line.split('\t')
+                if len(values) < 2 or not re.fullmatch(r'[A-Za-z0-9_-]{1,32}', values[0]):
+                    return None
+                datetime.datetime.strptime(values[1], '%Y-%m-%d %H:%M:%S')
+            if not lines:
+                return None
+            digest = hashlib.sha256((str(terminal['id']) + terminal['serial'] + terminal['address'] + query).encode() + body).hexdigest()
+            with self.queue_lock, sqlite3.connect(self.queue_path) as queue:
+                if queue.execute('SELECT 1 FROM uploads WHERE checksum=?', (digest,)).fetchone():
+                    return len(lines)
+                count, size = queue.execute('SELECT COUNT(*), COALESCE(SUM(LENGTH(body)),0) FROM uploads').fetchone()
+                if count >= 10000 or size + len(body) > 100 * 1024 * 1024:
+                    return None
+                queue.execute('INSERT INTO uploads(device,serial,address,query,body,checksum,records,created) VALUES(?,?,?,?,?,?,?,?)',
+                    (terminal['id'],terminal['serial'],terminal['address'],query,body,digest,len(lines),utc()))
+            return len(lines)
+        except (ValueError, UnicodeError, sqlite3.Error, OSError):
+            return None
+
+    def queued_counts(self):
+        if not self.queue_path:
+            return {}
+        with self.queue_lock, sqlite3.connect(self.queue_path) as queue:
+            return dict(queue.execute('SELECT device,SUM(records) FROM uploads GROUP BY device').fetchall())
+
+    def replay_once(self):
+        if not self.queue_path:
+            return
+        with self.queue_lock, sqlite3.connect(self.queue_path) as queue:
+            rows = queue.execute('SELECT id,device,serial,address,query,body,records FROM uploads ORDER BY id LIMIT 100').fetchall()
+        for identifier, device, serial, address, query, body, records in rows:
+            terminal = next((t for t in self.config['terminals'] if (t['id'],t['serial'],t['address']) == (device,serial,address)), None)
+            if terminal is None:
+                continue
+            try:
+                result, _ = self.cloud(terminal, 'cdata', query, body)
+                if result.strip() != ('OK: ' + str(records)).encode():
+                    break
+                with self.queue_lock, sqlite3.connect(self.queue_path) as queue:
+                    queue.execute('DELETE FROM uploads WHERE id=?', (identifier,))
+            except ConnectionError:
+                break
+
+    def replay(self):
+        while not self.stop.is_set():
+            try:
+                self.replay_once()
+            except (sqlite3.Error, OSError):
+                pass  # Retain records on disk and retry; never acknowledge an unsaved upload.
+            self.stop.wait(10)
+
     def cloud(self, terminal, operation, query='', body=None):
         url = self.config['server'] + '/api/attendance/bridge/' + str(terminal['id']) + '/' + operation
         if query:
@@ -88,7 +166,7 @@ class Connector:
                 message += '; record time=' + timestamp + '; current EAT=' + now_eat
             with self.lock:
                 self.status[terminal['id']].update(cloud_connected=False, last_error=message)
-            raise ConnectionError(message) from None
+            raise CloudUnavailable(message, isinstance(error, (urllib.error.URLError, TimeoutError, socket.timeout, OSError)) and not isinstance(error, urllib.error.HTTPError) or isinstance(error, urllib.error.HTTPError) and (error.code in (408,425,429) or error.code >= 500)) from None
     def heartbeat(self):
         while not self.stop.is_set():
             for terminal in self.config['terminals']:
@@ -122,7 +200,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlsplit(self.path)
         if parsed.path == '/health' and self.command == 'GET' and self.client_address[0] in ('127.0.0.1', connector.config['listen']):
             with connector.lock:
-                return self.reply(200, json.dumps({'listener': connector.config['listen'], 'port': connector.config['port'], 'devices': connector.status}).encode(), 'application/json')
+                states = {key: dict(value) for key,value in connector.status.items()}
+            return self.reply(200, json.dumps({'listener': connector.config['listen'], 'port': connector.config['port'], 'devices': states, 'queued_punches': connector.queued_counts()}).encode(), 'application/json')
         route = parsed.path.lower()
         allowed = {'/iclock/cdata': 'cdata', '/iclock/cdata.aspx': 'cdata', '/iclock/getrequest': 'getrequest', '/iclock/getrequest.aspx': 'getrequest', '/iclock/devicecmd': 'devicecmd', '/iclock/devicecmd.aspx': 'devicecmd'}
         operation = allowed.get(route)
@@ -153,6 +232,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             content, content_type = connector.cloud(terminal, operation, parsed.query, body)
         except ConnectionError as error:
             print(utc(), 'device', terminal['id'], operation, str(error), flush=True)
+            if isinstance(error, CloudUnavailable) and error.retryable and operation == 'cdata' and self.command == 'POST':
+                count = connector.enqueue(terminal, parsed.query, body)
+                if count is not None:
+                    return self.reply(200, ('OK: ' + str(count)).encode())
             return self.reply(503, b'Cloud unavailable; retry later')
         self.reply(200, content, content_type)
         if self.command == 'POST':
@@ -181,6 +264,7 @@ def main():
     server.daemon_threads = True
     server.connector = connector
     threading.Thread(target=connector.heartbeat, daemon=True).start()
+    threading.Thread(target=connector.replay, daemon=True).start()
     print(utc(), 'Attendance connector listening on', config['listen'] + ':' + str(config['port']), flush=True)
     try:
         server.serve_forever()

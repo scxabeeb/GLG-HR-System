@@ -22,12 +22,12 @@
 </nav>
 <section id="attendance-daily" data-workspace-panel aria-label="Daily attendance"><section class="card workspace-list">
     <header class="workspace-list-heading"><h2>Daily attendance</h2><small>@Model.Items.Count records shown</small></header>
-    <form method="get" class="actions">
-        <label>From<input asp-for="From" type="date" /></label>
-        <label>To<input asp-for="To" type="date" /></label>
-        <button class="secondary">Apply dates</button>
+    <form method="get" asp-fragment="attendance-daily" class="attendance-filter-form">
+        <label>Employee<select asp-for="EmployeeFilter"><option value="">All employees</option>@foreach(var employee in Model.Employees){<option value="@employee.Id">@employee.EmployeeNumber · @employee.FullName</option>}</select></label>
+        <label>From<input asp-for="From" type="date" /></label><label>To<input asp-for="To" type="date" /></label>
+        <div class="actions"><button class="secondary">Apply filters</button><a asp-page="./Attendance" asp-route-From="@Model.From.ToString("yyyy-MM-dd")" asp-route-To="@Model.To.ToString("yyyy-MM-dd")" asp-fragment="attendance-daily">Clear employee</a></div>
     </form>
-    @if (Model.Items.Count == 0) { <p>No attendance summaries for these dates.</p> }
+    @if (Model.Items.Count == 0) { <p>No attendance summaries match this employee and date range.</p> }
     else
     {
         <div class="table-scroll">
@@ -55,15 +55,16 @@
 </section>
 <section id="attendance-live" data-workspace-panel aria-label="Live punches"><section class="card" aria-labelledby="today-punches-title">
     <h2 id="today-punches-title">Today’s punches</h2>
-    <p>Latest 200 records for today in Mogadishu time. This list refreshes every 15 seconds while the page is visible.</p>
-    <div class="table-scroll" id="today-punches" data-refresh-url="@Url.Page("./Attendance", "TodayPunches")">
+    <form method="get" asp-fragment="attendance-live" class="actions"><input type="hidden" name="From" value="@Model.From.ToString("yyyy-MM-dd")"/><input type="hidden" name="To" value="@Model.To.ToString("yyyy-MM-dd")"/><label for="live-employee-filter">Employee<select id="live-employee-filter" name="EmployeeFilter"><option value="">All employees</option>@foreach(var employee in Model.Employees){<option value="@employee.Id" selected="@(Model.EmployeeFilter==employee.Id)">@employee.EmployeeNumber · @employee.FullName</option>}</select></label><button class="secondary">Filter live punches</button></form>
+    <p>Latest 200 records for the selected employee today in Mogadishu time. This list refreshes every 15 seconds while the page is visible.</p>
+    <div class="table-scroll" id="today-punches" data-refresh-url="@Url.Page("./Attendance", "TodayPunches", new { EmployeeFilter=Model.EmployeeFilter })">
         <partial name="_TodayPunches" model="Model.TodayPunches" />
     </div>
 </section>
 <script src="~/js/today-punches.js" asp-append-version="true" defer></script>
 
 </section>
-<section id="attendance-import" data-workspace-panel aria-label="Import and manual entry"><form method="post" asp-page-handler="Csv" enctype="multipart/form-data" class="card"><h2>CSV punch import</h2><p>Use the sample headers. Times use East Africa Time (UTC+3) unless the timestamp includes a UTC offset. Maximum 2 MB.</p><div class="actions"><a class="button secondary" asp-page-handler="Sample">Download sample CSV</a><a class="button secondary" asp-page-handler="Export" asp-route-from="@Model.From.ToString("yyyy-MM-dd")" asp-route-to="@Model.To.ToString("yyyy-MM-dd")">Export punches for selected dates</a></div><label>CSV file<input name="upload" type="file" accept=".csv" required/></label><label>Reason<input name="reason" required/></label><button>Import CSV</button></form>
+<section id="attendance-import" data-workspace-panel aria-label="Import and manual entry"><form method="post" asp-page-handler="Csv" enctype="multipart/form-data" class="card"><h2>CSV punch import</h2><p>Use the sample headers. Times use East Africa Time (UTC+3) unless the timestamp includes a UTC offset. Maximum 2 MB.</p><div class="actions"><a class="button secondary" asp-page-handler="Sample">Download sample CSV</a><a class="button secondary" asp-page-handler="Export" asp-route-from="@Model.From.ToString("yyyy-MM-dd")" asp-route-to="@Model.To.ToString("yyyy-MM-dd")" asp-route-EmployeeFilter="@Model.EmployeeFilter">Export punches for selected dates</a></div><label>CSV file<input name="upload" type="file" accept=".csv" required/></label><label>Reason<input name="reason" required/></label><button>Import CSV</button></form>
 <p>Import raw local device times or ISO timestamps with UTC offsets. Offset timestamps convert to East Africa Time (EAT, UTC+3). Raw punches are never deleted.</p><div class="grid"><form method="post" asp-page-handler="Punch" class="card"><h2>Manual punch</h2><label>Device<select name="deviceId">@foreach(var d in Model.Devices){<option value="@d.Id">@d.Name</option>}</select></label><label>Employee PIN<input name="pin" required/></label><label>Timestamp<input name="timestamp" value="@HrSystemDhg.Web.Services.BusinessClock.Now.ToString("yyyy-MM-ddTHH:mm:ss")" required/></label><label>Reason<input name="reason" required/></label><button>Import punch</button></form><form method="post" asp-page-handler="PunchAll" class="card">
     <h2>Bulk manual punch</h2>
     <p>Record the current Mogadishu time for every active employee you can manage who has a terminal User ID.</p>

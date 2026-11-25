@@ -78,6 +78,7 @@ db.Departments.Add(d);
 await db.SaveChangesAsync();
 var e = new Employee
 {
+    RegisteredUtc = new DateTime(2025,1,1,0,0,0,DateTimeKind.Utc),
     EmployeeNumber = suffix,
     FullName = "Integration employee",
     WorkEmail = suffix + "@test.local",

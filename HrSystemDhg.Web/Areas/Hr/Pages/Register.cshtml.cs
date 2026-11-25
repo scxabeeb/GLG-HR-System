@@ -115,6 +115,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
             var e = new Employee
             {
                 EmployeeNumber = Number,
+                RegisteredUtc = DateTime.UtcNow,
                 FullName = Name,
                 RegistrationComplete = false,
                 WorkEmail = Email,

@@ -15,7 +15,8 @@ public class MeetingsModel(HrDbContext db, RoomLinks links, OperationsNotices no
     [BindProperty(SupportsGet = true)] public string? Period { get; set; }
     public bool Managing => CanOrganize && Mode == "manage";
     public List<WorkMeeting> Items { get; private set; } = [];
-    public Dictionary<string,string> People { get; private set; } = [];
+    public record Invitee(string Id,string Name,string Email,string EmployeeNumber);
+    public List<Invitee> Invitees { get; private set; } = [];
     [BindProperty] public MeetingInput Input { get; set; } = new();
     public class MeetingInput
     {
@@ -45,8 +46,11 @@ public class MeetingsModel(HrDbContext db, RoomLinks links, OperationsNotices no
         Items = await query.AsNoTracking().Include(m => m.Participants)
             .OrderBy(m => m.Cancelled || m.EndedUtc != null || m.EndsUtc < now).ThenBy(m => m.EndsUtc < now ? DateTime.MaxValue : m.StartsUtc)
             .ThenByDescending(m => m.StartsUtc).Take(150).ToListAsync();
-        if (Managing) People = await OperationsPolicy.EligiblePeople(db, "meetings").Where(u => u.Id != Actor)
-            .OrderBy(u => u.Email).ToDictionaryAsync(u => u.Id, u => u.Email ?? u.UserName ?? "Employee");
+        if (Managing) Invitees = (await OperationsPolicy.EligiblePeople(db, "meetings").Where(u => u.Id != Actor)
+            .Select(u => new Invitee(u.Id,
+                db.Employees.Where(e=>e.Id==u.EmployeeId).Select(e=>e.FullName).FirstOrDefault() ?? u.UserName ?? u.Email ?? "Employee",
+                u.Email ?? "",db.Employees.Where(e=>e.Id==u.EmployeeId).Select(e=>e.EmployeeNumber).FirstOrDefault() ?? ""))
+            .ToListAsync()).OrderBy(u=>u.Name).ToList();
     }
 
     public async Task<IActionResult> OnGetAsync(int? edit)

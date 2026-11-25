@@ -6,6 +6,7 @@ public partial class ApplicationUser
 
 public partial class Employee
 {
+    public DateTime? RegisteredUtc { get; set; }
     public string Gender { get; set; } = "";
     public DateTime? DateOfBirth { get; set; }
     public string Nationality { get; set; } = "";

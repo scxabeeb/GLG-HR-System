@@ -116,10 +116,20 @@
     @if (!string.IsNullOrWhiteSpace(Model.Input.JoinUrl)) {
         <label>Existing external join link (clear it to switch to a Garowe room)<input asp-for="Input.JoinUrl" type="url" maxlength="2048" /></label>
     }
-    @if (Model.People.Count > 0) {
-        <fieldset><legend>Invite employee accounts</legend><div class="checkbox-list ops-participants">
-        @foreach (var person in Model.People) { <label><input type="checkbox" name="Input.Guests" value="@person.Key" checked="@Model.Input.Guests.Contains(person.Key)" /> @person.Value</label> }
-        </div></fieldset>
+    @if (Model.Invitees.Count > 0) {
+        <fieldset class="meeting-invite-field" data-invite-picker data-max-invitees="100"><legend>Invite employee accounts</legend>
+            <div class="invite-selection-heading"><span><strong data-invite-count>@Model.Input.Guests.Count(id=>Model.Invitees.Any(p=>p.Id==id))</strong> selected <small>· up to 100 invitees</small></span><button type="button" class="secondary" data-clear-invites>Clear selection</button></div>
+            <details class="meeting-invite-directory"><summary>Choose employees <span>@Model.Invitees.Count available</span></summary>
+                <label for="meeting-invite-search">Search employee name, ID or email<input id="meeting-invite-search" data-invite-search type="search" placeholder="Search employees…" autocomplete="off"/></label>
+                <div class="invite-directory-tools"><span data-invite-results>@Model.Invitees.Count employees</span><button type="button" class="secondary" data-select-matching>Select matching</button></div>
+                <div class="meeting-invite-options" aria-label="Available employee accounts">
+                @foreach(var person in Model.Invitees){<label class="meeting-invite-option" data-invite-option data-search="@(person.Name+" "+person.EmployeeNumber+" "+person.Email)"><input type="checkbox" name="Input.Guests" value="@person.Id" checked="@Model.Input.Guests.Contains(person.Id)" data-invite-name="@person.Name"/><span><strong>@person.Name</strong>@if(!string.IsNullOrEmpty(person.EmployeeNumber) || (!string.IsNullOrEmpty(person.Email) && person.Email!=person.Name)){<small>@person.EmployeeNumber @((person.Email==person.Name)?"":person.Email)</small>}</span></label>}
+                </div>
+                <p data-invite-empty hidden>No employees match this search.</p>
+            </details>
+            <details class="meeting-invite-selected" data-selected-invites hidden><summary>Review selected employees</summary><ul data-selected-list></ul></details>
+            <p class="invite-picker-status" data-invite-status role="status" aria-live="polite">The organizer is included automatically.</p>
+        </fieldset>
     }
     <label>Agenda<textarea asp-for="Input.Agenda" rows="3" maxlength="2500"></textarea></label>
     <button>Save meeting</button> @if (Model.Input.Id != 0) { <a asp-page="./Meetings" asp-route-mode="manage">Cancel edit</a> }
@@ -135,4 +145,4 @@
 </section>
 }
 </div>
-@section Scripts { <script src="~/js/meeting-share.js" asp-append-version="true" defer></script> }
+@section Scripts { <script src="~/js/meeting-share.js" asp-append-version="true" defer></script><script src="~/js/meeting-invites.js" asp-append-version="true" defer></script> }
