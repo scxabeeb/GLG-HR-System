@@ -31,6 +31,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
     public bool CanGenerate => PayrollWorkflow.Generate(User);
     public bool CanReview => PayrollWorkflow.Review(User);
     public bool CanPublish => CanGenerate || CanReview;
+    public bool CanViewPayslips => db.IsStaff;
     public bool CanReport => User.IsInRole("HR") || User.IsInRole("Admin") || User.IsInRole("Management");
     public bool CanDecide(string status, string action) => PayrollWorkflow.CanDecide(User, status, action);
     public List<AuditLog> WorkflowHistory = [];
@@ -54,6 +55,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
             SalaryDays = period.AttendanceSalaryDays ?? PayrollSalaryPolicy.DefaultSalaryDays;
             from = period.From;
             to = period.To;
+            if (PeriodId.HasValue) { Month = period.From.ToString("yyyy-MM"); PayrollBranchId = period.BranchId; }
             Lines = await db.PayrollLines.Where(l => l.PayrollPeriodId == period.Id && l.Revision == period.Revision).ToListAsync();
             var lineIds = Lines.Select(l => l.Id).ToArray();
             Deductions = await db.PayrollDeductions.Where(d => lineIds.Contains(d.PayrollLineId))
@@ -85,7 +87,7 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
         try
         {
             await work();
-            return RedirectToPage(new { Month, PayrollBranchId, PeriodId });
+            return RedirectToPage(null, null, new { Month, PayrollBranchId, PeriodId }, "payroll-register");
         }
         catch (Exception e) when (e is InvalidOperationException or MySqlConnector.MySqlException { Number: 1205 or 1213 } or DbUpdateException { InnerException: MySqlConnector.MySqlException { Number: 1205 or 1213 } })
         {
@@ -194,6 +196,10 @@ public class PayrollModel(HrDbContext db, PayrollService payroll) : PageModel
         try
         {
             await payroll.CalculateAsync(id, apply, User.Identity!.Name!, firstGenerationOnly, SalaryDays);
+            var calculated = await db.PayrollPeriods.SingleAsync(p => p.Id == id);
+            Month = calculated.From.ToString("yyyy-MM");
+            PayrollBranchId = calculated.BranchId;
+            TempData["PayrollNotice"] = "Payroll calculated. The updated employee payroll is shown below.";
         }
         catch (MissingWorkRuleException ex)
         {

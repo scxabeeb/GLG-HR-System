@@ -57,6 +57,7 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
 builder.Services.AddRazorPages(o =>
 {
     o.Conventions.AuthorizeFolder("/");
+    o.Conventions.AddPageRoute("/Reports/Hub", "Reports/Hub");
     o.Conventions.AuthorizeAreaFolder("Admin", "/");
     o.Conventions.AuthorizeAreaFolder("Hr", "/");
     o.Conventions.AuthorizeAreaFolder("Management", "/");

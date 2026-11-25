@@ -177,6 +177,22 @@ public static class AttendanceMinuteChecks
         await new PayrollService(db, calendar, attendance).CalculateAsync(leavePeriod.Id, true, "minute-fixture");
         var leaveLine = await db.PayrollLines.SingleAsync(l => l.PayrollPeriodId == leavePeriod.Id);
         check(leaveLine.AttendanceApplied == 0 && leaveLine.Net == leaveLine.Gross, "approved full and partial paid leave has no payroll deduction");
+        var navigationHttp = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        navigationHttp.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity([
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role,"Admin"),
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name,"navigation-fixture")],"test"));
+        var navigation = new HrSystemDhg.Web.Pages.Management.PayrollModel(db,new PayrollService(db,calendar,attendance))
+        {
+            PageContext = new Microsoft.AspNetCore.Mvc.RazorPages.PageContext { HttpContext=navigationHttp },
+            TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(navigationHttp,new NavigationTempDataProvider()),
+            Month = "2026-01"
+        };
+        var calculatedResult = await navigation.OnPostCalculateAsync(leavePeriod.Id,true);
+        check(calculatedResult is Microsoft.AspNetCore.Mvc.RedirectToPageResult { Fragment:"payroll-register" } result &&
+            Convert.ToInt32(result.RouteValues!["PeriodId"])==leavePeriod.Id && (string)result.RouteValues["Month"]! == "2026-11" &&
+            Convert.ToInt32(result.RouteValues["PayrollBranchId"])==branch.Id,
+            "recalculation returns to updated employee payroll with the selected run, correct month and branch");
+
     }
 }
 
@@ -184,4 +200,10 @@ public sealed class ClosingTestClock(DateTimeOffset now) : TimeProvider
 {
     public DateTimeOffset Now { get; set; } = now;
     public override DateTimeOffset GetUtcNow() => Now;
+}
+
+public sealed class NavigationTempDataProvider : Microsoft.AspNetCore.Mvc.ViewFeatures.ITempDataProvider
+{
+    public IDictionary<string,object> LoadTempData(Microsoft.AspNetCore.Http.HttpContext context) => new Dictionary<string,object>();
+    public void SaveTempData(Microsoft.AspNetCore.Http.HttpContext context,IDictionary<string,object> values) { }
 }

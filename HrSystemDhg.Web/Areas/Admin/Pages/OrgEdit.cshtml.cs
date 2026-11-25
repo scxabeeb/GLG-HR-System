@@ -40,22 +40,34 @@ public class OrgEditModel(HrDbContext db) : PageModel
     [BindProperty]
     public bool RequiresSub { get; set; }
 
+    [BindProperty(SupportsGet = true)] public string? Search { get; set; }
+    public List<SubDepartment> Subs = [];
+    public record UnitRow(int Id, string Name, string Code, string Parent, string Location, bool Active);
+    public IEnumerable<UnitRow> UnitRows => (Kind switch
+    {
+        "Department" => Departments.Select(d => new UnitRow(d.Id,d.Name,d.Code,Branches.FirstOrDefault(b=>b.Id==d.BranchId)?.Name ?? "—","",d.IsActive)),
+        "SubDepartment" => Subs.Select(s => new UnitRow(s.Id,s.Name,"",Departments.FirstOrDefault(d=>d.Id==s.DepartmentId)?.Name ?? "—","",s.IsActive)),
+        _ => Branches.Select(b => new UnitRow(b.Id,b.Name,b.Code,"",string.Join(" · ",new[]{b.City,b.Address,b.Timezone}.Where(v=>!string.IsNullOrWhiteSpace(v))),b.IsActive))
+    }).Where(r=>string.IsNullOrWhiteSpace(Search) || (r.Name+" "+r.Code+" "+r.Parent+" "+r.Location).Contains(Search,StringComparison.OrdinalIgnoreCase)).OrderBy(r=>r.Name);
     public List<Branch> Branches = [];
     public List<Department> Departments = [];
     private async Task Load()
     {
-        Branches = await db.Branchs.ToListAsync();
-        Departments = await db.Departments.ToListAsync();
+        Branches = await db.Branchs.OrderBy(b=>b.Name).ToListAsync();
+        Departments = await db.Departments.OrderBy(d=>d.Name).ToListAsync();
+        Subs = await db.SubDepartments.OrderBy(s=>s.Name).ToListAsync();
     }
 
     public async Task<IActionResult> OnGetAsync()
     {
+        if (Kind is not ("Branch" or "Department" or "SubDepartment") || Id < 0) return BadRequest();
         await Load();
         if (Id > 0)
         {
             if (Kind == "Branch")
             {
-                var b = await db.Branchs.SingleAsync(x => x.Id == Id);
+                var b = await db.Branchs.SingleOrDefaultAsync(x => x.Id == Id);
+                if (b == null) return NotFound();
                 Name = b.Name;
                 Code = b.Code;
                 City = b.City;
@@ -65,7 +77,8 @@ public class OrgEditModel(HrDbContext db) : PageModel
             }
             else if (Kind == "Department")
             {
-                var d = await db.Departments.SingleAsync(x => x.Id == Id);
+                var d = await db.Departments.SingleOrDefaultAsync(x => x.Id == Id);
+                if (d == null) return NotFound();
                 Name = d.Name;
                 Code = d.Code;
                 ParentId = d.BranchId;
@@ -74,7 +87,8 @@ public class OrgEditModel(HrDbContext db) : PageModel
             }
             else if (Kind == "SubDepartment")
             {
-                var s = await db.SubDepartments.SingleAsync(x => x.Id == Id);
+                var s = await db.SubDepartments.SingleOrDefaultAsync(x => x.Id == Id);
+                if (s == null) return NotFound();
                 Name = s.Name;
                 ParentId = s.DepartmentId;
                 Active = s.IsActive;
@@ -155,13 +169,21 @@ public class OrgEditModel(HrDbContext db) : PageModel
                 return BadRequest();
             db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Saved {Kind} {Name}; active={Active}" });
             await db.SaveChangesAsync();
-            return RedirectToPage("Organization");
+            TempData["OrganizationNotice"] = $"{Kind} {Name} saved.";
+            return RedirectToPage(null, null, new { Kind }, "organization-list");
         }
         catch (InvalidOperationException e)
         {
             ModelState.AddModelError("", e.Message);
             return Page();
         }
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync()
+    {
+        var organization = new OrganizationModel(db) { PageContext = PageContext, TempData = TempData };
+        var result = await organization.OnPostDeleteAsync(Kind, Id);
+        return result is RedirectToPageResult ? RedirectToPage(null, null, new { Kind }, "organization-list") : result;
     }
 
     private const string CsvColumns = "Kind,Name,Code,City,Address,Timezone,ParentId,Active,RequiresSub";
@@ -202,6 +224,6 @@ public class OrgEditModel(HrDbContext db) : PageModel
             if (Kind == "SubDepartment" && await db.SubDepartments.AnyAsync(x => x.DepartmentId == ParentId && x.Name == Name))
                 throw new FormatException("This sub-department already exists.");
             return await OnPostAsync();
-        }, () => RedirectToPage("Organization"));
+        }, () => RedirectToPage(null, null, new { Kind }, "organization-list"));
     }
 }

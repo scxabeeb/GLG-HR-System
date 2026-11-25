@@ -31,5 +31,5 @@
 @if(Allowed("meetings")){<a class="portal-module" href="/Operations/Meetings?mode=manage"><span class="module-glyph">▦</span><span><strong>Meetings</strong><small>Schedule, agendas &amp; minutes</small></span><b>↗</b></a>}
 @if(management && Allowed("assets")){<a class="portal-module" href="/Assets"><span class="module-glyph">▧</span><span><strong>Assets</strong><small>Equipment, custody &amp; condition</small></span><b>↗</b></a>}
 @if(management && Allowed("fleet")){<a class="portal-module" href="/Operations/Fleet"><span class="module-glyph">▰</span><span><strong>Fleet</strong><small>Vehicles, trips &amp; maintenance</small></span><b>↗</b></a>}
-@if(Allowed("reports")){<a class="portal-module" href="/Reports/Hub"><span class="module-glyph">▤</span><span><strong>Reports</strong><small>Explore data across your modules</small></span><b>↗</b></a>}
+@if(Allowed("reports")){<a class="portal-module" asp-area="" asp-page="/Reports/Hub"><span class="module-glyph">▤</span><span><strong>Reports</strong><small>Explore data across your modules</small></span><b>↗</b></a>}
 </div>

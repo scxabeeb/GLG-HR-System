@@ -23,7 +23,8 @@ public class IndexModel(HrDbContext db) : PageModel
         }
 
         if (!User.IsInRole("Admin") && !User.IsInRole("HR") && !User.IsInRole("Management"))
-            return RedirectToPage("/Me/Profile");
+            return User.IsInRole("Finance") ? Redirect("/Management/Payroll") :
+                User.IsInRole("Employee") ? RedirectToPage("/Me/Profile") : Redirect("/Operations/Notifications");
         Employees = await db.Employees.CountAsync(x => x.Status == "Active" || x.Status == "Probation");
         Leave = await db.LeaveRequests.CountAsync(x => x.Status == "Pending" || x.Status == "Manager approved" || x.Status == HrSystemDhg.Web.Services.LeaveService.Submitted);
         Branches = await db.Branchs.CountAsync(x => x.IsActive);

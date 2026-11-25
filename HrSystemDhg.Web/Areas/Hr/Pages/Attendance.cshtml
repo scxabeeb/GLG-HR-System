@@ -44,7 +44,7 @@
                         <td>@(day.LastOut?.ToString("hh:mm tt") ?? "—")</td>
                         <td>@day.WorkedHours.ToString("0.##") / @day.ExpectedHours.ToString("0.##") hrs</td>
                         <td>@day.LateMinutes / @day.EarlyMinutes min</td><td>@day.MissingMinutes min</td>
-                        <td><span class="badge @tone">@day.Status</span>@if(!string.IsNullOrWhiteSpace(day.StatusMessage)){<small class="attendance-status-message">@day.StatusMessage</small>}@if(!string.IsNullOrEmpty(day.StatusMessage)){<small class="attendance-status-message">@day.StatusMessage</small>}@if(!string.IsNullOrWhiteSpace(day.StatusMessage)){<small class="attendance-status-message">@day.StatusMessage</small>}@if (day.IsCorrected) { <small> · Corrected</small> }</td>
+                        <td><span class="badge @tone">@day.Status</span>@if(!string.IsNullOrWhiteSpace(day.StatusMessage)){<small class="attendance-status-message">@day.StatusMessage</small>}@if (day.IsCorrected) { <small> · Corrected</small> }</td>
                     </tr>
                 }
                 </tbody>

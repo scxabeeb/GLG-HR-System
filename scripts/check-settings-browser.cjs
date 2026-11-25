@@ -9,21 +9,29 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  const page = await browser.newPage({viewport:{width:390,height:844}});
  page.setDefaultNavigationTimeout(60000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ async function organizationSaved() {
+   await page.waitForURL(url=>url.pathname==='/Admin/OrgEdit' && url.hash==='#organization-list');
+   if(!await page.locator('#organization-list').isVisible())throw Error('Organization save did not return to its list');
+   await page.goto(base+'/Admin/Organization');
+ }
  async function fit(label) { const dimensions=await page.evaluate(()=>[innerWidth,document.documentElement.scrollWidth]); if(dimensions[1]>dimensions[0]+1)throw Error(label+' overflows'); }
  await page.goto(base+'/Identity/Account/Login');
  await page.locator('#Username').fill(process.env.E2E_USER);await page.locator('#Password').fill(process.env.E2E_PASSWORD);
  await page.locator('.auth-submit').click();await page.waitForURL('**/Admin/Dashboard');
  await page.goto(base+'/Admin/OrgEdit?kind=Branch');
  await page.locator('input[name="Name"]').fill('Blank fields test office');await page.locator('input[name="Code"]').fill('TESTEMPTY');
- await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ await page.getByRole('button',{name:'Save unit',exact:true}).click();await organizationSaved();
+ await page.goto(base+'/Admin/OrgEdit?kind=Branch#organization-list');
+ if(!await page.locator('#organization-list tr').filter({hasText:'Blank fields test office'}).getByRole('link',{name:'Edit',exact:true}).count())throw Error('Branch list is missing Edit');
+ await page.goto(base+'/Admin/Organization');
  const branchEdit=await page.locator('.card').filter({has:page.getByRole('heading',{name:/Blank fields test office/})}).getByRole('link',{name:'Edit branch',exact:true}).getAttribute('href');
  const branchId=new URL(base+branchEdit).searchParams.get('id');
  await page.goto(base+branchEdit);if(await page.locator('input[name="City"]').inputValue()!=='' || await page.locator('input[name="Address"]').inputValue()!=='')throw Error('Blank optional branch fields were not retained');
- await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ await page.getByRole('button',{name:'Save unit',exact:true}).click();await organizationSaved();
  await page.goto(base+'/Admin/OrgEdit?kind=Branch');await page.locator('input[name="Name"]').fill('Duplicate office');await page.locator('input[name="Code"]').fill('TESTEMPTY');await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.validation-summary-errors').textContent() || '').includes('unique'))throw Error('Duplicate branch code was not rejected');
- await page.goto(base+'/Admin/OrgEdit?kind=Department');await page.locator('input[name="Name"]').fill('Planning department');await page.locator('input[name="Code"]').fill('PLAN');await page.locator('select[name="ParentId"]').selectOption(branchId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ await page.goto(base+'/Admin/OrgEdit?kind=Department');await page.locator('input[name="Name"]').fill('Planning department');await page.locator('input[name="Code"]').fill('PLAN');await page.locator('select[name="ParentId"]').selectOption(branchId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await organizationSaved();
  const departmentEdit=await page.locator('.org-unit').filter({hasText:'Planning department'}).getByRole('link',{name:'Edit',exact:true}).getAttribute('href');const departmentId=new URL(base+departmentEdit).searchParams.get('id');
- await page.goto(base+'/Admin/OrgEdit?kind=SubDepartment');await page.locator('input[name="Name"]').fill('Planning desk');await page.locator('select[name="ParentId"]').selectOption(departmentId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ await page.goto(base+'/Admin/OrgEdit?kind=SubDepartment');await page.locator('input[name="Name"]').fill('Planning desk');await page.locator('select[name="ParentId"]').selectOption(departmentId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await organizationSaved();
  await page.goto(base+'/Admin/OrgEdit?kind=Branch');
  const sample=await page.request.get(base+'/Admin/OrgEdit?handler=Sample');
  const importForm=page.locator('form[action*="handler=Import"]');const token=await importForm.locator('input[name="__RequestVerificationToken"]').inputValue();
@@ -106,12 +114,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  await page.goto(base+'/Admin/Devices#devices-list');page.once('dialog',dialog=>dialog.accept());await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).getByRole('button',{name:'Delete device'}).click();await page.waitForLoadState('networkidle');if(await page.locator('#devices-list tbody tr').filter({hasText:'Branch terminal updated'}).count()!==0)throw Error('Unused device was not deleted');
  const historical=page.locator('#devices-list tbody tr').filter({hasText:'Legacy terminal'});
  if(await historical.count()){page.once('dialog',dialog=>dialog.accept());await historical.getByRole('button',{name:'Delete device'}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.notice[role="status"]').textContent()).includes('history'))throw Error('Historical device deletion was not blocked');}
- await page.goto(base+'/Admin/OrgEdit?kind=Branch');await page.locator('input[name="Name"]').fill('Delete test branch');await page.locator('input[name="Code"]').fill('DELTEST');await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ await page.goto(base+'/Admin/OrgEdit?kind=Branch');await page.locator('input[name="Name"]').fill('Delete test branch');await page.locator('input[name="Code"]').fill('DELTEST');await page.getByRole('button',{name:'Save unit',exact:true}).click();await organizationSaved();
  let deleteCard=page.locator('.card').filter({has:page.getByRole('heading',{name:/Delete test branch/})});const deleteBranchId=(await deleteCard.getAttribute('id')).split('-')[1];
- await page.goto(base+'/Admin/OrgEdit?kind=Department');await page.locator('input[name="Name"]').fill('Delete test department');await page.locator('input[name="Code"]').fill('DELD');await page.locator('select[name="ParentId"]').selectOption(deleteBranchId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ await page.goto(base+'/Admin/OrgEdit?kind=Department');await page.locator('input[name="Name"]').fill('Delete test department');await page.locator('input[name="Code"]').fill('DELD');await page.locator('select[name="ParentId"]').selectOption(deleteBranchId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await organizationSaved();
  const deleteDeptRow=page.locator('.org-unit').filter({hasText:'Delete test department'});const deleteDepartmentId=(await deleteDeptRow.getAttribute('id')).split('-')[1];
  page.once('dialog',dialog=>dialog.accept());await page.locator('#branch-'+deleteBranchId).getByRole('button',{name:'Delete branch',exact:true}).click();await page.waitForLoadState('networkidle');if(!(await page.locator('.notice[role="status"]').textContent()).includes('cannot be deleted'))throw Error('Branch with child department was deleted');
- await page.goto(base+'/Admin/OrgEdit?kind=SubDepartment');await page.locator('input[name="Name"]').fill('Delete test desk');await page.locator('select[name="ParentId"]').selectOption(deleteDepartmentId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL('**/Admin/Organization');
+ await page.goto(base+'/Admin/OrgEdit?kind=SubDepartment');await page.locator('input[name="Name"]').fill('Delete test desk');await page.locator('select[name="ParentId"]').selectOption(deleteDepartmentId);await page.getByRole('button',{name:'Save unit',exact:true}).click();await organizationSaved();
  const subRow=page.locator('tr').filter({hasText:'Delete test desk'});page.once('dialog',dialog=>dialog.accept());await subRow.getByRole('button',{name:'Delete sub-department',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('tr').filter({hasText:'Delete test desk'}).count())throw Error('Unused sub-department was not deleted');
  page.once('dialog',dialog=>dialog.accept());await page.locator('#department-'+deleteDepartmentId).getByRole('button',{name:'Delete department',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('#department-'+deleteDepartmentId).count())throw Error('Unused department was not deleted');
  page.once('dialog',dialog=>dialog.accept());await page.locator('#branch-'+deleteBranchId).getByRole('button',{name:'Delete branch',exact:true}).click();await page.waitForLoadState('networkidle');if(await page.locator('#branch-'+deleteBranchId).count())throw Error('Unused branch was not deleted');
@@ -180,6 +188,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    console.log('PASS clock review correction and retained review history');
  }
  console.log('PASS saved branding/logo, report creation, selected columns, CSV/PDF/Excel, report disabling and device settings views');
+ await page.goto(base+'/Operations/Tasks?view=mine');
+ await page.locator('a[href="#tasks-create"]').first().click();if(!await page.locator('#tasks-create').isVisible())throw Error('Create task shortcut did not reveal hidden editor');
+ await page.locator('a[href="#tasks-list"]').first().click();await page.goBack();if(!await page.locator('#tasks-create').isVisible())throw Error('Browser Back did not restore workspace section');
  await page.goto(base+'/Management/Payroll#payroll-manage');
  if(!await page.getByRole('heading',{name:'Payroll approval workflow',exact:true}).isVisible())throw Error('Payroll workflow page failed');
  if(!await page.getByRole('button',{name:'Generate payroll',exact:true}).count())throw Error('Administrator cannot prepare payroll');
@@ -196,6 +207,19 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    await page.goto(base+'/Me/Payslip?id='+process.env.E2E_PAYROLL_LINE);
    if(!await page.getByRole('heading',{name:'Attendance deduction breakdown',exact:true}).isVisible() || !(await page.locator('.payslip-deduction-breakdown').textContent()).includes('15.38'))throw Error('Payslip deduction table is missing');
    await page.screenshot({path:'/private/tmp/garowe-payslip-deduction-table.png',fullPage:true});
+   await page.goto(base+'/Management/Payroll?PeriodId='+process.env.E2E_PAYROLL_PERIOD+'#payroll-register');
+   await page.getByRole('link',{name:/payroll periods/}).first().click();
+   if(!await page.locator('#payroll-runs').isVisible())throw Error('Payroll periods shortcut failed');
+   const run=page.locator('[data-payroll-period="'+process.env.E2E_PAYROLL_PERIOD+'"]');
+   await run.getByRole('link',{name:'Manage',exact:true}).click();
+   if(!await page.locator('#payroll-manage').isVisible())throw Error('Payroll period Manage link failed');
+   await page.locator('a[href="#payroll-register"]').first().click();
+   await page.locator('[data-payroll-details="payroll-detail-'+process.env.E2E_PAYROLL_LINE+'"]').first().click();
+   const override=page.locator('dialog[open] form[action*="handler=Override"]');await override.locator('[name="reason"]').fill('Navigation fixture: retain calculated net');await override.getByRole('button',{name:'Save override',exact:true}).click();
+   await page.waitForURL(url=>url.pathname==='/Management/Payroll' && url.hash==='#payroll-register');
+   if(!await page.locator('#payroll-register').isVisible())throw Error('Payroll action did not return to employee amounts');
+
+
    console.log('PASS payroll and payslip deduction tables display source, saved formula and exact amounts');
  }
  await page.goto(base+'/Admin/Users?Search=other@example.test');
@@ -231,7 +255,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  // Usernames are independent of recovery email; both identifiers can sign in.
  for(const form of [
    {username:'city.user',email:'',role:'Employee'},
-   {username:'city.manager',email:'manager-check@example.test',role:'Management'}
+   {username:'city.manager',email:'manager-check@example.test',role:'Management'},
+   {username:'city.finance',email:'finance-check@example.test',role:'Finance'}
  ]) {
    const response=await page.request.post(base+'/Admin/Users?handler=Create',{form:{__RequestVerificationToken:userCsrf,password:'Usernames!check8401',employeeId:'',...form}});
    if(response.status()!==200 || !(await response.text()).includes(form.username))throw Error('Username-based creation failed');
@@ -251,6 +276,14 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    if(changed.status()!==200)throw Error('Username account mandatory password change failed');
    const managerPage=await managerContext.newPage();await managerPage.goto(base+'/Identity/Account/Login');await managerPage.locator('#Username').fill(' city.manager ');await managerPage.locator('#Password').fill('Usernames!updated8401');await managerPage.locator('.auth-submit').click();await managerPage.waitForURL('**/Management/Dashboard');
  } finally {await managerContext.close();}
+ const financeContext=await browser.newContext();
+ try {
+   const login=await financeContext.request.post(base+'/api/mobile/v2/auth/login',{data:{username:'city.finance',password:'Usernames!check8401'}});
+   const changed=await financeContext.request.post(base+'/api/mobile/v2/auth/password',{headers:{Authorization:'Bearer '+(await login.json()).accessToken},data:{current:'Usernames!check8401',password:'Finance!updated8401'}});
+   if(changed.status()!==200)throw Error('Finance password change failed');
+   const financePage=await financeContext.newPage();await financePage.goto(base+'/Identity/Account/Login');await financePage.locator('#Username').fill('city.finance');await financePage.locator('#Password').fill('Finance!updated8401');await financePage.locator('.auth-submit').click();await financePage.waitForURL('**/Management/Payroll');
+   if(await financePage.locator('a[href="/Me/Profile"], a[href^="/Me/Payslip"]').count())throw Error('Finance navigation offers restricted profile/payslip links');
+ } finally {await financeContext.close();}
  const userExport=await page.request.get(base+'/Admin/Users?handler=Export');
  const userCsv=await userExport.text();if(!userCsv.split('\n')[0].includes('Username') || !userCsv.includes('city.manager') || userCsv.includes('Usernames!check8401'))throw Error('User export lost usernames or included passwords');
  for(const [filename,contents] of [
@@ -285,6 +318,13 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  if(available){const linked=await page.request.post(base+'/Admin/Users?handler=Link',{form:{__RequestVerificationToken:linkToken,id:accountId,employeeId:available}});if(linked.status()!==200 || !(await linked.text()).includes('Employee profile linked'))throw Error('Cannot link profile after creating account');}
  console.log('PASS optional employee profiles, General Secretary inherits Management on web/mobile without Admin access, and post-registration profile linking');
  console.log('PASS payroll workflow page, clear approval stages and administrator preparation controls');
+
+ await page.goto(base+'/Admin/OrgEdit?kind=Branch');await page.locator('[name="Name"]').fill('Inline delete fixture');await page.locator('[name="Code"]').fill('INLINEDEL');await page.getByRole('button',{name:'Save unit',exact:true}).click();await page.waitForURL(url=>url.hash==='#organization-list');
+ const inlineRow=page.locator('#organization-list tr').filter({hasText:'Inline delete fixture'});if(!await inlineRow.getByRole('link',{name:'Edit',exact:true}).count())throw Error('Inline organization Edit link missing');page.once('dialog',dialog=>dialog.accept());await inlineRow.getByRole('button',{name:'Delete',exact:true}).click();await page.waitForLoadState('networkidle');
+ if(await page.locator('#organization-list tr').filter({hasText:'Inline delete fixture'}).count())throw Error('Inline organization delete failed');
+ await page.goto(base+'/Admin/OrgEdit?kind=Department');if(!await page.locator('#organization-list tr').filter({hasText:'Planning department'}).count())throw Error('Department registration does not show its registered list');
+ console.log('PASS branch/department inline lists, edit links and protected deletion handler');
+ await require('./check-navigation.cjs').audit(page,base);
  if(errors.length) throw Error(errors.join('; '));
  } finally { await browser.close(); }
 })().catch(error=>{ console.error(error.message);process.exit(1); });

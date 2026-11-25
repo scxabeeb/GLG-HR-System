@@ -8,7 +8,7 @@
 <p>@(meeting.Location is string location ? "In person · " + location : "Online meeting")</p>
 <partial name="_MeetingNavigation" model='("")' />
 <div class="actions">
-    @if (Model.CanEdit) { <a class="button secondary" asp-page="./Meetings" asp-route-edit="@meeting.Id" asp-route-mode="manage">Edit meeting &amp; agenda</a> }
+    @if (Model.CanEdit && meeting.EndedUtc == null) { <a class="button secondary" asp-page="./Meetings" asp-route-edit="@meeting.Id" asp-route-mode="manage">Edit meeting &amp; agenda</a> }
 </div>
 @if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
 <section class="card" id="meeting-attendance">

@@ -6,6 +6,6 @@ namespace HrSystemDhg.Web.Pages.Me;
 [Authorize(Roles = "Employee,HR,Management,Admin")]
 public class ApprovalsModel : PageModel
 {
-    public IActionResult OnGet() => RedirectToPage("/Profile");
-    public IActionResult OnPost() => RedirectToPage("/Profile");
+    public IActionResult OnGet() => RedirectToPage("/Me/Profile");
+    public IActionResult OnPost() => RedirectToPage("/Me/Profile");
 }

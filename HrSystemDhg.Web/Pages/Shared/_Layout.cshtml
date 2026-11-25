@@ -34,7 +34,7 @@
         <a href="/" data-route-prefix="/Admin/Dashboard /Hr/Dashboard /Management/Dashboard">Overview</a>
         @if (Show("personal"))
         {
-            <a href="/Me/Profile">My workspace</a>
+            @if(staff || User.IsInRole("Employee")){<a href="/Me/Profile">My workspace</a>}
             <a href="/Me/Agenda">My agenda</a>
         }
     </details>

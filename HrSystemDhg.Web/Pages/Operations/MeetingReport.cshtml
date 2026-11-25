@@ -32,10 +32,10 @@
 </form>
 <div class="grid civic-metrics">
     @foreach (var status in new[] { "Upcoming", "In progress", "Past", "Cancelled" }) {
-        <div class="card stat">@status<strong>@Model.Totals.GetValueOrDefault(status)</strong></div>
+        <a class="card stat metric-link" asp-page="./MeetingReport" asp-route-Status="@status" asp-route-Scope="@Model.Scope" asp-route-From="@Model.From?.ToString("yyyy-MM-dd")" asp-route-To="@Model.To?.ToString("yyyy-MM-dd")" asp-fragment="meeting-activity">@status<strong>@Model.Totals.GetValueOrDefault(status)</strong><small>View meetings →</small></a>
     }
 </div>
-<div class="card table-scroll">
+<div class="card table-scroll" id="meeting-activity">
     <h2>Meeting activity</h2>
     @if (Model.Items.Count == 0) { <p>No meetings match these filters.</p> }
     else {
