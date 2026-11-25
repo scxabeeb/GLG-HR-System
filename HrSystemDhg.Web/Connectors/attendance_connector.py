@@ -6,6 +6,7 @@ import sqlite3
 import socket
 import concurrent.futures
 import glob
+import subprocess
 import datetime
 import http.server
 import ipaddress
@@ -267,13 +268,57 @@ def scan_network(value):
     print('Discovery does not pair devices. Register each verified IP and serial in Admin / Attendance devices, assign its branch, then configure ADMS.')
     return found
 
+def computer_addresses():
+    rows=[]
+    if os.name=='nt':
+        # Read interface names and actual subnet prefixes locally; no internet request.
+        command="[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred | Select-Object IPAddress,InterfaceAlias,PrefixLength | ConvertTo-Json -Compress"
+        try:
+            output=subprocess.check_output(['powershell.exe','-NoProfile','-NonInteractive','-Command',command],text=True,encoding='utf-8',timeout=10,stderr=subprocess.DEVNULL)
+            records=json.loads(output.lstrip('\ufeff')) if output.strip() else []
+            if isinstance(records,dict):records=[records]
+            for item in records:
+                rows.append({'address':item['IPAddress'],'interface':item['InterfaceAlias'],'prefix':int(item['PrefixLength'])})
+        except (OSError,ValueError,KeyError,TypeError,subprocess.SubprocessError):
+            pass
+    if not rows:
+        try:
+            rows=[{'address':address,'interface':'Local adapter','prefix':None} for address in socket.gethostbyname_ex(socket.gethostname())[2]]
+        except OSError:
+            pass
+    found={}
+    for row in rows:
+        try:
+            discovery_network(row['address']+'/32')
+            if row['prefix'] is not None and not 0<=row['prefix']<=32:continue
+            found.setdefault(row['address'],row)
+        except ValueError:
+            continue
+    return sorted(found.values(),key=lambda row:tuple(int(part) for part in row['address'].split('.')))
+
+def display_computer_addresses(rows,terminals=()):
+    print('Current computer private IPv4 addresses (detected locally):')
+    for index,row in enumerate(rows,1):
+        network=ipaddress.ip_network(row['address']+'/'+str(row['prefix']),strict=False) if row['prefix'] is not None else None
+        matches=network is not None and any(ipaddress.ip_address(t['address']) in network for t in terminals)
+        suffix=' - same subnet as a configured terminal' if matches else ''
+        print(str(index)+'.',row['interface']+':',row['address']+('/'+str(row['prefix']) if row['prefix'] is not None else ''),suffix)
+    if not rows:print('No private IPv4 address detected. Check the Ethernet adapter and cable, or configure its IPv4 address first.')
+    print('Use the Ethernet adapter connected to the terminal. Wi-Fi may provide internet separately.')
+
+def choose_computer_address(terminals):
+    while True:
+        rows=computer_addresses();display_computer_addresses(rows,terminals)
+        choice=input('Select adapter number, R to scan again, or M to enter IP manually: ').strip()
+        if choice.lower()=='r':continue
+        if choice.lower()=='m':return input('Office computer Ethernet IPv4 address: ').strip()
+        if choice.isdigit() and 1<=int(choice)<=len(rows):return rows[int(choice)-1]['address']
+        print('Choose a listed adapter number, R or M.')
+
 def setup_windows(path):
     with open(path,encoding='utf-8') as source:
         config=json.load(source)
-    addresses=sorted({a for a in socket.gethostbyname_ex(socket.gethostname())[2] if ipaddress.ip_address(a).is_private and not ipaddress.ip_address(a).is_loopback})
-    print('This computer local IPv4 addresses:', ', '.join(addresses) or 'Use ipconfig to find the Ethernet IPv4 address')
-    print('Use the address on the SAME office network as the attendance terminal. Reserve this address in your office router.')
-    address=input('Office computer IPv4 address: ').strip()
+    address=choose_computer_address(config.get('terminals',[]))
     ip=ipaddress.ip_address(address)
     if ip.version!=4 or not ip.is_private or ip.is_loopback:
         raise ValueError('Choose the computer private Ethernet IPv4 address')
@@ -290,11 +335,15 @@ def setup_windows(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config')
+    parser.add_argument('--computer-ip', action='store_true', help='Show this computer private IPv4 addresses and adapter names without changing settings')
     parser.add_argument('--scan', nargs='?', const='prompt', help='Find TCP/4370 candidates on a private office subnet; does not pair or modify terminals')
     parser.add_argument('--setup', action='store_true', help='Choose this office computer IP before starting; select a downloaded configuration if omitted')
     parser.add_argument('--check', action='store_true', help='Check cloud authentication without reporting a terminal connection')
     parser.add_argument('--allow-loopback-test', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.computer_ip:
+        display_computer_addresses(computer_addresses())
+        return
     if args.scan is not None:
         try:
             scan_network(input('Office network, e.g. 192.168.1.0/24: ').strip() if args.scan=='prompt' else args.scan)

@@ -69,3 +69,24 @@ def fake_connection(target,timeout):
 with patch.object(m.socket,'create_connection',side_effect=fake_connection):
     assert m.scan_network('192.168.50.0/30')==['192.168.50.1']
 print('Discovery checks passed: bounded private subnets, candidate-only results and no device writes.')
+
+# Windows adapter detection is exercised with realistic PowerShell results on any host.
+import json
+adapters=json.dumps([
+ {'IPAddress':'192.168.50.1','InterfaceAlias':'Ethernet','PrefixLength':24},
+ {'IPAddress':'192.168.1.40','InterfaceAlias':'Wi-Fi','PrefixLength':24},
+ {'IPAddress':'127.0.0.1','InterfaceAlias':'Loopback','PrefixLength':8},
+ {'IPAddress':'8.8.8.8','InterfaceAlias':'Invalid public adapter','PrefixLength':32},
+ {'IPAddress':'192.168.50.1','InterfaceAlias':'Duplicate','PrefixLength':24}])
+with patch.object(m.os,'name','nt'),patch.object(m.subprocess,'check_output',return_value=adapters) as powershell:
+    addresses=m.computer_addresses()
+    assert len(addresses)==2 and addresses[1]=={'address':'192.168.50.1','interface':'Ethernet','prefix':24}
+    assert 'Get-NetIPAddress' in powershell.call_args.args[0][-1]
+with patch.object(m,'computer_addresses',return_value=addresses) as detect,patch('builtins.input',side_effect=['r','2']):
+    assert m.choose_computer_address([{'address':'192.168.50.2'}])=='192.168.50.1'
+    assert detect.call_count==2
+with patch.object(m,'computer_addresses',return_value=[]),patch('builtins.input',side_effect=['m','192.168.50.1']):
+    assert m.choose_computer_address([])=='192.168.50.1'
+with patch.object(m.os,'name','nt'),patch.object(m.subprocess,'check_output',side_effect=OSError()),patch.object(m.socket,'gethostbyname_ex',return_value=('test',[],['192.168.5.10','127.0.0.1'])):
+    assert m.computer_addresses()==[{'address':'192.168.5.10','interface':'Local adapter','prefix':None}]
+print('Computer IP checks passed: Windows adapter names/prefixes, private-address filtering, deduplication, numbered selection, rescanning and manual fallback.')
