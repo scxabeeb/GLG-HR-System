@@ -207,6 +207,14 @@ try:
         browserenv=os.environ.copy()
         browserenv.update({'E2E_USER':email,'E2E_PASSWORD':newpassword,'E2E_BASE':'http://127.0.0.1:5199'})
         if payroll_fixture: browserenv.update({'E2E_PAYROLL_PERIOD':payroll_fixture[0],'E2E_PAYROLL_LINE':payroll_fixture[1]})
+        # Give the independent browser/authentication suite a fresh in-memory rate-limit budget.
+        # The same disposable database and persisted test keys preserve all fixtures and tokens.
+        process.terminate();process.wait(timeout=10)
+        process=subprocess.Popen(['dotnet',str(dll)],env=appenv,cwd=root/'HrSystemDhg.Web',stdout=log,stderr=log)
+        for _ in range(40):
+            try:req('v2/auth/me',expected=401,auth=False);break
+            except (OSError,AssertionError):time.sleep(.5)
+        else:raise Exception('Browser test server failed to restart')
         subprocess.run(['node',str(root/'scripts/check-settings-browser.cjs')],env=browserenv,check=True)
     token=administrator
     req('v2/auth/logout',{});req('v2/auth/me',expected=401)

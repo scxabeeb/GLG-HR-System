@@ -25,6 +25,12 @@ public class LoginModel(SignInManager<ApplicationUser> signIn, UserManager<Appli
 
     public async Task<IActionResult> OnPostAsync()
     {
+        Username = Username?.Trim() ?? "";
+        if (Username.Length is 0 or > 256 || string.IsNullOrEmpty(Password))
+        {
+            ModelState.AddModelError("", "Enter your username or email and password.");
+            return Page();
+        }
         var user = await users.FindByNameAsync(Username) ?? await users.FindByEmailAsync(Username);
         if (user == null)
         {

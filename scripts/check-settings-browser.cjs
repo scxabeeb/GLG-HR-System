@@ -228,6 +228,39 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    const response=await page.request.post(base+'/Admin/Users?handler=Create',{form:{__RequestVerificationToken:userCsrf,email:account,password:'Secretary!check8401',role,employeeId:''}});
    if(response.status()!==200 || !(await response.text()).includes(account))throw Error('Cannot create '+role+' without employee profile');
  }
+ // Usernames are independent of recovery email; both identifiers can sign in.
+ for(const form of [
+   {username:'city.user',email:'',role:'Employee'},
+   {username:'city.manager',email:'manager-check@example.test',role:'Management'}
+ ]) {
+   const response=await page.request.post(base+'/Admin/Users?handler=Create',{form:{__RequestVerificationToken:userCsrf,password:'Usernames!check8401',employeeId:'',...form}});
+   if(response.status()!==200 || !(await response.text()).includes(form.username))throw Error('Username-based creation failed');
+ }
+ for(const form of [{username:'',email:''},{username:'CITY.MANAGER',email:''},{username:'manager-check@example.test',email:''}]) {
+   const response=await page.request.post(base+'/Admin/Users?handler=Create',{form:{__RequestVerificationToken:userCsrf,password:'Usernames!check8401',employeeId:'',role:'Employee',...form}});
+   const html=await response.text();if(response.status()!==200 || !html.includes('validation-summary-errors'))throw Error('Missing or duplicate login was accepted');
+ }
+ for(const loginName of ['city.user','city.manager','manager-check@example.test']) {
+   const response=await page.request.post(base+'/api/mobile/v2/auth/login',{data:{username:loginName,password:'Usernames!check8401'}});
+   if(response.status()!==200)throw Error('Mobile sign-in failed for username/email account ('+response.status()+')');
+ }
+ const managerContext=await browser.newContext();
+ try {
+   const login=await managerContext.request.post(base+'/api/mobile/v2/auth/login',{data:{username:'city.manager',password:'Usernames!check8401'}});
+   const changed=await managerContext.request.post(base+'/api/mobile/v2/auth/password',{headers:{Authorization:'Bearer '+(await login.json()).accessToken},data:{current:'Usernames!check8401',password:'Usernames!updated8401'}});
+   if(changed.status()!==200)throw Error('Username account mandatory password change failed');
+   const managerPage=await managerContext.newPage();await managerPage.goto(base+'/Identity/Account/Login');await managerPage.locator('#Username').fill(' city.manager ');await managerPage.locator('#Password').fill('Usernames!updated8401');await managerPage.locator('.auth-submit').click();await managerPage.waitForURL('**/Management/Dashboard');
+ } finally {await managerContext.close();}
+ const userExport=await page.request.get(base+'/Admin/Users?handler=Export');
+ const userCsv=await userExport.text();if(!userCsv.split('\n')[0].includes('Username') || !userCsv.includes('city.manager') || userCsv.includes('Usernames!check8401'))throw Error('User export lost usernames or included passwords');
+ for(const [filename,contents] of [
+   ['username-users.csv','Email,Role,EmployeeId,TemporaryPassword,Username\n,Employee,,Import!check8401,import.user\n'],
+   ['legacy-users.csv','Email,Role,EmployeeId,TemporaryPassword\nlegacy-check@example.test,Employee,,Import!check8401\n']
+ ]) {
+   const response=await page.request.post(base+'/Admin/Users?handler=Import',{multipart:{__RequestVerificationToken:userCsrf,upload:{name:filename,mimeType:'text/csv',buffer:Buffer.from(contents)}}});
+   if(response.status()!==200 || !(await response.text()).includes(filename.startsWith('username')?'import.user':'legacy-check@example.test'))throw Error('User CSV compatibility failed');
+ }
+ console.log('PASS username-only, email-only and combined registration; web/mobile sign-in, duplicate rejection, password-free export, new and legacy CSV import');
  const secretaryContext=await browser.newContext();
  try {
    const login=await secretaryContext.request.post(base+'/api/mobile/v2/auth/login',{data:{username:'secretary-check@example.test',password:'Secretary!check8401'}});

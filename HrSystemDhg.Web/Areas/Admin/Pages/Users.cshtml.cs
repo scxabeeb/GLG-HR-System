@@ -154,20 +154,28 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostCreateAsync(string email, string password, string role, int? employeeId)
+    public async Task<IActionResult> OnPostCreateAsync(string? email, string password, string role, int? employeeId, string? username = null)
     {
-        if (string.IsNullOrWhiteSpace(email) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || email.Length > 256)
-            ModelState.AddModelError("", "Enter a valid email address.");
+        email = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+        username = string.IsNullOrWhiteSpace(username) ? email : username.Trim();
+        if (string.IsNullOrEmpty(username) || username.Length > 256)
+            ModelState.AddModelError("", "Enter a username or email address, up to 256 characters.");
+        if (email == null && username != null && new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(username))
+            email = username;
+        if (email != null && (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || email.Length > 256))
+            ModelState.AddModelError("", "Enter a valid email address, or leave email blank and use a username.");
         if (string.IsNullOrEmpty(password) || password.Length is < 10 or > 128)
             ModelState.AddModelError("", "Enter a temporary password of 10–128 characters.");
         if (!new[] { "Admin", "HR", "Management", "Finance", "General Secretary", "Chairman", "Employee" }.Contains(role))
             ModelState.AddModelError("", "Select a valid role.");
         if (employeeId != null && (!await db.Employees.AnyAsync(x => x.Id == employeeId) || await db.Users.AnyAsync(x => x.EmployeeId == employeeId)))
             ModelState.AddModelError("", "Select an employee who does not already have a login account.");
-        if (!string.IsNullOrWhiteSpace(email) && await db.Users.AnyAsync(x => x.NormalizedEmail == email.Trim().ToUpperInvariant() || x.NormalizedUserName == email.Trim().ToUpperInvariant()))
-            ModelState.AddModelError("", "An account already uses this email address.");
+        var identifiers = new[] { users.NormalizeName(username), users.NormalizeEmail(email) }.Where(x => !string.IsNullOrEmpty(x)).ToArray();
+        if (await db.Users.AnyAsync(x => identifiers.Contains(x.NormalizedUserName) || identifiers.Contains(x.NormalizedEmail)))
+            ModelState.AddModelError("", "An account already uses this username or email address.");
+        if (username != null && await db.Employees.AnyAsync(e => e.EmployeeNumber == username && (employeeId == null || e.Id != employeeId)))
+            ModelState.AddModelError("", "This username is reserved for an existing employee. Link that employee or choose another username.");
         if (!ModelState.IsValid) { await OnGetAsync(); return Page(); }
-        email = email.Trim();
         await using var transaction = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted) : null;
         if (employeeId.HasValue)
         {
@@ -181,7 +189,7 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         }
         var u = new ApplicationUser
         {
-            UserName = email,
+            UserName = username,
             Email = email,
             EmployeeId = employeeId,
             MustChangePassword = true
@@ -197,7 +205,7 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
 
         var roleResult = await users.AddToRoleAsync(u, role);
         if (!roleResult.Succeeded) return BadRequest("Unable to assign the selected role.");
-        await Log("Created staff account " + email);
+        await Log("Created staff account " + username);
         if (transaction != null) await transaction.CommitAsync();
         TempData["Success"] = "Account created. The user must change their temporary password at first sign-in.";
         return RedirectToPage();
@@ -226,11 +234,12 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         return RedirectToPage(new { Search });
     }
 
-    private const string CsvColumns = "Email,Role,EmployeeId,TemporaryPassword";
+    private const string LegacyCsvColumns = "Email,Role,EmployeeId,TemporaryPassword";
+    private const string CsvColumns = LegacyCsvColumns + ",Username";
 
     public IActionResult OnGetSample()
     {
-        return RegistrationCsv.Download("user-accounts-sample", CsvColumns, [["staff@example.com", "Employee", 1, null]]);
+        return RegistrationCsv.Download("user-accounts-sample", CsvColumns, [["staff@example.com", "Employee", null, null, "staff.user"]]);
     }
 
     public async Task<IActionResult> OnGetExportAsync()
@@ -239,17 +248,30 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
             join membership in db.UserRoles on user.Id equals membership.UserId
             join role in db.Roles on membership.RoleId equals role.Id
             orderby user.Email, role.Name
-            select new { user.Email, Role = role.Name, user.EmployeeId }).ToListAsync();
+            select new { user.Email, user.UserName, Role = role.Name, user.EmployeeId }).ToListAsync();
         Response.Headers.CacheControl = "no-store";
-        return RegistrationCsv.Download("user-accounts", CsvColumns, records.Select(x => new object?[] { x.Email, x.Role, x.EmployeeId, null }));
+        return RegistrationCsv.Download("user-accounts", CsvColumns, records.Select(x => new object?[] { x.Email, x.Role, x.EmployeeId, null, x.UserName }));
     }
 
-    public Task<IActionResult> OnPostImportAsync(IFormFile? upload)
+    public async Task<IActionResult> OnPostImportAsync(IFormFile? upload)
     {
-        return RegistrationCsv.ImportAsync(this, db, upload, CsvColumns, async row =>
+        var columns = CsvColumns;
+        if (upload != null && upload.Length is > 0 and <= 2 * 1024 * 1024)
         {
-            return await OnPostCreateAsync(row.Get<string>("Email"), row.Get<string>("TemporaryPassword"),
-                row.Get<string>("Role"), row.Get<int?>("EmployeeId"));
+            using var parser = new Microsoft.VisualBasic.FileIO.TextFieldParser(upload.OpenReadStream());
+            parser.SetDelimiters(",");
+            try
+            {
+                var headers = parser.ReadFields();
+                if (headers != null && headers.Length == 4 && headers.ToHashSet().SetEquals(LegacyCsvColumns.Split(','))) columns = LegacyCsvColumns;
+            }
+            catch (Microsoft.VisualBasic.FileIO.MalformedLineException) { /* The shared importer returns a validation message. */ }
+        }
+        var includesUsername = columns == CsvColumns;
+        return await RegistrationCsv.ImportAsync(this, db, upload, columns, async row =>
+        {
+            return await OnPostCreateAsync(row.Optional("Email"), row.Get<string>("TemporaryPassword"),
+                row.Get<string>("Role"), row.Get<int?>("EmployeeId"), includesUsername ? row.Optional("Username") : null);
         });
     }
 }
