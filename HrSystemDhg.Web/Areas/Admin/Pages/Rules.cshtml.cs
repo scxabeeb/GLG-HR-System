@@ -124,7 +124,7 @@ public class RulesModel(HrDbContext db) : PageModel
     {
         if (dataset == "shifts") return RegistrationCsv.Download("shifts-sample", "Name", [["Morning shift"]]);
         if (dataset == "holidays") return RegistrationCsv.Download("holidays-sample", "Name,Date,BranchId", [["Example holiday", BusinessClock.Today.AddDays(1), null]]);
-        return RegistrationCsv.Download("work-rules-sample", CsvColumns, [[BusinessClock.Today, null, null, null, 8, 6, 30, 0, 0, "0,1,2,3,4,6", "Absent", 1.5m, false, 1, 0, true, "06:30", "10:30", "12:30", "15:30", "Salary", 26, 0, true]]);
+        return RegistrationCsv.Download("work-rules-sample", CsvColumns, [[BusinessClock.Today, null, null, null, 8, 6, 30, 0, 0, "0,1,2,3,4,6", "Absent", 1.5m, false, 1, 0, true, "06:30", "10:30", "12:30", "15:30", "Salary", 26, 0, false]]);
     }
 
     public async Task<IActionResult> OnGetExportAsync(string? dataset)

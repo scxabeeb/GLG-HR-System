@@ -68,7 +68,7 @@ public class AttendanceMinutesTests
     [InlineData(10.5, 15.5)]
     public void AnyValidWindowPairCreditsEightHours(double first, double last)
     {
-        var rule = new WorkRule { UsePunchWindows = true, DailyHours = 8, BreakMinutes = 0 };
+        var rule = new WorkRule { UsePunchWindows = true, CreditFullDayForValidPunches = true, DailyHours = 8, BreakMinutes = 0 };
         Assert.Equal(0, AttendanceMinutes.Missing(rule,Day,Day.AddHours(first),Day.AddHours(last),[]));
         Assert.Equal(8m, AttendanceMinutes.CreditedHours(rule,Day,Day.AddHours(first),Day.AddHours(last),[]));
         Assert.Equal(0m, PayrollSalaryPolicy.Deduction(rule,400m,AttendanceMinutes.Missing(rule,Day,Day.AddHours(first),Day.AddHours(last),[]),26));
@@ -111,5 +111,18 @@ public class AttendanceMinutesTests
         day.Status = "On leave";
         AttendanceMinutes.ApplyClosingPhase(rule, day, Day.AddDays(1));
         Assert.Equal("On leave", day.Status);
+    }
+    [Fact]
+    public void ActualElapsedMinutesAreTheDefaultAndUse12480MonthlyMinutes()
+    {
+        var rule = new WorkRule { UsePunchWindows = true, DailyHours = 8, BreakMinutes = 0 };
+        var first = Day.AddHours(8).AddMinutes(59);
+        var last = Day.AddHours(12).AddMinutes(43);
+        Assert.False(AttendanceMinutes.CreditsFullDay(rule));
+        Assert.Equal(224, AttendanceMinutes.Worked(first,last));
+        Assert.Equal(256, AttendanceMinutes.Missing(rule,Day,first,last,[]));
+        Assert.Equal(400m / 12480m, PayrollSalaryPolicy.Rate(rule,400m,26));
+        Assert.Equal(8.21m, decimal.Round(PayrollSalaryPolicy.Deduction(rule,400m,256,26),2));
+        Assert.Contains("12480 monthly minutes",PayrollSalaryPolicy.Formula(rule,26));
     }
 }

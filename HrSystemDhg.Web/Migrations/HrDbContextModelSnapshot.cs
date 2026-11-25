@@ -320,6 +320,9 @@ namespace HrSystemDhg.Web.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CalculationVersion")
+                        .HasColumnType("int");
+
                     b.Property<string>("CorrectionReason")
                         .HasColumnType("longtext");
 

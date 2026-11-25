@@ -15,6 +15,11 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
     public List<ZkPunchReview> ClockReviews = [];
     [BindProperty(SupportsGet = true)] public bool ClockHistory { get; set; }
     private IQueryable<ZkPunchReview> VisibleClockReviews() => db.ZkPunchReviews.Where(r => !db.Scoped || db.Employees.Any(e => e.ZkPin == r.Pin));
+    public static string HoursAndMinutes(decimal hours)
+    {
+        var minutes = (int)Math.Round(Math.Max(0,hours) * 60m);
+        return $"{minutes / 60}h {minutes % 60:00}m";
+    }
     public List<AttendanceDay> Items = [];
     public List<Employee> Employees = [];
     public List<ZkDevice> Devices = [];

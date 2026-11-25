@@ -143,6 +143,38 @@ public static class AttendanceMinuteChecks
         db.ZkPunchs.Add(new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=closingDate.AddHours(15.5)});await db.SaveChangesAsync();
         await closingAttendance.RebuildAsync(creditEmployee.Id,closingDate);
         check(closingDay.Status=="Present" && closingDay.MissingMinutes==0 && closingDay.WorkedHours==8,"a delayed upload of a valid checkout replaces automatic absence on rebuild");
+        // Reported case: 08:59 -> 12:43 is 224 actual minutes, not an automatic eight hours.
+        var actualBranch=new Branch{Name="Actual minutes "+key,Code="ACT"+key};db.Add(actualBranch);await db.SaveChangesAsync();
+        var actualDept=new Department{Name="Actual minutes",Code="ACT"+key,BranchId=actualBranch.Id};db.Add(actualDept);await db.SaveChangesAsync();
+        var actualDate=new DateTime(2026,11,25);
+        var actualEmployee=new Employee{EmployeeNumber="ACT"+key,FullName="Actual minute fixture",WorkEmail="actual"+key+"@example.test",HireDate=actualDate,RegistrationComplete=true,ZkPin="ACT"+key};db.Add(actualEmployee);await db.SaveChangesAsync();
+        db.EmployeeAssignments.Add(new(){EmployeeId=actualEmployee.Id,BranchId=actualBranch.Id,DepartmentId=actualDept.Id,EffectiveFrom=actualDate});
+        db.SalaryVersions.Add(new(){EmployeeId=actualEmployee.Id,Basic=400m,EffectiveFrom=actualDate,IsDraft=false});
+        db.WorkRules.Add(new(){BranchId=actualBranch.Id,EffectiveFrom=new(2026,11,1),UsePunchWindows=true,DailyHours=8,BreakMinutes=0,WorkingWeekdays="0,1,2,3,4,6"});
+        var actualDay=new AttendanceDay{EmployeeId=actualEmployee.Id,Date=actualDate,FirstIn=actualDate.AddHours(8).AddMinutes(59),LastOut=actualDate.AddHours(12).AddMinutes(43),WorkedHours=8,ExpectedHours=8,Status="Present",CalculationVersion=0};db.Add(actualDay);
+        db.ZkPunchs.AddRange(new(){DeviceId=device.Id,Pin=actualEmployee.ZkPin!,PunchTime=actualDay.FirstIn.Value},new(){DeviceId=device.Id,Pin=actualEmployee.ZkPin!,PunchTime=actualDay.LastOut.Value});await db.SaveChangesAsync();
+        var actualClock=new ClosingTestClock(new DateTimeOffset(2026,11,25,10,0,0,TimeSpan.Zero)); // 13:00 EAT, before window closes
+        var actualServices=new Microsoft.Extensions.DependencyInjection.ServiceCollection();actualServices.AddScoped<HrDbContext>(_=>new HrDbContext(options));actualServices.AddScoped<CalendarService>();actualServices.AddScoped<AttendanceService>();actualServices.AddSingleton<TimeProvider>(actualClock);
+        await using(var provider=actualServices.BuildServiceProvider()){
+            await new AttendanceDeadlineWorker(provider.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(),new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),Microsoft.Extensions.Logging.Abstractions.NullLogger<AttendanceDeadlineWorker>.Instance).ClosePendingAsync();
+        }
+        await db.Entry(actualDay).ReloadAsync();
+        check(Math.Round(actualDay.WorkedHours*60m)==224 && actualDay.MissingMinutes==256 && actualDay.Status=="Short hours" && actualDay.CalculationVersion==AttendanceService.CalculationVersion,"background rebuild replaces saved 8/8 with 224 worked and 256 missing minutes from unchanged punches");
+        check(HrSystemDhg.Web.Pages.Hr.AttendanceModel.HoursAndMinutes(actualDay.WorkedHours)=="3h 44m","attendance displays actual hours and minutes clearly");
+        var actualAttendance=new AttendanceService(db,calendar,actualClock);var actualPayroll=new PayrollService(db,calendar,actualAttendance);
+        var actualPeriod=new PayrollPeriod{BranchId=actualBranch.Id,From=actualDate,To=actualDate};db.Add(actualPeriod);await db.SaveChangesAsync();await actualPayroll.CalculateAsync(actualPeriod.Id,true,"actual-minute-fixture");
+        var actualLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==actualPeriod.Id && l.Revision==1);
+        check(actualLine.Basic==400m && actualLine.AttendanceApplied==8.21m && actualLine.Net==391.79m,"valid in/out pair before closing deducts 400 / 12480 x 256 = 8.21 without changing basic salary");
+        actualDay.IsCorrected=true;actualDay.CorrectionReason="Fixture correction preserves exact punches";actualDay.WorkedHours=8;await db.SaveChangesAsync();await actualAttendance.RebuildAsync(actualEmployee.Id,actualDate);
+        check(actualDay.WorkedHours==224m/60m && actualDay.MissingMinutes==256,"corrected attendance also uses actual duration rather than window credit");
+        var actualLeave=new LeaveRequest{EmployeeId=actualEmployee.Id,LeaveTypeId=creditLeaveType.Id,From=actualDate,To=actualDate,Status="Approved",Reason="Paid leave fixture"};db.Add(actualLeave);await db.SaveChangesAsync();await actualPayroll.CalculateAsync(actualPeriod.Id,true,"actual-minute-fixture");
+        check((await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==actualPeriod.Id && l.Revision==2)).AttendanceApplied==0 && actualDay.MissingMinutes==0,"approved paid leave remains free of actual-minute attendance deductions");
+        db.Remove(actualLeave);actualDay.IsCorrected=false;
+        db.ZkPunchs.AddRange(new(){DeviceId=device.Id,Pin=actualEmployee.ZkPin!,PunchTime=actualDate.AddDays(1).AddHours(8).AddMinutes(59)},new(){DeviceId=device.Id,Pin=actualEmployee.ZkPin!,PunchTime=actualDate.AddDays(1).AddHours(12).AddMinutes(43)});
+        var twoDayPeriod=new PayrollPeriod{BranchId=actualBranch.Id,From=actualDate,To=actualDate.AddDays(1)};db.Add(twoDayPeriod);await db.SaveChangesAsync();actualClock.Now=new DateTimeOffset(2026,11,26,13,0,0,TimeSpan.Zero);await actualPayroll.CalculateAsync(twoDayPeriod.Id,true,"actual-minute-fixture");
+        var monthlyLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==twoDayPeriod.Id);
+        check(monthlyLine.AttendanceApplied==16.41m && monthlyLine.Net==383.59m,"monthly total uses 512 missing minutes at basic /12480 with rounding only carried across daily entries");
+        check(!(await db.WorkRules.Where(r=>r.BranchId==null && r.EffectiveFrom==creditDate).OrderByDescending(r=>r.Id).FirstAsync()).CreditFullDayForValidPunches,"migration appends actual-minute rules while retaining earlier full-day-credit history");
         var friday = date.AddDays(4);
         await attendance.RebuildAsync(employee.Id, friday);
         var weekend = await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == friday);

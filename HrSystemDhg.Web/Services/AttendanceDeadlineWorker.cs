@@ -28,12 +28,14 @@ public sealed class AttendanceDeadlineWorker(IServiceScopeFactory scopes, IConfi
         var calendar = scope.ServiceProvider.GetRequiredService<CalendarService>();
         var today = attendance.LocalNow.Date;
         var since = today.AddDays(-31);
+        var actualMinutesFrom = AttendanceService.ActualMinutesEffectiveFrom;
         var candidates = await db.AttendanceDays.AsNoTracking()
-            .Where(d => d.Date <= today && (d.Status.StartsWith("Pending") || d.Status == "Not due" ||
+            .Where(d => d.Date <= today && ((d.Date >= actualMinutesFrom && d.CalculationVersion < AttendanceService.CalculationVersion) || d.Status.StartsWith("Pending") || d.Status == "Not due" ||
                 (d.Date >= since && (d.Status == "Incomplete punch" ||
                  ((d.Status == "Absent" || d.Status == "On leave (partial)") && (d.FirstIn == null || d.LastOut == null) && (d.FirstIn != null || d.LastOut != null))))))
-            .OrderByDescending(d => d.Status.StartsWith("Pending") || d.Status == "Not due")
-            .ThenByDescending(d => d.Date).Select(d => new { d.Id, d.EmployeeId, d.Date }).Take(500).ToListAsync(cancellationToken);
+            .OrderBy(d => d.CalculationVersion >= AttendanceService.CalculationVersion)
+            .ThenByDescending(d => d.Status.StartsWith("Pending") || d.Status == "Not due")
+            .ThenByDescending(d => d.Date).Select(d => new { d.Id, d.EmployeeId, d.Date, d.CalculationVersion }).Take(500).ToListAsync(cancellationToken);
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -41,7 +43,7 @@ public sealed class AttendanceDeadlineWorker(IServiceScopeFactory scopes, IConfi
             try
             {
                 var rule = await calendar.RuleAsync(candidate.EmployeeId, candidate.Date);
-                if (!rule.UsePunchWindows) continue;
+                if (!rule.UsePunchWindows && !(candidate.Date >= actualMinutesFrom && candidate.CalculationVersion < AttendanceService.CalculationVersion)) continue;
                 await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
                 // Serialize with device/correction updates, then rebuild from the latest raw punches.
                 var locked = await db.AttendanceDays.FromSqlInterpolated($"SELECT * FROM AttendanceDays WHERE Id = {candidate.Id} FOR UPDATE").IgnoreQueryFilters().ToListAsync(cancellationToken);

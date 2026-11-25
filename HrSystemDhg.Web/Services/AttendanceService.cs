@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 namespace HrSystemDhg.Web.Services;
 public class AttendanceService(HrDbContext db, CalendarService calendar, TimeProvider? timeProvider = null)
 {
+    public const int CalculationVersion = 2;
+    public static readonly DateTime ActualMinutesEffectiveFrom = new(2026, 11, 1);
     public DateTime LocalNow => TimeZoneInfo.ConvertTime((timeProvider ?? TimeProvider.System).GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Africa/Mogadishu")).DateTime;
     public bool DayClosed(WorkRule rule, DateTime date) => LocalNow >= AttendanceMinutes.CheckoutDeadline(rule, date);
 
@@ -52,7 +54,7 @@ public class AttendanceService(HrDbContext db, CalendarService calendar, TimePro
                 day.ExpectedHours = 0;
                 if (AttendanceMinutes.CreditsFullDay(rule)) day.WorkedHours = AttendanceMinutes.Worked(day.FirstIn, day.LastOut, rule.BreakMinutes) / 60m;
             }
-            AttendanceMinutes.ApplyClosingPhase(rule, day, LocalNow);
+            FinalizeSummary(rule, day);
             await db.SaveChangesAsync();
             return;
         }
@@ -69,7 +71,7 @@ public class AttendanceService(HrDbContext db, CalendarService calendar, TimePro
         day.ExpectedHours = rule.DailyHours;
         day.FirstIn = rule.UsePunchWindows ? punches.FirstOrDefault(p => AttendanceMinutes.CheckIn(rule, p.PunchTime))?.PunchTime : punches.FirstOrDefault()?.PunchTime;
         day.LastOut = rule.UsePunchWindows ? punches.LastOrDefault(p => AttendanceMinutes.CheckOut(rule, p.PunchTime))?.PunchTime : punches.Count > 1 ? punches.Last().PunchTime : null;
-        day.WorkedHours = day.FirstIn.HasValue && day.LastOut.HasValue ? (decimal)Math.Max(0, (day.LastOut.Value - day.FirstIn!.Value).TotalHours - rule.BreakMinutes / 60d) : 0;
+        day.WorkedHours = AttendanceMinutes.Worked(day.FirstIn, day.LastOut, rule.BreakMinutes) / 60m;
         day.LateMinutes = !rule.UsePunchWindows && day.FirstIn.HasValue ? Math.Max(0, (int)(day.FirstIn.Value - window.Start).TotalMinutes - rule.GraceMinutes) : 0;
         day.EarlyMinutes = !rule.UsePunchWindows && day.LastOut.HasValue ? Math.Max(0, (int)(window.End - day.LastOut.Value).TotalMinutes) : 0;
         var approved = await db.LeaveRequests.Where(x => x.EmployeeId == employeeId && x.Status == "Approved" && x.From <= date && x.To >= date).ToListAsync();
@@ -113,8 +115,16 @@ public class AttendanceService(HrDbContext db, CalendarService calendar, TimePro
             day.ExpectedHours = 0;
             if (AttendanceMinutes.CreditsFullDay(rule)) day.WorkedHours = AttendanceMinutes.Worked(day.FirstIn, day.LastOut, rule.BreakMinutes) / 60m;
         }
-        AttendanceMinutes.ApplyClosingPhase(rule, day, LocalNow);
+        FinalizeSummary(rule, day);
         await db.SaveChangesAsync();
+    }
+
+    private void FinalizeSummary(WorkRule rule, AttendanceDay day)
+    {
+        AttendanceMinutes.ApplyClosingPhase(rule, day, LocalNow);
+        if (rule.UsePunchWindows && !AttendanceMinutes.CreditsFullDay(rule) && day.ExpectedHours > 0 && day.Status != "On leave" && AttendanceMinutes.ValidPair(rule, day.FirstIn, day.LastOut))
+            day.StatusMessage = $"{Math.Round(day.WorkedHours * 60m):0} worked min / {AttendanceMinutes.Required(rule)} required min; {day.MissingMinutes} unexcused min short.";
+        day.CalculationVersion = CalculationVersion;
     }
 
     public async Task ImportAsync(int deviceId, string pin, DateTime localTime, string actor, string reason)
