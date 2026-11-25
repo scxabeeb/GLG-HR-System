@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using HrSystemDhg.Web.Data;
 using HrSystemDhg.Web.Models;
 using HrSystemDhg.Web.Services;
@@ -21,7 +22,7 @@ public static class AttendanceMinuteChecks
         db.SalaryVersions.Add(new() { EmployeeId = employee.Id, EffectiveFrom = date, Basic = 1500, IsDraft = false });
         db.ZkPunchs.AddRange(new() { DeviceId = device.Id, Pin = key, PunchTime = date.AddHours(10.5) }, new() { DeviceId = device.Id, Pin = key, PunchTime = date.AddHours(15.5) });
         await db.SaveChangesAsync();
-        var calendar = new CalendarService(db); var attendance = new AttendanceService(db, calendar);
+        var calendar = new CalendarService(db); var attendance = new AttendanceService(db, calendar, new ClosingTestClock(new DateTimeOffset(2026,12,1,0,0,0,TimeSpan.Zero)));
         await attendance.RebuildAsync(employee.Id, date);
         var day = await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == date);
         check(day.FirstIn == date.AddHours(10.5) && day.LastOut == date.AddHours(15.5) && day.WorkedHours == 5 && day.MissingMinutes == 180, "EAT morning and afternoon punches produce 180 missing minutes");
@@ -113,13 +114,42 @@ public static class AttendanceMinuteChecks
         creditLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==creditPeriod.Id && l.Revision==4);
         check(creditedDay.WorkedHours==4m && creditedDay.MissingMinutes==0 && creditLine.AttendanceApplied==0m && creditLine.Net==400m,"partial paid leave plus valid window pair satisfies the full day without double credit");
         check(await db.WorkRules.AnyAsync(r=>r.BranchId==null && r.EffectiveFrom==new DateTime(2026,11,23) && !r.CreditFullDayForValidPunches) && await db.WorkRules.AnyAsync(r=>r.BranchId==null && r.EffectiveFrom==creditDate && r.CreditFullDayForValidPunches && r.CheckOutFrom==TimeSpan.FromHours(12.5)),"window-credit migration preserves earlier rules and installs the new effective 12:30 checkout rule");
+        // A fresh single punch remains pending until the last allowed checkout minute finishes.
+        var closingDate = new DateTime(2026,11,25);
+        var clock = new ClosingTestClock(new DateTimeOffset(2026,11,25,12,30,59,TimeSpan.Zero)); // 15:30:59 EAT
+        var closingAttendance = new AttendanceService(db,calendar,clock);
+        db.ZkPunchs.Add(new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=closingDate.AddHours(8)});await db.SaveChangesAsync();
+        await closingAttendance.RebuildAsync(creditEmployee.Id,closingDate);
+        var closingDay=await db.AttendanceDays.SingleAsync(d=>d.EmployeeId==creditEmployee.Id && d.Date==closingDate);
+        check(closingAttendance.LocalNow.Hour==15 && closingDay.Status=="Pending check-out" && closingDay.MissingMinutes==0,"EAT closing minute stays pending without a deduction");
+        var closingPeriod=new PayrollPeriod{BranchId=creditBranch.Id,From=closingDate,To=closingDate.AddDays(1)};db.Add(closingPeriod);await db.SaveChangesAsync();
+        var closingPayroll=new PayrollService(db,calendar,closingAttendance);
+        await closingPayroll.CalculateAsync(closingPeriod.Id,true,"closing-fixture");
+        check((await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==closingPeriod.Id && l.Revision==1)).AttendanceApplied==0,"open and future days cause no premature absence deductions");
+        clock.Now=new DateTimeOffset(2026,11,25,12,31,0,TimeSpan.Zero);
+        var services=new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddScoped<HrDbContext>(_=>new HrDbContext(options));
+        services.AddScoped<CalendarService>();services.AddScoped<AttendanceService>();services.AddSingleton<TimeProvider>(clock);
+        await using(var provider=services.BuildServiceProvider())
+        {
+            var worker=new AttendanceDeadlineWorker(provider.GetRequiredService<Microsoft.Extensions.DependencyInjection.IServiceScopeFactory>(),new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(),Microsoft.Extensions.Logging.Abstractions.NullLogger<AttendanceDeadlineWorker>.Instance);
+            await worker.ClosePendingAsync();
+        }
+        await db.Entry(closingDay).ReloadAsync();
+        check(closingDay.Status=="Absent" && closingDay.MissingMinutes==480 && closingDay.LastOut==null && closingDay.StatusMessage!.Contains("check-out missing"),"background closing marks a missing checkout absent without another device scan");
+        await closingPayroll.CalculateAsync(closingPeriod.Id,true,"closing-fixture");
+        var closedLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==closingPeriod.Id && l.Revision==2);
+        check(closedLine.Basic==400 && closedLine.AttendanceApplied==15.38m && closedLine.Net==384.62m,"closed incomplete day deducts 480 minutes while future days remain uncharged");
+        db.ZkPunchs.Add(new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=closingDate.AddHours(15.5)});await db.SaveChangesAsync();
+        await closingAttendance.RebuildAsync(creditEmployee.Id,closingDate);
+        check(closingDay.Status=="Present" && closingDay.MissingMinutes==0 && closingDay.WorkedHours==8,"a delayed upload of a valid checkout replaces automatic absence on rebuild");
         var friday = date.AddDays(4);
         await attendance.RebuildAsync(employee.Id, friday);
         var weekend = await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == friday);
         check(weekend.Status == "Weekend" && weekend.MissingMinutes == 0, "Friday has no absence or missing-minute charge");
         db.ZkPunchs.Add(new() { DeviceId = device.Id, Pin = key, PunchTime = date.AddDays(1).AddHours(15) });
         await db.SaveChangesAsync(); await attendance.RebuildAsync(employee.Id, date.AddDays(1));
-        check((await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == date.AddDays(1))).Status == "Incomplete punch", "checkout-only attendance requires review instead of inventing a check-in");
+        check((await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == date.AddDays(1))).Status == "Absent", "checkout-only attendance becomes absent after its deadline without inventing a check-in");
         var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
         context.User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(new[] { new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "minute-fixture"), new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Admin") }, "test"));
         context.Request.ContentType = "application/x-www-form-urlencoded";
@@ -148,4 +178,10 @@ public static class AttendanceMinuteChecks
         var leaveLine = await db.PayrollLines.SingleAsync(l => l.PayrollPeriodId == leavePeriod.Id);
         check(leaveLine.AttendanceApplied == 0 && leaveLine.Net == leaveLine.Gross, "approved full and partial paid leave has no payroll deduction");
     }
+}
+
+public sealed class ClosingTestClock(DateTimeOffset now) : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = now;
+    public override DateTimeOffset GetUtcNow() => Now;
 }

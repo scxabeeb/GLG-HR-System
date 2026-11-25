@@ -3,8 +3,11 @@ using HrSystemDhg.Web.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace HrSystemDhg.Web.Services;
-public class AttendanceService(HrDbContext db, CalendarService calendar)
+public class AttendanceService(HrDbContext db, CalendarService calendar, TimeProvider? timeProvider = null)
 {
+    public DateTime LocalNow => TimeZoneInfo.ConvertTime((timeProvider ?? TimeProvider.System).GetUtcNow(), TimeZoneInfo.FindSystemTimeZoneById("Africa/Mogadishu")).DateTime;
+    public bool DayClosed(WorkRule rule, DateTime date) => LocalNow >= AttendanceMinutes.CheckoutDeadline(rule, date);
+
     public async Task RebuildAsync(int employeeId, DateTime date)
     {
         var e = await db.Employees.SingleAsync(x => x.Id == employeeId);
@@ -41,7 +44,6 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
             {
                 day.WorkedHours = AttendanceMinutes.CreditedHours(rule, date, day.FirstIn, day.LastOut, leave);
                 day.StatusMessage = AttendanceMinutes.PairMessage(rule, day.FirstIn, day.LastOut);
-                if (day.Status == "Incomplete punch") day.Status = "Absent";
             }
             else day.StatusMessage = null;
             if (day.Status is "Holiday" or "Weekend" or "On leave") day.MissingMinutes = 0;
@@ -50,6 +52,7 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
                 day.ExpectedHours = 0;
                 if (AttendanceMinutes.CreditsFullDay(rule)) day.WorkedHours = AttendanceMinutes.Worked(day.FirstIn, day.LastOut, rule.BreakMinutes) / 60m;
             }
+            AttendanceMinutes.ApplyClosingPhase(rule, day, LocalNow);
             await db.SaveChangesAsync();
             return;
         }
@@ -103,13 +106,14 @@ public class AttendanceService(HrDbContext db, CalendarService calendar)
 
         day.MissingMinutes = rule.UsePunchWindows ? AttendanceMinutes.Missing(rule, date, day.FirstIn, day.LastOut, approved) : Math.Max(0, day.LateMinutes + day.EarlyMinutes);
         day.Status = await calendar.HolidayAsync(employeeId, date) ? "Holiday" : !CalendarService.Weekday(rule, date) ? "Weekend" : fullLeave ? "On leave" : approved.Count > 0 ? "On leave (partial)" : punches.Count == 0 ? "Absent" : (day.FirstIn == null || day.LastOut == null) ? "Incomplete punch" : rule.UsePunchWindows && day.MissingMinutes > 0 ? "Short hours" : !rule.UsePunchWindows && day.LateMinutes > 0 ? "Late" : "Present";
-        if (AttendanceMinutes.CreditsFullDay(rule) && day.Status == "Incomplete punch") day.Status = "Absent";
+
         if (day.Status is "Holiday" or "Weekend" or "On leave") day.MissingMinutes = 0;
         if (day.Status is "Holiday" or "Weekend")
         {
             day.ExpectedHours = 0;
             if (AttendanceMinutes.CreditsFullDay(rule)) day.WorkedHours = AttendanceMinutes.Worked(day.FirstIn, day.LastOut, rule.BreakMinutes) / 60m;
         }
+        AttendanceMinutes.ApplyClosingPhase(rule, day, LocalNow);
         await db.SaveChangesAsync();
     }
 

@@ -33,7 +33,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             p.WorkingDays,
             p.BranchId ?? 0,
             p.AttendanceSalaryDays ?? 0,
-            "FullMonthlySalary-SalaryMinutes-WindowCredit-v3"
+            "FullMonthlySalary-SalaryMinutes-WindowCredit-Closing-v4"
         };
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data))));
     }
@@ -109,7 +109,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                 if (working)
                     unpaidLeaveAmount += PayrollSalaryPolicy.UnpaidLeave(rule, salary.Basic, date,
                         leaveForDay.Where(l => unpaidTypeIds.Contains(l.LeaveTypeId)), salaryDays);
-                if (working && leaveFraction < 1)
+                if (working && leaveFraction < 1 && (!rule.UsePunchWindows || attendance.DayClosed(rule, date)))
                 {
                     var ruleDailyRate = PayrollSalaryPolicy.Deduction(rule, salary.Basic, AttendanceMinutes.Required(rule), salaryDays);
                     decimal amount = 0;

@@ -7,6 +7,28 @@ public static class AttendanceMinutes
     // Device punches are stored as East Africa local wall-clock times, not UTC.
     public static bool CheckIn(WorkRule rule, DateTime time) => time.TimeOfDay >= rule.CheckInFrom && time.TimeOfDay < rule.CheckInUntil.Add(TimeSpan.FromMinutes(1));
     public static bool CheckOut(WorkRule rule, DateTime time) => time.TimeOfDay >= rule.CheckOutFrom && time.TimeOfDay < rule.CheckOutUntil.Add(TimeSpan.FromMinutes(1));
+    public static DateTime CheckoutDeadline(WorkRule rule, DateTime date) => rule.UsePunchWindows
+        ? date.Date.Add(rule.CheckOutUntil).AddMinutes(1) // The selected last minute is inclusive.
+        : CalendarService.Window(rule, date).End;
+
+    public static void ApplyClosingPhase(WorkRule rule, AttendanceDay day, DateTime localNow)
+    {
+        if (!rule.UsePunchWindows || day.Status is "Holiday" or "Weekend" or "On leave") return;
+        if (ValidPair(rule, day.FirstIn, day.LastOut)) return;
+        var deadline = CheckoutDeadline(rule, day.Date);
+        if (localNow < deadline)
+        {
+            day.Status = day.Date.Date > localNow.Date ? "Not due" : day.FirstIn.HasValue ? "Pending check-out" : day.LastOut.HasValue ? "Pending check-in" : "Pending attendance";
+            day.MissingMinutes = day.LateMinutes = day.EarlyMinutes = 0;
+            day.StatusMessage = $"{PairMessage(rule, day.FirstIn, day.LastOut)} Awaiting check-out deadline {deadline:yyyy-MM-dd h:mm tt} EAT; no attendance deduction yet.";
+        }
+        else
+        {
+            if (day.Status != "On leave (partial)") day.Status = "Absent";
+            day.StatusMessage = $"{PairMessage(rule, day.FirstIn, day.LastOut)} Check-out window closed at {rule.CheckOutUntil:hh\\:mm} EAT.";
+        }
+    }
+
     public static bool CreditsFullDay(WorkRule rule) => rule.UsePunchWindows && rule.CreditFullDayForValidPunches;
     public static bool ValidPair(WorkRule rule, DateTime? first, DateTime? last) => first.HasValue && last.HasValue && first.Value.Date == last.Value.Date && CheckIn(rule, first.Value) && CheckOut(rule, last.Value) && last.Value > first.Value;
     public static decimal CreditedHours(WorkRule rule, DateTime date, DateTime? first, DateTime? last, IEnumerable<LeaveRequest> leaves) =>

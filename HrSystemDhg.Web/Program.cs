@@ -80,6 +80,7 @@ builder.Services.AddScoped<PortalBranding>();
 builder.Services.AddHttpClient("whatsapp", client => client.Timeout = TimeSpan.FromSeconds(12))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHostedService<WhatsAppWorker>();
+builder.Services.AddHostedService<AttendanceDeadlineWorker>();
 builder.Services.AddRateLimiter(options => options.AddPolicy("fleet-gps", context =>
     RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 180, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 })));

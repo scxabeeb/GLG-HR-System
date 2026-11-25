@@ -14,7 +14,7 @@ email='native-check@example.test';process=None
 try:
     sql('CREATE DATABASE '+database)
     testcs=re.sub(r'(?i)Database=[^;]+','Database='+database,cs)
-    appenv=os.environ.copy();appenv.update({'ConnectionStrings__DefaultConnection':testcs,'Bootstrap__Email':email,'Bootstrap__Password':password,'ASPNETCORE_ENVIRONMENT':'Development','ASPNETCORE_URLS':'http://127.0.0.1:5199','Logging__LogLevel__Default':'Warning'})
+    appenv=os.environ.copy();appenv.update({'ConnectionStrings__DefaultConnection':testcs,'Bootstrap__Email':email,'Bootstrap__Password':password,'ASPNETCORE_ENVIRONMENT':'Development','ASPNETCORE_URLS':'http://127.0.0.1:5199','Logging__LogLevel__Default':'Warning','Attendance__AutomaticClosingEnabled':'false'})
     dll=root/'HrSystemDhg.Web/bin/Debug/net8.0/HrSystemDhg.Web.dll'
     if os.environ.get('DHG_DEVICE_MIGRATION_CHECK') == '1':
         subprocess.run([os.environ.get('DOTNET_EF','dotnet-ef'),'database','update','BrandingAndSavedReportViews','--project',str(root/'HrSystemDhg.Web'),'--no-build'],env=appenv,cwd=root,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True)

@@ -19,7 +19,7 @@
     </form>
     <div asp-validation-summary="All"></div>
 
-    <p>Generation uses the displayed month and branch. The registered basic salary stays unchanged. Attendance deductions are calculated separately using basic salary ÷ the run’s salary days (default 26) ÷ required daily minutes × missing minutes, then subtracted when calculating net pay. Basic salary and registered allowances are paid in full; employment-date proration is not applied. Only scheduled days within employment dates are checked for attendance deductions. With 26 salary days and an eight-hour day, the formula is basic ÷ 26 ÷ 480 × missing minutes.</p>
+    <p>Generation uses the displayed month and branch. The registered basic salary stays unchanged. Attendance deductions are calculated separately using basic salary ÷ the run’s salary days (default 26) ÷ required daily minutes × missing minutes, then subtracted when calculating net pay. Basic salary and registered allowances are paid in full; employment-date proration is not applied. Only scheduled days within employment dates are checked for attendance deductions. With 26 salary days and an eight-hour day, the formula is basic ÷ 26 ÷ 480 × missing minutes.</p><p>For attendance windows, deductions start only after the last check-out minute closes in East Africa Time. A missing check-in or check-out then counts as absence for the unexcused time. Open and future days are not charged. Recalculate an unapproved payroll after attendance closes or new punches arrive.</p>
 </section>
 @if (Model.MissingRule is { } missing)
 {

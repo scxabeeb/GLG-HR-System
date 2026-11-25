@@ -84,4 +84,32 @@ public class AttendanceMinutesTests
         Assert.Equal(0m,AttendanceMinutes.CreditedHours(rule,Day,null,Day.AddHours(12.5),[]));
     }
 
+    [Fact]
+    public void MissingCheckoutWaitsForInclusiveDeadlineThenBecomesAbsent()
+    {
+        var rule = new WorkRule { UsePunchWindows = true, DailyHours = 8 };
+        var day = new AttendanceDay { Date = Day, FirstIn = Day.AddHours(8), Status = "Incomplete punch", MissingMinutes = 480 };
+        AttendanceMinutes.ApplyClosingPhase(rule, day, Day.AddHours(15.5).AddSeconds(59));
+        Assert.Equal("Pending check-out", day.Status);
+        Assert.Equal(0, day.MissingMinutes);
+        // Rebuild calculates missing minutes again before applying the closing phase.
+        day.MissingMinutes = AttendanceMinutes.Missing(rule, Day, day.FirstIn, null, []);
+        AttendanceMinutes.ApplyClosingPhase(rule, day, Day.AddHours(15).AddMinutes(31));
+        Assert.Equal("Absent", day.Status);
+        Assert.Equal(480, day.MissingMinutes);
+        Assert.Contains("check-out missing", day.StatusMessage);
+        Assert.Null(day.LastOut);
+    }
+    [Fact]
+    public void FutureAttendanceAndApprovedLeaveAreProtected()
+    {
+        var rule = new WorkRule { UsePunchWindows = true };
+        var day = new AttendanceDay { Date = Day, Status = "Absent", MissingMinutes = 480 };
+        AttendanceMinutes.ApplyClosingPhase(rule, day, Day.AddDays(-1));
+        Assert.Equal("Not due", day.Status);
+        Assert.Equal(0, day.MissingMinutes);
+        day.Status = "On leave";
+        AttendanceMinutes.ApplyClosingPhase(rule, day, Day.AddDays(1));
+        Assert.Equal("On leave", day.Status);
+    }
 }
