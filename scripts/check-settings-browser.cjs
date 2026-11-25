@@ -195,6 +195,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  if(!await page.getByRole('heading',{name:'Payroll approval workflow',exact:true}).isVisible())throw Error('Payroll workflow page failed');
  if(!await page.getByRole('button',{name:'Generate payroll',exact:true}).count())throw Error('Administrator cannot prepare payroll');
  if(await page.locator('form[action*="handler=Generate"] input[name="SalaryDays"]').inputValue()!=='26')throw Error('Payroll default divisor is not 26');
+ if(process.env.E2E_PAYROLL_PERIOD)await page.goto(base+'/Management/Payroll?PeriodId='+process.env.E2E_PAYROLL_PERIOD+'#payroll-manage');
+ if(!await page.locator('#generate-month').isVisible() || !await page.locator('#generate-branch').isVisible())throw Error('Generate payroll lacks visible month/branch fields');
+ if(await page.locator('.payroll-stage-list li').count()!==4)throw Error('Payroll approval steps missing');
+ for(const width of [1440,768,390]){await page.setViewportSize({width,height:1000});await page.waitForTimeout(350);await fit('Generate payroll at '+width);await page.locator('#payroll-manage').scrollIntoViewIfNeeded();if(width===390 && await page.locator('#workspace-nav').evaluate(el=>el.getBoundingClientRect().right>1))throw Error('Sidebar obscures mobile payroll');if(width===1440 || width===390)await page.screenshot({path:'/private/tmp/garowe-generate-payroll-'+width+'.png',fullPage:false});}
+ await page.setViewportSize({width:1280,height:1000});
+
  if(process.env.E2E_PAYROLL_PERIOD){
    await page.setViewportSize({width:1280,height:1000});
    await page.goto(base+'/Management/Payroll?PeriodId='+process.env.E2E_PAYROLL_PERIOD+'#payroll-register');
