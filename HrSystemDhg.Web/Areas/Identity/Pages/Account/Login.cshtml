@@ -13,16 +13,16 @@
     <div class="auth-form-side">
         <a class="auth-mobile-brand" href="/"><img src="@brand.LogoUrl" alt="@brand.Organization"/><span>@brand.ShortName<small>@brand.Subtitle</small></span></a>
         <article class="auth-card">
-            <div class="eyebrow">WELCOME BACK</div><h1>Sign in to your workspace</h1><p>Enter your registered email or employee number to continue.</p>
+            <div class="eyebrow">WELCOME BACK</div><h1>Sign in to your workspace</h1><p>Enter your username, email address or employee ID to continue.</p>
             <form method="post">
                 <input asp-for="ReturnUrl" type="hidden"/>
                 <div asp-validation-summary="All" role="alert"></div>
-                <div class="auth-field"><label asp-for="Username">Email or employee number</label><input asp-for="Username" autocomplete="username" placeholder="Your email or employee number" required/></div>
+                <div class="auth-field"><label asp-for="Username">Username, email or employee ID</label><input asp-for="Username" autocomplete="username" placeholder="Your username, email or employee ID" required/></div>
                 <div class="auth-field"><label asp-for="Password">Password</label><input asp-for="Password" type="password" autocomplete="current-password" placeholder="Enter your password" required/></div>
                 <div class="auth-recovery"><a asp-page="ForgotPassword" asp-route-returnUrl="@Model.ReturnUrl">Forgot your password?</a></div>
                 <button class="auth-submit">Sign in <span aria-hidden="true">→</span></button>
             </form>
-            <div class="auth-help"><span class="auth-lock" aria-hidden="true">◈</span><p>Use the account linked to your employee profile.<br/>Contact your administrator if you need access.</p></div>
+            <div class="auth-help"><span class="auth-lock" aria-hidden="true">◈</span><p>Use the account supplied by your administrator.<br/>Contact your administrator if you need access.</p></div>
         </article>
         <p class="auth-copyright">© @HrSystemDhg.Web.Services.BusinessClock.Today.Year Garowe Local Government</p>
     </div>

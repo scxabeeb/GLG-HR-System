@@ -76,7 +76,7 @@ public static class NativeMobileApi
     private static async Task<IResult> Login(LoginInput input, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, HrDbContext db)
     {
         if (string.IsNullOrWhiteSpace(input.Username) || input.Username.Length > 256 || string.IsNullOrEmpty(input.Password) || input.Password.Length > 128)
-            return Error("Enter your email or employee number and password.");
+            return Error("Enter your username, email or employee ID and password.");
         var username = input.Username.Trim();
         var user = await users.FindByNameAsync(username) ?? await users.FindByEmailAsync(username);
         if (user == null)
