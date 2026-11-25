@@ -12,13 +12,13 @@ public sealed class OperationsNotices(HrDbContext db, IConfiguration config)
 
     public static IQueryable<OperationsNotification> Visible(IQueryable<OperationsNotification> query, HashSet<string> blocked) =>
         query.Where(n =>
-            (!blocked.Contains("tasks") || (n.TaskId == null && n.Kind != OperationsNoticeKind.TeamAssigned)) &&
-            (!blocked.Contains("meetings") || n.MeetingId == null) &&
-            (!blocked.Contains("fleet") || n.FleetTripId == null) &&
-            (!blocked.Contains("assets") || n.Kind != OperationsNoticeKind.AssetAssigned) &&
-            (!blocked.Contains("leave") || n.Kind != OperationsNoticeKind.LeaveDecided) &&
-            (!blocked.Contains("payroll") || n.Kind != OperationsNoticeKind.PayslipPublished) &&
-            (!blocked.Contains("attendance") || n.Kind != OperationsNoticeKind.AttendanceCorrectionDecided));
+            (!(blocked.Contains("tasks") || blocked.Contains("tasks.mine")) || (n.TaskId == null && n.Kind != OperationsNoticeKind.TeamAssigned)) &&
+            (!(blocked.Contains("meetings") || blocked.Contains("meetings.mine")) || n.MeetingId == null) &&
+            (!(blocked.Contains("fleet") || blocked.Contains("fleet.trips")) || n.FleetTripId == null) &&
+            (!(blocked.Contains("assets") || blocked.Contains("assets.register")) || n.Kind != OperationsNoticeKind.AssetAssigned) &&
+            (!(blocked.Contains("leave") || blocked.Contains("leave.requests")) || n.Kind != OperationsNoticeKind.LeaveDecided) &&
+            (!(blocked.Contains("payroll") || blocked.Contains("personal.payslips")) || n.Kind != OperationsNoticeKind.PayslipPublished) &&
+            (!(blocked.Contains("attendance") || blocked.Contains("attendance.corrections")) || n.Kind != OperationsNoticeKind.AttendanceCorrectionDecided));
 
     public static async Task AddEmployeeUpdatesAsync(HrDbContext db, IEnumerable<int> employees, OperationsNoticeKind kind, string title)
     {

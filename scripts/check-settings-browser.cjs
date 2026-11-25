@@ -7,6 +7,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  const browser = await chromium.launch({ ...(process.env.CHROME_PATH ? {executablePath:process.env.CHROME_PATH} : {}), headless:true });
  try {
  const page = await browser.newPage({viewport:{width:390,height:844}});
+ page.setDefaultNavigationTimeout(60000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  async function fit(label) { const dimensions=await page.evaluate(()=>[innerWidth,document.documentElement.scrollWidth]); if(dimensions[1]>dimensions[0]+1)throw Error(label+' overflows'); }
  await page.goto(base+'/Identity/Account/Login');
@@ -197,6 +198,29 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
    await page.screenshot({path:'/private/tmp/garowe-payslip-deduction-table.png',fullPage:true});
    console.log('PASS payroll and payslip deduction tables display source, saved formula and exact amounts');
  }
+ await page.goto(base+'/Admin/Users?Search=other@example.test');
+ const userCard=page.locator('.user-card').filter({has:page.getByRole('heading',{name:'other@example.test',exact:true})});
+ await userCard.locator('details').first().locator('summary').first().click();
+ const permissionForm=userCard.locator('form[action*="handler=MenuAccess"]');
+ if(await permissionForm.locator('select[name^="access["]').count()<35)throw Error('Menu and submenu catalog missing');
+ const tasksModule=permissionForm.locator('details').filter({has:page.locator('select[name="access[tasks.manage]"]')});
+ await tasksModule.locator('summary').click();
+ await permissionForm.locator('select[name="access[tasks.manage]"]').selectOption('Deny');
+ await page.setViewportSize({width:390,height:844});await fit('User menu permissions');
+ await page.setViewportSize({width:1280,height:1000});await tasksModule.scrollIntoViewIfNeeded();await page.screenshot({path:'/private/tmp/garowe-user-menu-permissions.png',fullPage:false});
+ await permissionForm.getByRole('button',{name:'Save menu permissions',exact:true}).click();
+ const permissionContext=await browser.newContext();
+ try {
+   const staffPage=await permissionContext.newPage();
+   await staffPage.goto(base+'/Identity/Account/Login');await staffPage.locator('#Username').fill('other@example.test');await staffPage.locator('#Password').fill(process.env.E2E_PASSWORD);await staffPage.locator('.auth-submit').click();await staffPage.waitForURL(url=>!url.pathname.includes('/Login'));
+   const blocked=await staffPage.request.get(base+'/Operations/Tasks?view=created');if(blocked.status()!==403)throw Error('Denied task management URL remains accessible');
+   await staffPage.goto(base+'/Operations/Tasks?view=mine');
+   if(await staffPage.locator('a[href*="view=created"]').count() || await staffPage.locator('form[action*="handler=Save"]').count())throw Error('Denied task menu/editor remains visible');
+ } finally {await permissionContext.close();}
+ await page.goto(base+'/Admin/Users?Search=other@example.test');
+ await page.locator('.user-card details').first().locator('summary').first().click();
+ const restore=page.locator('form[action*="handler=MenuAccess"]');await restore.locator('details').filter({has:page.locator('select[name="access[tasks.manage]"]')}).locator('summary').click();await restore.locator('select[name="access[tasks.manage]"]').selectOption('Allow');await restore.getByRole('button',{name:'Save menu permissions',exact:true}).click();
+ console.log('PASS menu/submenu permission editor, direct URL denial and hidden task editor');
  console.log('PASS payroll workflow page, clear approval stages and administrator preparation controls');
  if(errors.length) throw Error(errors.join('; '));
  } finally { await browser.close(); }

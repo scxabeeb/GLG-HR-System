@@ -10,7 +10,7 @@
     var isErrorPage = ViewContext.HttpContext.Request.Path.StartsWithSegments("/Error");
     var brand = isErrorPage ? new PortalBranding.Brand("Garowe City Management System", "Garowe City", "Management System", "Garowe Local Government", "/images/garowe-local-government.jpg") : await Branding.GetAsync();
     var hiddenModules = isErrorPage ? new HashSet<string>() : await ModulePermissions.BlockedAsync();
-    bool Show(string module) => ModuleAccess.Allows(hiddenModules, module);
+    bool Show(string module) => ModuleAccess.Allows(hiddenModules, module) && (!MenuPermissions.Items.Any(x=>x.Module==module) || MenuPermissions.Items.Any(x=>x.Module==module && !hiddenModules.Contains(x.Key)));
     var isAdmin = User.IsInRole("Admin");
     var isHr = User.IsInRole("HR") || isAdmin;
     var isManager = User.IsInRole("Management") || isAdmin;

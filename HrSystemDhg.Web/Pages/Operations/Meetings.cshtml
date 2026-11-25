@@ -1,4 +1,5 @@
 @page
+@inject HrSystemDhg.Web.Services.ModuleAccess MenuAccess
 @using HrSystemDhg.Web.Services
 @model HrSystemDhg.Web.Pages.Operations.MeetingsModel
 @{ ViewData["Title"] = "Meeting organizer"; }
@@ -8,8 +9,8 @@
 <p>@(Model.Managing ? "Schedule, reschedule, and cancel meetings you organize." : "Open meetings you organized or were invited to join.") Times are in Mogadishu time.</p>
 
 @if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
-<div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Meeting views"><a href="#meetings-list" data-workspace-link>Meeting list</a>@if (Model.Managing) { <a asp-page="./Meetings">My invitations</a><a href="#meetings-create" data-workspace-link>Schedule / edit</a> } else if (Model.CanOrganize) { <a asp-page="./Meetings" asp-route-mode="manage" asp-fragment="meetings-create">Schedule meeting</a> }
-@if (Model.CanOrganize) { <a href="#meetings-import" data-workspace-link>Import &amp; export</a> }
+<div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Meeting views"><a href="#meetings-list" data-workspace-link>Meeting list</a>@if (Model.Managing) { <a asp-page="./Meetings">My invitations</a><a href="#meetings-create" data-workspace-link>Schedule / edit</a> } else if ((Model.CanOrganize && HrSystemDhg.Web.Services.MenuPermissions.Allows(await MenuAccess.BlockedAsync(), "meetings.manage"))) { <a asp-page="./Meetings" asp-route-mode="manage" asp-fragment="meetings-create">Schedule meeting</a> }
+@if ((Model.CanOrganize && HrSystemDhg.Web.Services.MenuPermissions.Allows(await MenuAccess.BlockedAsync(), "meetings.manage"))) { <a href="#meetings-import" data-workspace-link>Import &amp; export</a> }
 <a asp-page="./MeetingReport">Reports</a><a asp-page="./MeetingRecordings">Recordings</a></nav>
 <section id="meetings-list" data-workspace-panel><div class="actions" aria-label="Meeting schedule filters">
     <a class="button @(Model.Period == "upcoming" ? "" : "secondary")" asp-page="./Meetings" asp-route-mode="@Model.Mode" asp-route-period="upcoming">Upcoming &amp; in progress</a>
@@ -49,7 +50,7 @@
                     } else if (upcoming && OperationsPolicy.IsJoinUrl(meeting.JoinUrl)) {
                         <a class="button" href="@meeting.JoinUrl" target="_blank" rel="noopener noreferrer">Join video meeting</a>
                     }
-                    @if (Model.CanOrganize && owner && status == "In progress")
+                    @if ((Model.CanOrganize && HrSystemDhg.Web.Services.MenuPermissions.Allows(await MenuAccess.BlockedAsync(), "meetings.manage")) && owner && status == "In progress")
                     {
                         <form method="post" asp-page-handler="End" asp-route-id="@meeting.Id"
                               asp-route-mode="@Model.Mode" asp-route-period="@Model.Period"
@@ -68,7 +69,7 @@
                         <a class="button secondary" asp-page="./MeetingDetails" asp-route-id="@meeting.Id" asp-fragment="meeting-attendance">@(meeting.Participants.Any(p => p.UserId == Model.Actor && p.AttendedUtc != null) ? "Attendance recorded" : "I'm attending")</a>
                     }
                     <a class="button secondary" asp-page="./MeetingDetails" asp-route-id="@meeting.Id">Agenda &amp; minutes</a>
-                    @if (Model.CanOrganize && owner && !meeting.Cancelled && meeting.EndedUtc == null) {
+                    @if ((Model.CanOrganize && HrSystemDhg.Web.Services.MenuPermissions.Allows(await MenuAccess.BlockedAsync(), "meetings.manage")) && owner && !meeting.Cancelled && meeting.EndedUtc == null) {
                         <a class="button secondary" asp-page="./Meetings" asp-route-edit="@meeting.Id" asp-route-mode="manage">Edit meeting</a>
                         <form method="post" asp-page-handler="Cancel" asp-route-id="@meeting.Id"><button class="secondary">Cancel meeting</button></form>
                     }
@@ -126,8 +127,8 @@
 }
 </section>
 }
-@if (Model.CanOrganize) {
-<section id="meetings-import" data-workspace-panel>@if (Model.CanOrganize)
+@if ((Model.CanOrganize && HrSystemDhg.Web.Services.MenuPermissions.Allows(await MenuAccess.BlockedAsync(), "meetings.manage"))) {
+<section id="meetings-import" data-workspace-panel>@if ((Model.CanOrganize && HrSystemDhg.Web.Services.MenuPermissions.Allows(await MenuAccess.BlockedAsync(), "meetings.manage")))
 {
     <partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='( "meetings" )' />
 }

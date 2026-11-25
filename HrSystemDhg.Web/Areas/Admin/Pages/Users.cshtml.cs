@@ -20,7 +20,7 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
     public Dictionary<string, string> Roles = [];
     public async Task OnGetAsync()
     {
-        Items = await db.Users.Where(u => Search == null || Search == "" || (u.Email != null && u.Email.Contains(Search))).OrderBy(u => u.Email).ToListAsync();
+        Items = await db.Users.Where(u => Search == null || Search == "" || (u.Email != null && u.Email.Contains(Search)) || (u.UserName != null && u.UserName.Contains(Search)) || db.Employees.Any(e => e.Id == u.EmployeeId && (e.FullName.Contains(Search) || e.EmployeeNumber.Contains(Search)))).OrderBy(u => u.Email).ToListAsync();
         Employees = await db.Employees.Where(e => !db.Users.Any(u => u.EmployeeId == e.Id)).ToListAsync();
         Branches = await db.Branchs.ToListAsync();
         Scopes = await db.UserBranchScopes.ToListAsync();
@@ -56,7 +56,7 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         var u = await users.FindByIdAsync(id);
         if (u == null)
             return NotFound();
-        if (!remove && role != "Admin" && u.EmployeeId == null)
+        if (!remove && role != "Admin" && u.EmployeeId == null && !await users.IsInRoleAsync(u, "Admin"))
             return BadRequest("Link an employee before assigning an operational role.");
         if (await users.IsInRoleAsync(u, role) == !remove)
             return RedirectToPage();
@@ -104,12 +104,33 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         if (user == null) return NotFound();
         if (await users.IsInRoleAsync(user, "Admin")) return BadRequest("Administrator accounts retain full module access.");
         var selected = blocked.ToHashSet();
-        var previous = await db.UserModuleRestrictions.Where(r => r.UserId == id).ToListAsync();
+        var moduleKeys = ModuleAccess.Modules.Select(m => m.Key).ToArray();
+        var previous = await db.UserModuleRestrictions.Where(r => r.UserId == id && moduleKeys.Contains(r.Module)).ToListAsync();
         db.UserModuleRestrictions.RemoveRange(previous.Where(r => !selected.Contains(r.Module)));
         foreach (var module in selected.Except(previous.Select(r => r.Module)))
             db.UserModuleRestrictions.Add(new() { UserId = id, Module = module });
         await Log($"User {id}: module restrictions set to {(selected.Count == 0 ? "none" : string.Join(", ", selected.Order()))}");
         TempData["Success"] = "Module access updated. Changes take effect on the user’s next request.";
+        return RedirectToPage(new { Search });
+    }
+
+    public async Task<IActionResult> OnPostMenuAccessAsync(string id, Dictionary<string, string> access)
+    {
+        var keys = ModuleAccess.Modules.Select(m => m.Key).Concat(MenuPermissions.Items.Select(m => m.Key)).ToHashSet();
+        if (!ModelState.IsValid || id == Own || access.Count != keys.Count || access.Any(x => !keys.Contains(x.Key) || x.Value is not ("Allow" or "Deny")))
+            return BadRequest("Submit a valid choice for every menu and submenu.");
+        var user = await users.FindByIdAsync(id);
+        if (user == null) return NotFound();
+        if (await users.IsInRoleAsync(user, "Admin")) return BadRequest("Administrator accounts retain full access.");
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var selected = access.Where(x => x.Value == "Deny").Select(x => x.Key).ToHashSet();
+        var previous = await db.UserModuleRestrictions.Where(r => r.UserId == id).ToListAsync();
+        db.UserModuleRestrictions.RemoveRange(previous.Where(r => keys.Contains(r.Module) && !selected.Contains(r.Module)));
+        foreach (var key in selected.Except(previous.Select(r => r.Module)))
+            db.UserModuleRestrictions.Add(new() { UserId = id, Module = key });
+        await Log($"User {id}: menu/submenu denied: {(selected.Count == 0 ? "none" : string.Join(", ",selected.Order()))}");
+        await transaction.CommitAsync();
+        TempData["Success"] = "Menu permissions saved. Denied pages and actions are blocked on the next request, including mobile access.";
         return RedirectToPage(new { Search });
     }
 
@@ -132,17 +153,20 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
 
     public async Task<IActionResult> OnPostCreateAsync(string email, string password, string role, int? employeeId)
     {
-        if (!new[]
-        {
-            "Admin",
-            "HR",
-            "Management",
-            "Finance",
-            "General Secretary",
-            "Chairman",
-            "Employee"
-        }.Contains(role) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || (role != "Admin" && employeeId == null) || (employeeId != null && (!await db.Employees.AnyAsync(x => x.Id == employeeId) || await db.Users.AnyAsync(x => x.EmployeeId == employeeId))))
-            return BadRequest();
+        if (string.IsNullOrWhiteSpace(email) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || email.Length > 256)
+            ModelState.AddModelError("", "Enter a valid email address.");
+        if (string.IsNullOrEmpty(password) || password.Length is < 10 or > 128)
+            ModelState.AddModelError("", "Enter a temporary password of 10–128 characters.");
+        if (!new[] { "Admin", "HR", "Management", "Finance", "General Secretary", "Chairman", "Employee" }.Contains(role))
+            ModelState.AddModelError("", "Select a valid role.");
+        if (role != "Admin" && employeeId == null)
+            ModelState.AddModelError("", "Select an employee profile for this account.");
+        if (employeeId != null && (!await db.Employees.AnyAsync(x => x.Id == employeeId) || await db.Users.AnyAsync(x => x.EmployeeId == employeeId)))
+            ModelState.AddModelError("", "Select an employee who does not already have a login account.");
+        if (!string.IsNullOrWhiteSpace(email) && await db.Users.AnyAsync(x => x.NormalizedEmail == email.Trim().ToUpperInvariant() || x.NormalizedUserName == email.Trim().ToUpperInvariant()))
+            ModelState.AddModelError("", "An account already uses this email address.");
+        if (!ModelState.IsValid) { await OnGetAsync(); return Page(); }
+        email = email.Trim();
         await using var transaction = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync() : null;
         var u = new ApplicationUser
         {

@@ -1,4 +1,5 @@
 @page
+@inject HrSystemDhg.Web.Services.ModuleAccess MenuAccess
 @model HrSystemDhg.Web.Pages.Operations.TasksModel
 @{ ViewData["Title"] = "Task manager"; }
 @if (Model.FocusedTask is { } focused)
@@ -33,7 +34,7 @@ else
 
 <p class="muted">Find assigned work, follow team progress, or create a task. Expand a subtask to see each employee’s responsibility.</p>
 <div class="actions">
-    <a class="button" href="#tasks-create">+ Create task</a>
+    <a class="button" href="#tasks-create" menu-permission="tasks.manage">+ Create task</a>
     <a class="button secondary" asp-page="./TaskReport">Task progress report</a>
     <a class="button @(Model.View == "related" ? "" : "secondary")" asp-page="./Tasks" asp-route-view="related">All my work</a>
     <a class="button @(Model.View == "mine" ? "" : "secondary")" asp-page="./Tasks" asp-route-view="mine">My tasks</a>
@@ -42,7 +43,7 @@ else
 </div>
 @if (TempData["OperationsNotice"] is string notice) { <p class="notice" role="status">@notice</p> }
 
-<div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Task views"><a href="#tasks-list" data-workspace-link>Task list</a><a href="#tasks-create" data-workspace-link>Create / edit task</a><a href="#tasks-import" data-workspace-link>Import &amp; export</a><a href="/Operations/TaskReport">Progress reports</a></nav>
+<div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Task views"><a href="#tasks-list" data-workspace-link>Task list</a><a href="#tasks-create" menu-permission="tasks.manage" data-workspace-link>Create / edit task</a><a href="#tasks-import" menu-permission="tasks.manage" data-workspace-link>Import &amp; export</a><a href="/Operations/TaskReport">Progress reports</a></nav>
 <section id="tasks-list" data-workspace-panel><div class="card workspace-list compact-task-list">
     <header class="workspace-list-heading"><h2>Tasks</h2><small>@Model.Items.Count assignments shown</small></header>
     <form method="get" class="task-list-filters">
@@ -150,6 +151,7 @@ else
     }
 </div>
 </section>
+@if (HrSystemDhg.Web.Services.MenuPermissions.Allows(await MenuAccess.BlockedAsync(), "tasks.manage")) {
 <section id="tasks-create" data-workspace-panel data-workspace-auto><details id="task-editor" class="card task-create-panel workspace-tools" open="@(Model.Input.Id != 0 || !ViewData.ModelState.IsValid)">
 <summary>@(Model.Input.Id == 0 ? "Create a task" : "Edit task")</summary>
 <form method="post" asp-page-handler="Save">
@@ -202,7 +204,11 @@ else
     <button id="save-task-button">Save task</button> @if (Model.Input.Id != 0) { <a asp-page="./Tasks">Cancel edit</a> }
 </form>
 </details></section>
+}
+
+@if (HrSystemDhg.Web.Services.MenuPermissions.Allows(await MenuAccess.BlockedAsync(), "tasks.manage")) {
 <section id="tasks-import" data-workspace-panel><partial name="/Pages/Shared/_RegistrationCsv.cshtml" model='("tasks")' /></section>
+}
 </div>
 
 }

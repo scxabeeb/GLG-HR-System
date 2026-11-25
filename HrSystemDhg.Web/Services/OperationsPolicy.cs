@@ -16,7 +16,7 @@ public static class OperationsPolicy
             users = users.Where(u => u.EmployeeId.HasValue && visible.Contains(u.EmployeeId.Value) || u.Id == db.ActorId);
         }
         if (module != null)
-            users = users.Where(u => !db.UserModuleRestrictions.Any(r => r.UserId == u.Id && r.Module == module) ||
+            users = users.Where(u => !db.UserModuleRestrictions.Any(r => r.UserId == u.Id && (r.Module == module || ((module == "tasks" || module == "meetings") && r.Module == module + ".mine"))) ||
                 db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(role => role.Id == ur.RoleId && role.NormalizedName == "ADMIN")));
         return users;
     }

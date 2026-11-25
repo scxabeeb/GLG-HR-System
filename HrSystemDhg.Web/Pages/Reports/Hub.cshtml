@@ -31,6 +31,8 @@
         reports.Add(("Assets", "Inventory, custody, status and value", "/Assets/Index", "true", null));
     if (fleetAccess && Show("fleet"))
         reports.Add(("Fleet", "Trips, mileage, expenses and service", "/Operations/FleetReport", null, null));
+    reports.RemoveAll(r => !MenuPermissions.Allows(denied, r.Title switch {
+        "Employees"=>"people.reports", "Attendance"=>"attendance.reports", "Leave"=>"leave.reports", "Salary"=>"payroll.salaryreports", "Payroll"=>"payroll.reports", "Tasks"=>"tasks.reports", "Meetings"=>"meetings.reports", "Assets"=>"assets.reports", "Fleet"=>"fleet.reports", _=>null }));
     if (Db.IsAdmin)
         reports.Add(("Audit log", "Account, configuration and HR changes", "/Audit", null, "Admin"));
 }
@@ -46,7 +48,8 @@
         (Id: "audit", Label: "Audit", Detail: "Account, configuration and administrative changes.", Titles: new[] { "Audit log" })
     };
     var savedReports = staff && Show("reports") ? await Db.SavedReportViews.AsNoTracking().Where(v => v.IsActive && (v.Source != "Salary" || salaryAccess)).OrderBy(v => v.Name).ToListAsync() : [];
-    var leaveAccess = (staff || User.IsInRole("General Secretary")) && Show("leave");
+    savedReports.RemoveAll(v=>!MenuPermissions.Allows(denied,MenuPermissions.Report(v.Source)));
+    var leaveAccess = (staff || User.IsInRole("General Secretary")) && MenuPermissions.Allows(denied,"leave.requests");
 }
 @if (reports.Count > 0 || leaveAccess)
 {

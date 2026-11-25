@@ -186,12 +186,36 @@ app.Use(async (context, next) =>
         var area = context.GetRouteValue("area")?.ToString();
         var page = context.GetRouteValue("page")?.ToString();
         var module = ModuleAccess.ForRoute(area, page);
-        if (module != null && !ModuleAccess.Allows(await context.RequestServices.GetRequiredService<ModuleAccess>().BlockedAsync(), module))
+        var denied = await context.RequestServices.GetRequiredService<ModuleAccess>().BlockedAsync();
+        var menu = MenuPermissions.ForUrl(context.Request.Path.Value ?? "", context.Request.Query, context.Request.Method);
+        // A saved report determines its source on the server; query parameters cannot override its permission.
+        if (page == "/Reports/Index" && int.TryParse(context.Request.Query["SavedViewId"].FirstOrDefault(), out var savedId))
+        {
+            var source = await context.RequestServices.GetRequiredService<HrDbContext>().SavedReportViews.AsNoTracking()
+                .Where(v => v.Id == savedId && v.IsActive).Select(v => v.Source).SingleOrDefaultAsync();
+            if (source != null) menu = MenuPermissions.Report(source);
+        }
+        var extraTaskPermission = page == "/Operations/MeetingDetails" && HttpMethods.IsPost(context.Request.Method) && string.Equals(context.Request.Query["handler"].FirstOrDefault(), "FollowUp", StringComparison.OrdinalIgnoreCase);
+        if (!ModuleAccess.Allows(denied, module) || !MenuPermissions.Allows(denied, menu) || (extraTaskPermission && !MenuPermissions.Allows(denied, "tasks.manage")))
         {
             if (module == "overview" && HttpMethods.IsGet(context.Request.Method))
                 context.Response.Redirect("/Operations/Notifications");
             else
+            {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                if (context.Request.Path.StartsWithSegments("/api"))
+                    await context.Response.WriteAsJsonAsync(new { message = "Your administrator has denied access to this menu or action.", code = "menu_access_denied" });
+                else
+                {
+                    context.Response.ContentType = "text/html; charset=utf-8";
+                    await context.Response.WriteAsync("""
+                        <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Access denied</title></head>
+                        <body style="margin:0;background:#f3f6fb;color:#183153;font:16px system-ui,sans-serif"><main style="max-width:520px;margin:12vh auto;padding:32px;background:white;border-radius:12px;border:1px solid #dbe3ef">
+                        <p style="color:#1749bd;font-size:13px">WORKSPACE ACCESS</p><h1>Access denied</h1><p>Your account does not have permission to open this page or perform this action. Ask your administrator to review your menu permissions.</p>
+                        <a href="/Operations/Notifications" style="display:inline-block;background:#1749bd;color:white;padding:12px 18px;border-radius:6px;text-decoration:none">Return to workspace</a></main></body></html>
+                        """);
+                }
+            }
             return;
         }
     }

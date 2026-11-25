@@ -135,17 +135,17 @@ public static class MobileEmployeeApi
         var today = BusinessClock.Today;
         var month = new DateTime(today.Year, today.Month, 1);
         var now = DateTime.UtcNow;
-        var tasks = ModuleAccess.Allows(blocked, "tasks")
+        var tasks = MenuPermissions.Allows(blocked, "tasks.mine")
             ? await db.WorkTasks.Where(t => t.AssigneeId == actor && t.Status != TaskProgress.Cancelled)
                 .GroupBy(t => t.Status).Select(g => new { Status = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(g => g.Status, g => g.Count, ct)
             : null;
-        int? meetings = ModuleAccess.Allows(blocked, "meetings")
+        int? meetings = MenuPermissions.Allows(blocked, "meetings.mine")
             ? await OperationsPolicy.Meetings(db, actor).CountAsync(m => !m.Cancelled && m.EndedUtc == null && m.EndsUtc > now, ct)
             : null;
         decimal? hours = null;
         var employeeId = await db.Users.Where(u => u.Id == actor).Select(u => u.EmployeeId).SingleOrDefaultAsync(ct);
-        if (employeeId.HasValue && ModuleAccess.Allows(blocked, "personal"))
+        if (employeeId.HasValue && MenuPermissions.Allows(blocked, "personal.workspace"))
             hours = await db.AttendanceDays.Where(d => d.EmployeeId == employeeId && d.Date >= month && d.Date < today.AddDays(1))
                 .SumAsync(d => (decimal?)d.WorkedHours, ct) ?? 0;
         return Results.Json(new
