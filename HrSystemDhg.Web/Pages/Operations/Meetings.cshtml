@@ -17,8 +17,8 @@
     <a class="button @(Model.Period == "past" ? "" : "secondary")" asp-page="./Meetings" asp-route-mode="@Model.Mode" asp-route-period="past">Past &amp; cancelled</a>
     <a class="button @(Model.Period == null ? "" : "secondary")" asp-page="./Meetings" asp-route-mode="@Model.Mode">All meetings</a>
 </div>
-<div class="card meeting-list workspace-list">
-    <header class="workspace-list-heading"><h2>@(Model.Managing ? "Meetings you organize" : "Your meetings")</h2><small>@Model.Items.Count shown</small></header>
+<div class="card meeting-list workspace-list" data-registration-list="meetings" data-list-items=":scope > .meeting-entry">
+    <header class="workspace-list-heading"><h2>@(Model.Managing ? "Meetings you organize" : "Your meetings")</h2><small>@Model.Items.Count matching meetings</small></header>
     @if (Model.Items.Count == 0) { <p>No meetings match this view.</p> }
     @foreach (var meeting in Model.Items) {
         var now = DateTime.UtcNow;

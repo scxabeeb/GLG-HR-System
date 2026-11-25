@@ -208,6 +208,12 @@ try:
                 paging_date=(datetime(2025,1,1)+timedelta(days=offset)).strftime('%Y-%m-%d')
                 values.append("("+employee+",'"+paging_date+"',8,0,'Present',8,0,0,0)")
             sql("INSERT INTO "+database+".AttendanceDays (EmployeeId,Date,WorkedHours,LateMinutes,Status,ExpectedHours,EarlyMinutes,MissingMinutes,IsCorrected) VALUES "+','.join(values))
+            # Synthetic directory data exercises server pagination without creating accounts or credentials.
+            fixture_values=[]
+            for index in range(205):
+                fixture_values.append("('PAGE-"+str(index)+"','ZZZ Pagination "+str(index).zfill(3)+"','page-"+str(index)+"@example.test','"+month+"','Active',0,'','','','','','','','','',0,'Permanent')")
+            sql("INSERT INTO "+database+".Employees (EmployeeNumber,FullName,WorkEmail,HireDate,Status,RegistrationComplete,Phone,Gender,Nationality,PersonalEmail,Address,EmergencyContact,EmergencyRelation,EmergencyPhone,MaritalStatus,Dependents,EmploymentType) VALUES "+','.join(fixture_values))
+            sql("INSERT INTO "+database+".EmployeeAssignments (EmployeeId,BranchId,DepartmentId,JobTitle,EffectiveFrom,Grade) SELECT Id,"+branch+","+department+",'Pagination officer','"+month+"','' FROM "+database+".Employees WHERE EmployeeNumber LIKE 'PAGE-%'")
             payroll_fixture=(period,line)
         browserenv=os.environ.copy()
         browserenv.update({'E2E_USER':email,'E2E_PASSWORD':newpassword,'E2E_BASE':'http://127.0.0.1:5199'})
@@ -221,6 +227,7 @@ try:
             except (OSError,AssertionError):time.sleep(.5)
         else:raise Exception('Browser test server failed to restart')
         subprocess.run(['node',str(root/'scripts/check-settings-browser.cjs')],env=browserenv,check=True)
+        subprocess.run(['node',str(root/'scripts/check-registration-pagination.cjs')],env=browserenv,check=True)
     token=administrator
     req('v2/auth/logout',{});req('v2/auth/me',expected=401)
     print('PASS native bearer login, mandatory password change, old-token revocation, user-scoped feeds, task update audit, invalid status rejection, missing-record authorization, logout revocation')

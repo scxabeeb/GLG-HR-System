@@ -291,6 +291,18 @@ public static class AttendanceMinuteChecks
         check(pagingModel.PageNumber==31 && pagingModel.Items.Count==1,"out-of-range attendance page clamps to the final page");
 
 
+        var directoryEmployees=Enumerable.Range(0,205).Select(i=>new Employee{FullName=$"ZZZ Pagination {i:000}",EmployeeNumber=$"PAGE-{key}-{i}",WorkEmail=$"page-{key}-{i}@example.test",HireDate=firstDate,RegistrationComplete=false}).ToList();
+        db.AddRange(directoryEmployees);await db.SaveChangesAsync();
+        db.EmployeeAssignments.AddRange(directoryEmployees.Select(e=>new EmployeeAssignment{EmployeeId=e.Id,BranchId=branch.Id,DepartmentId=department.Id,JobTitle="Pagination officer",EffectiveFrom=firstDate}));await db.SaveChangesAsync();
+        var directory=new HrSystemDhg.Web.Pages.Hr.EmployeesModel(db){Search="ZZZ Pagination",Department=department.Name,StatusFilter="Onboarding"};
+        await directory.OnGetAsync();var firstEmployees=directory.Items.Select(e=>e.Id).ToHashSet();
+        check(directory.Items.Count==20 && directory.Paging.TotalRecords==205,"employee directory defaults to 20 filtered records and preserves department/onboarding filters");
+        directory.PageNumber=2;await directory.OnGetAsync();check(directory.Items.Count==20 && !directory.Items.Any(e=>firstEmployees.Contains(e.Id)),"employee pages have stable ordering without duplicate records");
+        foreach(var size in new[]{"50","100","200","All"}){directory.RowsPerPage=size;directory.PageNumber=1;await directory.OnGetAsync();check(directory.Items.Count==(size=="All"?205:int.Parse(size)),"employee page size "+size+" returns the complete selected record range");}
+        directory.Search="pagination OFFICER";await directory.OnGetAsync();check(directory.Items.Count==205,"employee job-title search remains case-insensitive with pagination");
+        directory.Search="No such employee fixture";await directory.OnGetAsync();check(directory.Items.Count==0 && directory.Paging.TotalRecords==0,"empty employee searches are safely paginated");
+
+
 
     }
 }

@@ -6,7 +6,7 @@
 <h1>Saved recordings</h1>
 <p>Play or download recordings you saved as the meeting organizer.</p>
 <partial name="_MeetingNavigation" model='("recordings")' />
-<div class="card meeting-list">
+<div class="card meeting-list" data-registration-list="meeting-recordings" data-list-items=":scope > article">
 @if (Model.Recordings.Count == 0) { <p>No saved recordings. Open a Garowe meeting you organize, then choose <strong>Start recording</strong>.</p> }
 @foreach (var recording in Model.Recordings) {
     <article class="meeting-entry">

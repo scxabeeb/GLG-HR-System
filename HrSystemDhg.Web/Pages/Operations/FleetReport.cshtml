@@ -56,7 +56,7 @@
     <h2>Trip activity</h2>
     @if (Model.Trips.Count == 0) { <p>No trips in this period.</p> }
     else {
-        <table><thead><tr><th>Destination</th><th>Vehicle</th><th>Planned start (EAT)</th><th>Status</th><th>Distance</th></tr></thead>
+        <table data-registration-list="fleet-records-1"><thead><tr><th>Destination</th><th>Vehicle</th><th>Planned start (EAT)</th><th>Status</th><th>Distance</th></tr></thead>
             <tbody>@foreach (var trip in Model.Trips) { <tr><td>@trip.Destination</td><td>@(trip.Vehicle?.Plate ?? "Unassigned")</td><td>@OperationsPolicy.Local(trip.StartsUtc).ToString("dd MMM yyyy, HH:mm")</td><td>@trip.Status</td><td>@(trip.EndKm.HasValue ? $"{trip.EndKm - trip.StartKm} km" : "—")</td></tr> }</tbody>
         </table>
     }
@@ -65,7 +65,7 @@
     <h2>Expense register</h2>
     @if (Model.Expenses.Count == 0) { <p>No expenses in this period.</p> }
     else {
-        <table><thead><tr><th>Date</th><th>Vehicle</th><th>Category</th><th>Amount</th><th>Fuel litres</th><th>Reference</th></tr></thead>
+        <table data-registration-list="fleet-records-2"><thead><tr><th>Date</th><th>Vehicle</th><th>Category</th><th>Amount</th><th>Fuel litres</th><th>Reference</th></tr></thead>
         <tbody>@foreach (var expense in Model.Expenses) { <tr><td>@expense.Date.ToString("dd MMM yyyy")</td><td>@expense.Vehicle.Plate</td><td>@expense.Type</td><td>@expense.Amount.ToString("N2") @expense.Currency</td><td>@expense.Litres?.ToString("N2")</td><td>@expense.Reference</td></tr> }</tbody></table>
     }
 </div>

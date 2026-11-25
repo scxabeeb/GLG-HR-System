@@ -76,7 +76,7 @@
     <h2>@(Model.TeamId.HasValue ? "Subtasks and responsibilities" : "Current progress")</h2>
     @if (Model.Tasks.Count == 0) { <p>No matching assignments.</p> }
     else {
-        <table><thead><tr><th scope="col">@(Model.TeamId.HasValue ? "Subtask" : "Task")</th><th scope="col">Assignee</th>@if (!Model.TeamId.HasValue) { <th scope="col">Responsibility</th> }<th scope="col">Due date</th><th scope="col">Status</th><th scope="col">Last updated (EAT)</th></tr></thead>
+        <table data-registration-list="subtask-assignments"><thead><tr><th scope="col">@(Model.TeamId.HasValue ? "Subtask" : "Task")</th><th scope="col">Assignee</th>@if (!Model.TeamId.HasValue) { <th scope="col">Responsibility</th> }<th scope="col">Due date</th><th scope="col">Status</th><th scope="col">Last updated (EAT)</th></tr></thead>
         <tbody>
         @foreach (var group in Model.Tasks.GroupBy(t => Model.TeamId.HasValue ? t.SubtaskId ?? -t.Id : -t.Id)) {
             var first = group.First();

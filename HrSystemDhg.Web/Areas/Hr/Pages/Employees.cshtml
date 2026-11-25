@@ -10,10 +10,11 @@
 <label>Search employees<input asp-for="Search" type="search" placeholder="Name, number, email or job title" /></label>
 <label>Department<select asp-for="Department"><option value="">All departments</option>@foreach(var department in Model.DepartmentOptions){<option value="@department">@department</option>}</select></label>
 <label>Status<select asp-for="StatusFilter"><option value="">All statuses</option>@foreach(var status in Model.StatusOptions){<option value="@status">@status</option>}</select></label>
+<label>Records per page<select asp-for="RowsPerPage" onchange="this.form.requestSubmit()">@foreach(var size in ListPager.Options){<option value="@size">@size</option>}</select></label>
 <button>Apply filters</button><a asp-page="./Employees">Clear</a>
 </form>
 <div class="card table-scroll employee-directory">
-<header class="workspace-list-heading"><h2>Employees</h2><small>@Model.Items.Count of @Model.TotalEmployees employees</small></header>
+<header class="workspace-list-heading"><h2>Employees</h2><small>@Model.Paging.TotalRecords matching of @Model.TotalEmployees employees</small></header>
     @if (Model.Items.Count == 0) { <p>No employees match this view. Clear the filters or register an employee.</p> }
     else
     {
@@ -37,7 +38,7 @@
                     <td><span class="badge">@(employee.RegistrationComplete ? employee.Status : "Onboarding")</span></td>
                     <td><a class="button secondary" asp-page="./Employees"
                            asp-route-search="@Model.Search" asp-route-department="@Model.Department" asp-route-statusFilter="@Model.StatusFilter"
-                           asp-route-expandedEmployeeId="@(expanded ? (int?)null : employee.Id)"
+                           asp-route-expandedEmployeeId="@(expanded ? (int?)null : employee.Id)" asp-route-RowsPerPage="@Model.RowsPerPage" asp-route-PageNumber="@Model.PageNumber"
                            asp-fragment="@($"employee-{employee.Id}")" aria-expanded="@expanded.ToString().ToLowerInvariant()">
                         @(expanded ? "Hide details" : "Details")
                     </a></td>
@@ -111,6 +112,7 @@
                                 @if (Model.Terminals.Count > 0 && ZkEmployeeCommands.ValidPin(employee.ZkPin))
                                 {
                                     <form method="post" asp-page-handler="Terminal" asp-route-employeeId="@employee.Id">
+                                        <input type="hidden" name="Search" value="@Model.Search"/><input type="hidden" name="Department" value="@Model.Department"/><input type="hidden" name="StatusFilter" value="@Model.StatusFilter"/><input type="hidden" name="RowsPerPage" value="@Model.RowsPerPage"/><input type="hidden" name="PageNumber" value="@Model.PageNumber"/>
                                         <label>Terminal<select name="terminalId" required>
                                             @foreach (var terminal in Model.Terminals) { <option value="@terminal.Id">@terminal.Name</option> }
                                         </select></label>
@@ -133,4 +135,5 @@
             </tbody>
         </table>
     }
+    <partial name="/Pages/Shared/_ListPager.cshtml" model="@(new ListPagerView(Model.Paging,Model.PageLink))" />
 </div>

@@ -76,11 +76,11 @@ public class FleetReportModel(HrDbContext db) : PageModel
         Litres = await expenses.SumAsync(e => e.Litres) ?? 0;
         CostTotals = (await expenses.GroupBy(e => e.Currency).Select(g => new { Currency = g.Key, Total = g.Sum(e => e.Amount) })
             .OrderBy(x => x.Currency).ToListAsync()).Select(x => (x.Currency, x.Total)).ToList();
-        Trips = await trips.Include(t => t.Vehicle).OrderByDescending(t => t.StartsUtc).Take(150).ToListAsync();
-        Expenses = await expenses.Include(e => e.Vehicle).OrderByDescending(e => e.Date).ThenByDescending(e => e.Id).Take(150).ToListAsync();
+        Trips = await trips.Include(t => t.Vehicle).OrderByDescending(t => t.StartsUtc).ToListAsync();
+        Expenses = await expenses.Include(e => e.Vehicle).OrderByDescending(e => e.Date).ThenByDescending(e => e.Id).ToListAsync();
         var ids = Vehicles.Where(v => !VehicleId.HasValue || v.Id == VehicleId).Select(v => v.Id).ToArray();
         PendingService = await db.FleetServiceEntries.Where(s => ids.Contains(s.VehicleId) && !s.Completed && s.ServiceDate <= RenewalCutoff)
-            .OrderBy(s => s.ServiceDate).Take(100).ToListAsync();
+            .OrderBy(s => s.ServiceDate).ToListAsync();
         return Page();
     }
 

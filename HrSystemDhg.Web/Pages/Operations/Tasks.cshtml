@@ -45,7 +45,7 @@ else
 
 <div class="page-workspace" data-page-workspace><nav class="workspace-tabs" aria-label="Task views"><a href="#tasks-list" data-workspace-link>Task list</a><a href="#tasks-create" menu-permission="tasks.manage" data-workspace-link>Create / edit task</a><a href="#tasks-import" menu-permission="tasks.manage" data-workspace-link>Import &amp; export</a><a href="/Operations/TaskReport">Progress reports</a></nav>
 <section id="tasks-list" data-workspace-panel><div class="card workspace-list compact-task-list">
-    <header class="workspace-list-heading"><h2>Tasks</h2><small>@Model.Items.Count assignments shown</small></header>
+    <header class="workspace-list-heading"><h2>Tasks</h2><small>@Model.Items.Count matching assignments</small></header>
     <form method="get" class="task-list-filters">
         <input type="hidden" name="view" value="@Model.View" />
         <label>Search<input asp-for="Search" type="search" maxlength="120" placeholder="Task, description, or employee" /></label>
@@ -63,7 +63,7 @@ else
     @if (individualTasks.Count > 0) {
         <section class="task-list-section">
             <h3>Individual tasks</h3>
-            <div class="ops-list">
+            <div class="ops-list" data-registration-list="individual-tasks">
                 @foreach (var task in individualTasks) {
                     <partial name="_TaskAssignment" model="(Model, task, true)" />
                 }
@@ -73,7 +73,7 @@ else
     @if (teamTasks.Count > 0 || Model.EmptyTeams.Count > 0) {
     <section class="task-list-section">
     <h3>Team tasks</h3>
-    <div class="ops-list">
+    <div class="ops-list" data-registration-list="team-tasks">
     @foreach (var team in Model.EmptyTeams) {
         <div class="task-parent">
             <span class="badge">Team task</span><h3>@team.Title</h3>

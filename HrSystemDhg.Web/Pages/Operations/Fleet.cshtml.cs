@@ -48,7 +48,7 @@ public class FleetModel(HrDbContext db) : PageModel
     private async Task Load(FleetVehicle? selected)
     {
         Response.Headers.CacheControl = "no-store";
-        Vehicles = await OperationsPolicy.Vehicles(db).AsNoTracking().OrderBy(v => v.Plate).Take(500).ToListAsync();
+        Vehicles = await OperationsPolicy.Vehicles(db).AsNoTracking().OrderBy(v => v.Plate).ToListAsync();
         Branches = await ActiveBranches().OrderBy(b => b.Name).ToDictionaryAsync(b => b.Id, b => b.Name);
         Drivers = await db.Employees.AsNoTracking().OrderBy(e => e.FullName).ToDictionaryAsync(e => e.Id, e => e.FullName);
         Selected = selected;
@@ -57,7 +57,7 @@ public class FleetModel(HrDbContext db) : PageModel
             Positions = await db.FleetPositions.AsNoTracking().Where(p => p.VehicleId == Selected.Id)
                 .OrderByDescending(p => p.RecordedUtc).Take(50).ToListAsync();
             Services = await db.FleetServiceEntries.AsNoTracking().Where(s => s.VehicleId == Selected.Id)
-                .OrderBy(s => s.Completed).ThenByDescending(s => s.ServiceDate).Take(100).ToListAsync();
+                .OrderBy(s => s.Completed).ThenByDescending(s => s.ServiceDate).ToListAsync();
         }
     }
 

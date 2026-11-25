@@ -85,7 +85,7 @@ public class TaskReportModel(HrDbContext db, OperationsNotices notices) : PageMo
             .ToDictionaryAsync(x => x.Status, x => x.Count);
         if (Status.HasValue) tasks = tasks.Where(t => t.Status == Status.Value);
 
-        Tasks = await tasks.OrderByDescending(t => t.UpdatedUtc).ThenByDescending(t => t.Id).Take(100).ToListAsync();
+        Tasks = await tasks.OrderByDescending(t => t.UpdatedUtc).ThenByDescending(t => t.Id).ToListAsync();
         Activity = await db.TaskActivities.AsNoTracking().Where(a => tasks.Any(t => t.Id == a.TaskId))
             .Include(a => a.Task).OrderByDescending(a => a.RecordedUtc).ThenByDescending(a => a.Id).Take(100).ToListAsync();
         var ids = Tasks.Select(t => t.AssigneeId).Concat(Activity.Select(a => a.ActorId)).Distinct().ToArray();

@@ -59,7 +59,7 @@ public class FleetTripsModel(HrDbContext db, OperationsNotices notices) : PageMo
         if (Status.HasValue) query = query.Where(t => t.Status == Status);
         // Load display names separately; employee query filters must not hide trip rows.
         Trips = await query.AsNoTracking().OrderBy(t => t.Status >= FleetTripState.Completed)
-            .ThenByDescending(t => t.StartsUtc).Take(200).ToListAsync();
+            .ThenByDescending(t => t.StartsUtc).ToListAsync();
         var branchIds = Trips.Select(t => t.BranchId).Distinct().ToArray();
         BranchNames = await db.Branchs.Where(b => branchIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.Name);
         if (CanManage && !Mine)

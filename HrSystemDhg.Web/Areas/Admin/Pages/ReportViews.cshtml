@@ -9,7 +9,7 @@
 <nav class="workspace-tabs" aria-label="Report designer views"><a href="#report-library" data-workspace-link>Saved reports</a><a href="#report-editor" data-workspace-link>Create / edit report</a><a asp-area="" asp-page="/Reports/Hub">Main reports</a></nav>
 <section id="report-library" data-workspace-panel><div class="card table-scroll"><h2>Report library</h2>
 @if (Model.Items.Count == 0) { <p>No custom reports yet. Choose Create / edit report to add one.</p> }
-else { <table><thead><tr><th>Name</th><th>Dataset</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+else { <table data-registration-list="ReportViews-1"><thead><tr><th>Name</th><th>Dataset</th><th>Status</th><th>Actions</th></tr></thead><tbody>
 @foreach (var item in Model.Items) { <tr><td><strong>@item.Name</strong><br/>@item.Description</td><td>@item.Source</td><td>@(item.IsActive ? "Active" : "Disabled")</td><td><div class="actions"><a asp-page="./ReportViews" asp-route-id="@item.Id" asp-fragment="report-editor">Edit</a>@if(item.IsActive){<a asp-area="" asp-page="/Reports/Index" asp-route-savedViewId="@item.Id">Open report</a>}<form method="post" asp-page-handler="Toggle" asp-route-id="@item.Id"><button class="secondary">@(item.IsActive ? "Disable" : "Enable")</button></form></div></td></tr>}
 </tbody></table>}
 </div></section>

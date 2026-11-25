@@ -45,7 +45,7 @@ public class MeetingsModel(HrDbContext db, RoomLinks links, OperationsNotices no
         if (Period == "past") query = query.Where(m => m.Cancelled || m.EndedUtc != null || m.EndsUtc <= now);
         Items = await query.AsNoTracking().Include(m => m.Participants)
             .OrderBy(m => m.Cancelled || m.EndedUtc != null || m.EndsUtc < now).ThenBy(m => m.EndsUtc < now ? DateTime.MaxValue : m.StartsUtc)
-            .ThenByDescending(m => m.StartsUtc).Take(150).ToListAsync();
+            .ThenByDescending(m => m.StartsUtc).ToListAsync();
         if (Managing) Invitees = (await OperationsPolicy.EligiblePeople(db, "meetings").Where(u => u.Id != Actor)
             .Select(u => new Invitee(u.Id,
                 db.Employees.Where(e=>e.Id==u.EmployeeId).Select(e=>e.FullName).FirstOrDefault() ?? u.UserName ?? u.Email ?? "Employee",

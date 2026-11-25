@@ -18,7 +18,7 @@
         @if (Model.Input.Id != 0) { <a class="button secondary" asp-page="./Agenda">Cancel</a> }
     </div>
 </form>
-<section class="card">
+<section class="card" data-registration-list="personal-agenda" data-list-items=":scope > article">
     <h2>Agenda items</h2>
     @if (Model.Items.Count == 0) { <p>Your agenda is empty.</p> }
     @foreach (var item in Model.Items)

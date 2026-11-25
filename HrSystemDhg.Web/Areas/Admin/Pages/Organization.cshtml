@@ -7,11 +7,12 @@
 <p>Manage branches, their departments and sub-departments. Delete unused units, or edit and deactivate units linked to existing records.</p>
 <div class="actions"><a class="button" asp-page="./OrgEdit" asp-route-kind="Branch">+ Branch</a><a class="button" asp-page="./OrgEdit" asp-route-kind="Department">+ Department</a><a class="button" asp-page="./OrgEdit" asp-route-kind="SubDepartment">+ Sub-department</a><a class="button secondary" asp-page="./OrgEdit" asp-route-kind="Branch">Import &amp; export</a></div>
 @if(Model.Branches.Count == 0){<section class="card"><p>No branches registered. Add a branch to get started.</p></section>}
+<div data-registration-list="organization-branches">
 @foreach(var b in Model.Branches){
 <section class="card" id="branch-@b.Id">
 <h2>@b.Name <span class="badge">@(b.IsActive ? "Active" : "Inactive")</span></h2><p>@b.Code · @b.City · @b.Timezone</p>
 <div class="actions"><a asp-page="./OrgEdit" asp-route-kind="Branch" asp-route-id="@b.Id">Edit branch</a><form method="post" asp-page-handler="Delete" asp-route-kind="Branch" asp-route-id="@b.Id" onsubmit="return confirm('Delete this unused branch? Linked records will prevent deletion.');"><button class="secondary">Delete branch</button></form></div>
-<div class="table-scroll"><table><thead><tr><th>Department / sub-department</th><th>Code</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+<div class="table-scroll"><table data-registration-list="Organization-1" data-row-start=".org-unit"><thead><tr><th>Department / sub-department</th><th>Code</th><th>Status</th><th>Actions</th></tr></thead><tbody>
 @foreach(var d in Model.Departments.Where(x=>x.BranchId==b.Id)){
 <tr class="org-unit" id="department-@d.Id"><th scope="row">@d.Name</th><td>@d.Code</td><td>@(d.IsActive?"Active":"Inactive")</td><td><div class="actions"><a asp-page="./OrgEdit" asp-route-kind="Department" asp-route-id="@d.Id">Edit</a><form method="post" asp-page-handler="Delete" asp-route-kind="Department" asp-route-id="@d.Id" onsubmit="return confirm('Delete this unused department? Linked records will prevent deletion.');"><button class="secondary">Delete department</button></form></div></td></tr>
 @foreach(var sub in Model.Subs.Where(x=>x.DepartmentId==d.Id)){
@@ -22,4 +23,5 @@
 @if(!Model.Departments.Any(d=>d.BranchId==b.Id)){<p>No departments in this branch yet.</p>}
 </section>
 }
+</div>
 @if(TempData["RegistrationCsvResult"] is string csvResult){<p role="status">@csvResult</p>}

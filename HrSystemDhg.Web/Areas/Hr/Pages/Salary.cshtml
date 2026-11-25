@@ -12,7 +12,7 @@
 <a href="#salary-import" data-workspace-link>Import &amp; export</a>
 <a asp-area="" asp-page="/Reports/Index" asp-route-report="Salary">Salary reports</a>
 </nav>
-<section id="salary-history" data-workspace-panel><div class="card table-scroll"><h2>History</h2><table><tr><th>Employee</th><th>Effective</th><th>Basic</th><th>Allowances</th><th>Currency</th><th>Status</th></tr>@foreach(var s in Model.Versions){<tr><td>@Model.Employees.FirstOrDefault(e=>e.Id==s.EmployeeId)?.FullName</td><td>@s.EffectiveFrom.ToString("dd MMM yyyy")</td><td>@s.Basic</td><td>@(s.Housing+s.Transport+s.Allowances)</td><td>@s.Currency</td><td>@(s.IsDraft?"Draft":"Published") @if(s.IsDraft){<form method="post" asp-page-handler="Publish"><input type="hidden" name="id" value="@s.Id"/><button>Publish</button></form>}</td></tr>}</table></div>
+<section id="salary-history" data-workspace-panel><div class="card table-scroll"><h2>History</h2><table data-registration-list="Salary-1"><tr><th>Employee</th><th>Effective</th><th>Basic</th><th>Allowances</th><th>Currency</th><th>Status</th></tr>@foreach(var s in Model.Versions){<tr><td>@Model.Employees.FirstOrDefault(e=>e.Id==s.EmployeeId)?.FullName</td><td>@s.EffectiveFrom.ToString("dd MMM yyyy")</td><td>@s.Basic</td><td>@(s.Housing+s.Transport+s.Allowances)</td><td>@s.Currency</td><td>@(s.IsDraft?"Draft":"Published") @if(s.IsDraft){<form method="post" asp-page-handler="Publish"><input type="hidden" name="id" value="@s.Id"/><button>Publish</button></form>}</td></tr>}</table></div>
 </section>
 <section id="salary-create" data-workspace-panel data-workspace-auto>
 <details class="card workspace-tools" open="@(Model.ReturnToWizard || Model.EmployeeId != 0 || !ViewData.ModelState.IsValid)">

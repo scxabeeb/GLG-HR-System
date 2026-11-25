@@ -26,6 +26,7 @@ public class RulesModel(HrDbContext db) : PageModel
     public List<Branch> Branches = [];
     public List<Department> Departments = [];
     public List<Shift> Shifts = [];
+    public List<Shift> RegisteredShifts = [];
     public List<WorkRule> Rules = [];
     public List<Holiday> Holidays = [];
     public int? PayrollId { get; private set; }
@@ -36,7 +37,8 @@ public class RulesModel(HrDbContext db) : PageModel
     {
         Branches = await db.Branchs.ToListAsync();
         Departments = await db.Departments.ToListAsync();
-        Shifts = await db.Shifts.Where(x => x.IsActive).ToListAsync();
+        RegisteredShifts = await db.Shifts.OrderBy(x=>x.Name).ToListAsync();
+        Shifts = RegisteredShifts.Where(x=>x.IsActive).ToList();
         Rules = await db.WorkRules.AsNoTracking().OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).ToListAsync();
         Holidays = await db.Holidays.OrderBy(x => x.Date).ToListAsync();
         PayrollId = payrollId;

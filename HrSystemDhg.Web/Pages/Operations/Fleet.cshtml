@@ -17,7 +17,7 @@
     <div class="user-heading"><h2>Fleet register</h2><a class="button secondary" asp-page="./Fleet">Add vehicle</a></div>
     @if (Model.Vehicles.Count == 0) { <p>No vehicles registered. Add your first vehicle below.</p> }
     else {
-    <table><thead><tr><th>Registration</th><th>Vehicle</th><th>Status</th><th>Odometer</th><th>GPS</th></tr></thead><tbody>
+    <table data-registration-list="fleet-vehicles"><thead><tr><th>Registration</th><th>Vehicle</th><th>Status</th><th>Odometer</th><th>GPS</th></tr></thead><tbody>
         @foreach (var vehicle in Model.Vehicles) {
             <tr><td><a asp-page="./Fleet" asp-route-vehicle="@vehicle.Id">@vehicle.Plate</a></td><td>@vehicle.Name</td><td>@vehicle.Status</td><td>@vehicle.OdometerKm.ToString("N0") km</td><td>@(vehicle.TrackerKeyHash == null ? "Not configured" : "Key issued")</td></tr>
         }
@@ -88,7 +88,7 @@
         <div class="grid"><label>Service date<input asp-for="Service.Date" type="date" required /></label><label>Service description<input asp-for="Service.Description" required maxlength="500" /></label></div>
         <button>Schedule service</button>
     </form>
-    <div class="ops-list">
+    <div class="ops-list" data-registration-list="fleet-services">
     @foreach (var entry in Model.Services) {
         <article class="ops-row">
             <div><h3>@entry.Description</h3><p>@entry.ServiceDate.ToString("dd MMM yyyy") · @(entry.Completed ? "Completed" : entry.ServiceDate.Date < BusinessClock.Today ? "Overdue" : "Scheduled")</p></div>

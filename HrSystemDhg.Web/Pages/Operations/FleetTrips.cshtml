@@ -36,6 +36,7 @@
         <label>Status<select asp-for="Status" asp-items="Html.GetEnumSelectList<FleetTripState>()"><option value="">All statuses</option></select></label><button>Filter</button>
     </form>
     @if (Model.Trips.Count == 0) { <p>No trips in this view.</p> }
+    <div data-registration-list="fleet-trips">
     @foreach (var trip in Model.Trips) {
         var mayManage = Model.CanManage && !Model.Mine;
         var mayDrive = Model.EmployeeId.HasValue && trip.DriverId == Model.EmployeeId;
@@ -76,4 +77,5 @@
             </div>
         </article>
     }
+</div>
 </div>

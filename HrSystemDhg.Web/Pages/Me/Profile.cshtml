@@ -74,7 +74,7 @@
 <button>Submit request</button>
 </form>
 <div class="table-scroll">
-<table>
+<table data-registration-list="personal-leave">
 <tr>
 <th>Dates</th>
 <th>Reason</th>
@@ -107,11 +107,11 @@
 <details>
 <summary>Raw punches</summary>@foreach(var punch in Model.Punches){<p>@punch.PunchTime.ToString("dd MMM yyyy HH:mm:ss") · device @punch.DeviceId</p>}</details>
 </div>
-<div class="card">
+<div class="card" data-registration-list="personal-payslips" data-list-items=":scope > p">
 <h2 id="payroll">Published payslips</h2>@foreach(var l in Model.Pay){<p>
 <a href="/Me/Payslip?id=@l.Id">@Model.Periods.GetValueOrDefault(l.PayrollPeriodId) · @l.Currency @l.Net.ToString("N2") · revision @l.Revision</a>
 </p>}</div>
-<div class="card">
+<div class="card" data-registration-list="personal-corrections" data-list-items=":scope > p">
 <h2>Request a correction</h2>
 <form method="post" asp-page-handler="Correction">
 <label>Attendance date (leave empty for profile correction)<input name="date" type="date"/>

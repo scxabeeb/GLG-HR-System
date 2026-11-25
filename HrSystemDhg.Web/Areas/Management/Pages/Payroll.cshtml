@@ -76,7 +76,7 @@
     else
     {
         <div class="table-scroll">
-            <table class="payroll-table workspace-table">
+            <table data-registration-list="payroll-employees" class="payroll-table workspace-table">
                 <thead><tr><th>Employee</th><th>Basic salary</th><th>Allowances</th><th>Gross</th><th>Attendance deducted</th><th>Unpaid leave</th><th>Net pay</th><th>Details &amp; payslip</th></tr></thead>
                 <tbody>
                 @foreach (var employee in Model.SalaryRows)
@@ -148,7 +148,7 @@
 </section>
 
 </section>
-<section id="payroll-runs" data-workspace-panel class="card"><header class="workspace-list-heading"><h2>Payroll periods</h2><small>@Model.Periods.Count registered runs</small></header><p>Open employee payroll to see amounts, or choose Manage to recalculate and follow approvals.</p><div class="table-scroll"><table class="workspace-table"><thead><tr><th>Period</th><th>Branch</th><th>Status</th><th>Revision</th><th>Actions</th></tr></thead><tbody>
+<section id="payroll-runs" data-workspace-panel class="card"><header class="workspace-list-heading"><h2>Payroll periods</h2><small>@Model.Periods.Count registered runs</small></header><p>Open employee payroll to see amounts, or choose Manage to recalculate and follow approvals.</p><div class="table-scroll"><table data-registration-list="payroll-periods" class="workspace-table"><thead><tr><th>Period</th><th>Branch</th><th>Status</th><th>Revision</th><th>Actions</th></tr></thead><tbody>
 @foreach(var run in Model.Periods){<tr data-payroll-period="@run.Id"><td>@run.From.ToString("dd MMM yyyy") – @run.To.ToString("dd MMM yyyy")</td><td>@(run.BranchId.HasValue?Model.Branches.FirstOrDefault(b=>b.Id==run.BranchId)?.Name:"All branches")</td><td><span class="badge">@PayrollWorkflow.Label(run.Status)</span></td><td>@run.Revision</td><td><div class="actions"><a asp-page="./Payroll" asp-route-PeriodId="@run.Id" asp-route-Month="@run.From.ToString("yyyy-MM")" asp-route-PayrollBranchId="@run.BranchId" asp-fragment="payroll-register">Employee payroll</a><a asp-page="./Payroll" asp-route-PeriodId="@run.Id" asp-route-Month="@run.From.ToString("yyyy-MM")" asp-route-PayrollBranchId="@run.BranchId" asp-fragment="payroll-manage">Manage</a></div></td></tr>}
 </tbody></table></div>@if(Model.Periods.Count==0){<p>No payroll periods yet. <a href="#payroll-manage">Generate the first payroll</a>.</p>}</section>
 <section id="payroll-manage" data-workspace-panel>

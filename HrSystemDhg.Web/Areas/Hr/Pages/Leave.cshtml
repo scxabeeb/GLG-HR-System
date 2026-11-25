@@ -51,7 +51,7 @@
     @if (Model.Items.Count == 0) { <p>No requests match these filters.</p> }
     else
     {
-        <table>
+        <table data-registration-list="Leave-1">
             <thead><tr><th>Employee</th><th>Leave and dates</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>
             @foreach (var request in Model.Items)
@@ -93,7 +93,7 @@ else
     @if (Model.Balances.Count == 0) { <p>No employees with leave balances for this year.</p> }
     else
     {
-        <table>
+        <table data-registration-list="Leave-2">
             <thead><tr><th>Employee number</th><th>Employee</th><th>Leave type</th><th>Entitlement source</th><th>Approved days</th><th>Remaining days</th></tr></thead>
             <tbody>
             @foreach (var row in Model.Balances)

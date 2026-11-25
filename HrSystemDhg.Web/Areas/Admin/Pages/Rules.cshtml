@@ -67,7 +67,7 @@
 <div class="actions"><button>Save new effective version</button><a class="button secondary" href="/Admin/Settings">Main settings</a></div>
 </form>
 <section class="card table-scroll"><h2>Policy versions</h2>
-<table class="workspace-table"><thead><tr><th>Effective</th><th>Scope</th><th>Working days</th><th>Hours / break</th><th>Check-in / checkout (EAT)</th><th>Attendance credit</th><th>Manage</th></tr></thead><tbody>
+<table data-registration-list="Rules-1" class="workspace-table"><thead><tr><th>Effective</th><th>Scope</th><th>Working days</th><th>Hours / break</th><th>Check-in / checkout (EAT)</th><th>Attendance credit</th><th>Manage</th></tr></thead><tbody>
 @foreach(var r in Model.Rules){<tr>
 <td>@r.EffectiveFrom.ToString("dd MMM yyyy")</td>
 <td>@(Model.Branches.FirstOrDefault(x=>x.Id==r.BranchId)?.Name ?? "All branches") · @(Model.Departments.FirstOrDefault(x=>x.Id==r.DepartmentId)?.Name ?? "All departments") · @(Model.Shifts.FirstOrDefault(x=>x.Id==r.ShiftId)?.Name ?? "All shifts")</td>
@@ -82,7 +82,8 @@
 <form method="post" asp-page-handler="Shift" class="card"><h2>Add shift</h2><label>Name<input name="name" required /></label><button>Create shift</button></form>
 <form method="post" asp-page-handler="Holiday" class="card"><h2>Add public holiday</h2><label>Name<input name="name" required /></label><label>Date<input name="date" type="date" required /></label><label>Branch<select name="branchId"><option value="">All branches</option>@foreach(var b in Model.Branches){<option value="@b.Id">@b.Name</option>}</select></label><button>Add holiday</button></form>
 </div>
-<section class="card"><h2>Public holidays</h2>@foreach(var h in Model.Holidays){<form method="post" asp-page-handler="RemoveHoliday" class="inline"><input type="hidden" name="id" value="@h.Id"/><span>@h.Date.ToString("dd MMM yyyy") · @h.Name</span><button>Remove holiday</button></form>}</section>
+<section class="card"><h2>Registered shifts</h2><table data-registration-list="shifts"><thead><tr><th>Name</th><th>Status</th></tr></thead><tbody>@foreach(var shift in Model.RegisteredShifts){<tr><td>@shift.Name</td><td>@(shift.IsActive?"Active":"Inactive")</td></tr>}</tbody></table></section>
+<section class="card"><h2>Public holidays</h2><div data-registration-list="holidays">@foreach(var h in Model.Holidays){<form method="post" asp-page-handler="RemoveHoliday" class="inline"><input type="hidden" name="id" value="@h.Id"/><span>@h.Date.ToString("dd MMM yyyy") · @h.Name</span><button>Remove holiday</button></form>}</div></section>
 <script>
 (() => {
  const field = n => document.querySelector('[name="Rule.' + n + '"]');

@@ -21,7 +21,7 @@
     else
     {
         <div class="table-scroll">
-            <table>
+            <table data-registration-list="Devices-1">
                 <thead><tr><th>Device</th><th>Branch</th><th>Office / location</th><th>Serial number</th><th>Connection / IP</th><th>Status</th><th>Last contact (EAT)</th><th>Last upload (EAT)</th><th>Error</th><th>Actions</th></tr></thead>
                 <tbody>
                 @foreach (var registered in Model.ListedDevices)
@@ -60,7 +60,7 @@
     @if(Model.Items.Count==0){<p>No devices registered yet. Use the form above to add your first terminal.</p>}
     else
     {
-        <div class="table-scroll"><table id="registration-device-list"><thead><tr><th>Device</th><th>Branch</th><th>Office / location</th><th>Serial / IP</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        <div class="table-scroll"><table data-registration-list="Devices-2" id="registration-device-list"><thead><tr><th>Device</th><th>Branch</th><th>Office / location</th><th>Serial / IP</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @foreach(var registered in Model.Items.OrderBy(d=>d.Name))
         {
             <tr><td><strong>@registered.Name</strong><br /><small>@registered.Endpoint · #@registered.Id</small></td>
@@ -75,7 +75,7 @@
 </section>
 </section><section id="devices-config" data-workspace-panel><h2>Device configuration</h2><p>Expand a registered device to manage its branch, network pairing, employee sync and enrollment commands.</p>
 @if(Model.Items.Count == 0){<p class="notice">No devices registered. <a href="#devices-register">Register a device</a> to configure its connection.</p>}
-<div class="device-configurations">@foreach (var device in Model.Items)
+<div class="device-configurations" data-registration-list="device-configurations">@foreach (var device in Model.Items)
 {
     <details class="card workspace-tools" id="device-@device.Id"><summary>@device.Name · @(device.Location ?? device.Endpoint) · #@device.Id</summary><article>
         <h2>@device.Name <span class="badge">#@device.Id</span></h2>
