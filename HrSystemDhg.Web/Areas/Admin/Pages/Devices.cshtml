@@ -53,7 +53,27 @@
     <h2>Register a terminal</h2>
     <div class="grid"><label>Device name<input name="name" required maxlength="200" /></label><label>Branch<select name="branchId" required><option value="">Choose branch</option>@foreach(var branch in Model.Branches){<option value="@branch.Id">@branch.Name</option>}</select></label><label>Reference<input name="endpoint" /></label><label>Office / location<input name="location" maxlength="250" /></label></div>
     <button>Add device</button>
-</form></section><section id="devices-config" data-workspace-panel><h2>Device configuration</h2><p>Expand a registered device to manage its branch, network pairing, employee sync and enrollment commands.</p>
+</form>
+<section class="card" aria-labelledby="registered-below-title">
+    <div class="actions"><h2 id="registered-below-title">Registered devices <span class="badge">@Model.Items.Count</span></h2><a href="#devices-list">Full device status</a></div>
+    <p class="muted">Manage the terminals you have registered. Edit opens the device configuration.</p>
+    @if(Model.Items.Count==0){<p>No devices registered yet. Use the form above to add your first terminal.</p>}
+    else
+    {
+        <div class="table-scroll"><table id="registration-device-list"><thead><tr><th>Device</th><th>Branch</th><th>Office / location</th><th>Serial / IP</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        @foreach(var registered in Model.Items.OrderBy(d=>d.Name))
+        {
+            <tr><td><strong>@registered.Name</strong><br /><small>@registered.Endpoint · #@registered.Id</small></td>
+            <td>@(Model.Branches.FirstOrDefault(b=>b.Id==registered.BranchId)?.Name ?? "Unassigned branch")</td>
+            <td>@(registered.Location ?? "—")</td><td>@(registered.PushSerial ?? "Not paired")<br /><small>@(registered.PushAddress ?? "—")</small></td>
+            <td>@DevicesModel.ConnectionStatus(registered)</td>
+            <td><div class="actions"><a class="button secondary" href="#device-@registered.Id">Edit</a>
+            <form method="post" asp-page-handler="Delete" asp-route-id="@registered.Id" onsubmit="return confirm('Delete this unused device registration?')"><input type="hidden" name="returnToRegistration" value="true"/><button class="secondary">Delete</button></form></div></td></tr>
+        }
+        </tbody></table></div>
+    }
+</section>
+</section><section id="devices-config" data-workspace-panel><h2>Device configuration</h2><p>Expand a registered device to manage its branch, network pairing, employee sync and enrollment commands.</p>
 @if(Model.Items.Count == 0){<p class="notice">No devices registered. <a href="#devices-register">Register a device</a> to configure its connection.</p>}
 <div class="device-configurations">@foreach (var device in Model.Items)
 {

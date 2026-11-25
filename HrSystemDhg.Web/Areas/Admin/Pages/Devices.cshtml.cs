@@ -42,7 +42,7 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         return RedirectToPage(null, null, $"device-{id}");
     }
 
-    public async Task<IActionResult> OnPostDeleteAsync(int id)
+    public async Task<IActionResult> OnPostDeleteAsync(int id, bool returnToRegistration = false)
     {
         var device = await db.ZkDevices.FindAsync(id); if (device == null) return NotFound();
         if (await db.ZkPunchs.AnyAsync(p => p.DeviceId == id) || await db.ZkPunchReviews.AnyAsync(p => p.DeviceId == id) || await db.ZkDeviceCommands.AnyAsync(c => c.DeviceId == id))
@@ -52,7 +52,7 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         db.ZkDevices.Remove(device);
         db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Deleted unused device {id}: {device.Name}" });
         await db.SaveChangesAsync(); TempData["DeviceNotice"] = "Device deleted.";
-        return RedirectToPage(null, null, "devices-list");
+        return RedirectToPage(null, null, returnToRegistration ? "devices-register" : "devices-list");
     }
 
     public async Task<IActionResult> OnPostLocationAsync(int id, int? branchId, string? location)
@@ -113,8 +113,8 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         db.ZkDevices.Add(new() { Name = name.Trim(), Endpoint = string.IsNullOrWhiteSpace(endpoint) ? "Manual import" : endpoint.Trim(), BranchId = branchId, Location = string.IsNullOrWhiteSpace(location) ? null : location.Trim() });
         db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Added attendance device {name} for branch {branchId}" });
         await db.SaveChangesAsync();
-        TempData["DeviceNotice"] = "Attendance device registered for the selected branch.";
-        return RedirectToPage(null, null, "devices-list");
+        TempData["DeviceNotice"] = "Attendance device registered for the selected branch. It is listed below.";
+        return RedirectToPage(null, null, "devices-register");
     }
     public async Task<IActionResult> OnPostPushAsync(int id, string? serial, string? address, bool disable)
     {
