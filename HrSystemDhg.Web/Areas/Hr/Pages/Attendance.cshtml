@@ -21,11 +21,12 @@
 <a href="#attendance-review" data-workspace-link>Corrections &amp; device mapping</a>
 </nav>
 <section id="attendance-daily" data-workspace-panel aria-label="Daily attendance"><section class="card workspace-list">
-    <header class="workspace-list-heading"><h2>Daily attendance</h2><small>@Model.Items.Count records shown</small></header>
+    <header class="workspace-list-heading"><h2>Daily attendance</h2><small>@Model.Paging.TotalRecords matching records</small></header>
     <form method="get" asp-fragment="attendance-daily" class="attendance-filter-form">
         <label>Employee<select asp-for="EmployeeFilter"><option value="">All employees</option>@foreach(var employee in Model.Employees){<option value="@employee.Id">@employee.EmployeeNumber · @employee.FullName</option>}</select></label>
         <label>From<input asp-for="From" type="date" /></label><label>To<input asp-for="To" type="date" /></label>
-        <div class="actions"><button class="secondary">Apply filters</button><a asp-page="./Attendance" asp-route-From="@Model.From.ToString("yyyy-MM-dd")" asp-route-To="@Model.To.ToString("yyyy-MM-dd")" asp-fragment="attendance-daily">Clear employee</a></div>
+        <label>Records per page<select asp-for="RowsPerPage" onchange="this.form.requestSubmit()">@foreach(var size in HrSystemDhg.Web.Services.ListPager.Options){<option value="@size">@size</option>}</select></label>
+        <div class="actions"><button class="secondary">Apply filters</button><a asp-page="./Attendance" asp-route-From="@Model.From.ToString("yyyy-MM-dd")" asp-route-To="@Model.To.ToString("yyyy-MM-dd")" asp-route-RowsPerPage="@Model.RowsPerPage" asp-fragment="attendance-daily">Clear employee</a></div>
     </form>
     @if (Model.Items.Count == 0) { <p>No attendance summaries match this employee and date range.</p> }
     else
@@ -51,6 +52,7 @@
             </table>
         </div>
     }
+    <partial name="/Pages/Shared/_ListPager.cshtml" model="@(new HrSystemDhg.Web.Services.ListPagerView(Model.Paging, Model.PageLink))" />
 </section>
 </section>
 <section id="attendance-live" data-workspace-panel aria-label="Live punches"><section class="card" aria-labelledby="today-punches-title">

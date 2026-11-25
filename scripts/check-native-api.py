@@ -203,10 +203,15 @@ try:
             line=sql("SELECT MAX(Id) FROM "+database+".PayrollLines").strip()
             sql("INSERT INTO "+database+".PayrollDeductions (PayrollLineId,Date,Type,Calculated,Applied,Reason) VALUES ("+line+",'"+workday+"','Absence',15.38,15.38,'480 absent min x 0.032051 USD/min (basic / 26 / 480); check-in recorded, valid check-out missing')")
             sql("INSERT INTO "+database+".AttendanceDays (EmployeeId,Date,FirstIn,WorkedHours,LateMinutes,Status,ExpectedHours,EarlyMinutes,MissingMinutes,IsCorrected,StatusMessage) VALUES ("+employee+",'"+workday+"','"+workday+" 10:30:00',0,0,'Absent',8,0,480,0,'Check-in recorded; valid check-out missing.')")
+            values=[]
+            for offset in range(205):
+                paging_date=(datetime(2025,1,1)+timedelta(days=offset)).strftime('%Y-%m-%d')
+                values.append("("+employee+",'"+paging_date+"',8,0,'Present',8,0,0,0)")
+            sql("INSERT INTO "+database+".AttendanceDays (EmployeeId,Date,WorkedHours,LateMinutes,Status,ExpectedHours,EarlyMinutes,MissingMinutes,IsCorrected) VALUES "+','.join(values))
             payroll_fixture=(period,line)
         browserenv=os.environ.copy()
         browserenv.update({'E2E_USER':email,'E2E_PASSWORD':newpassword,'E2E_BASE':'http://127.0.0.1:5199'})
-        if payroll_fixture: browserenv.update({'E2E_PAYROLL_PERIOD':payroll_fixture[0],'E2E_PAYROLL_LINE':payroll_fixture[1]})
+        if payroll_fixture: browserenv.update({'E2E_PAYROLL_PERIOD':payroll_fixture[0],'E2E_PAYROLL_LINE':payroll_fixture[1],'E2E_ATTENDANCE_EMPLOYEE':employee})
         # Give the independent browser/authentication suite a fresh in-memory rate-limit budget.
         # The same disposable database and persisted test keys preserve all fixtures and tokens.
         process.terminate();process.wait(timeout=10)

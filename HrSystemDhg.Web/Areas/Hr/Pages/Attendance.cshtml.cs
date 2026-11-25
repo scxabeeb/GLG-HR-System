@@ -21,6 +21,10 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
         return $"{minutes / 60}h {minutes % 60:00}m";
     }
     [BindProperty(SupportsGet = true)] public int? EmployeeFilter { get; set; }
+    [BindProperty(SupportsGet = true)] public string RowsPerPage { get; set; }="20";
+    [BindProperty(SupportsGet = true)] public int PageNumber { get; set; }=1;
+    public ListPager Paging { get; private set; }=new("20",1,0);
+    public string PageLink(int number)=>(Url.Page("./Attendance",new{From=From.ToString("yyyy-MM-dd"),To=To.ToString("yyyy-MM-dd"),EmployeeFilter,RowsPerPage,PageNumber=number})??"")+"#attendance-daily";
     public List<AttendanceDay> Items = [];
     public List<Employee> Employees = [];
     public List<ZkDevice> Devices = [];
@@ -42,7 +46,11 @@ public class AttendanceModel(HrDbContext db, AttendanceService attendance, Calen
         ClockReviews = await VisibleClockReviews().AsNoTracking().Where(r => ClockHistory || r.ReviewedUtc == null).OrderByDescending(r => r.Id).Take(100).ToListAsync();
         Names = Employees.ToDictionary(x => x.Id, x => x.FullName);
         Devices = await db.ZkDevices.ToListAsync();
-        Items = await db.AttendanceDays.Where(x => x.Date >= From && x.Date <= To && (!EmployeeFilter.HasValue || x.EmployeeId==EmployeeFilter)).OrderByDescending(x => x.Date).Take(500).ToListAsync();
+        var filtered=db.AttendanceDays.AsNoTracking().Where(x => x.Date >= From && x.Date <= To && (!EmployeeFilter.HasValue || x.EmployeeId==EmployeeFilter));
+        Paging=new(RowsPerPage,PageNumber,await filtered.CountAsync());RowsPerPage=Paging.RowsPerPage;PageNumber=Paging.PageNumber;
+        var page=filtered.OrderByDescending(x=>x.Date).ThenBy(x=>x.EmployeeId).ThenBy(x=>x.Id).Skip(Paging.Skip).AsQueryable();
+        if(Paging.Size.HasValue)page=page.Take(Paging.Size.Value);
+        Items=await page.ToListAsync();
         if (!db.Scoped)
             Unmapped = await db.ZkPunchs.Where(x => !db.Employees.Any(e => e.ZkPin == x.Pin)).Select(x => x.Pin).Distinct().ToListAsync();
     }

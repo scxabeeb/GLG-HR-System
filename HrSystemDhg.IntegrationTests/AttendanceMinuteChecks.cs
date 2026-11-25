@@ -272,6 +272,25 @@ public static class AttendanceMinuteChecks
         check(await ZkAttendancePush.Poll(directContext,db,environment) is Microsoft.AspNetCore.Http.HttpResults.NotFound,"disabling direct mode revokes public terminal access immediately");
 
 
+        var paginationEmployee=new Employee{EmployeeNumber="PAGE"+key,WorkEmail="page"+key+"@example.test",ZkPin="PAGE"+key,FullName="Attendance paging fixture",HireDate=new(2025,1,1),RegisteredUtc=new(2025,1,1)};
+        db.Add(paginationEmployee);await db.SaveChangesAsync();
+        var firstDate=new DateTime(2025,1,1);
+        for(var i=0;i<601;i++)db.AttendanceDays.Add(new(){EmployeeId=paginationEmployee.Id,Date=firstDate.AddDays(i),Status="Present",WorkedHours=8,ExpectedHours=8});
+        await db.SaveChangesAsync();
+        var pagingModel=new HrSystemDhg.Web.Pages.Hr.AttendanceModel(db,attendance,calendar){From=firstDate,To=firstDate.AddDays(600),EmployeeFilter=paginationEmployee.Id};
+        await pagingModel.OnGetAsync();var firstPageIds=pagingModel.Items.Select(d=>d.Id).ToHashSet();
+        check(pagingModel.Items.Count==20 && pagingModel.Paging.TotalRecords==601 && pagingModel.Paging.TotalPages==31,"attendance defaults to 20 scoped matching records with the complete count beyond the old 500-row cap");
+        pagingModel.PageNumber=2;await pagingModel.OnGetAsync();
+        check(pagingModel.Items.Count==20 && !pagingModel.Items.Any(d=>firstPageIds.Contains(d.Id)) && pagingModel.Items.All(d=>d.EmployeeId==paginationEmployee.Id),"attendance page two preserves employee/date filtering without repeating records");
+        foreach(var size in new[]{"50","100","200","All"})
+        {
+            pagingModel.RowsPerPage=size;pagingModel.PageNumber=1;await pagingModel.OnGetAsync();
+            check(pagingModel.Items.Count==(size=="All"?601:int.Parse(size)),"attendance page size "+size+" returns the selected number of matching records");
+        }
+        pagingModel.RowsPerPage="20";pagingModel.PageNumber=int.MaxValue;await pagingModel.OnGetAsync();
+        check(pagingModel.PageNumber==31 && pagingModel.Items.Count==1,"out-of-range attendance page clamps to the final page");
+
+
 
     }
 }

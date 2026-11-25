@@ -1,0 +1,18 @@
+@model HrSystemDhg.Web.Services.ListPagerView
+<div class="list-pagination">
+    <p role="status">Showing <strong>@Model.Paging.First–@Model.Paging.Last</strong> of <strong>@Model.Paging.TotalRecords</strong> records</p>
+    @if(Model.Paging.TotalPages>1)
+    {
+        <nav aria-label="List pages" class="list-page-links">
+            @if(Model.Paging.PageNumber>1){<a href="@Model.PageUrl(1)" aria-label="First page">First</a><a href="@Model.PageUrl(Model.Paging.PageNumber-1)" rel="prev">Previous</a>}
+            else{<span aria-disabled="true">First</span><span aria-disabled="true">Previous</span>}
+            @for(var number=Math.Max(1,Model.Paging.PageNumber-2);number<=Math.Min(Model.Paging.TotalPages,Model.Paging.PageNumber+2);number++)
+            {
+                if(number==Model.Paging.PageNumber){<span aria-current="page">@number</span>}
+                else{<a href="@Model.PageUrl(number)" aria-label="Page @number">@number</a>}
+            }
+            @if(Model.Paging.PageNumber<Model.Paging.TotalPages){<a href="@Model.PageUrl(Model.Paging.PageNumber+1)" rel="next">Next</a><a href="@Model.PageUrl(Model.Paging.TotalPages)" aria-label="Last page">Last</a>}
+            else{<span aria-disabled="true">Next</span><span aria-disabled="true">Last</span>}
+        </nav>
+    }
+</div>
