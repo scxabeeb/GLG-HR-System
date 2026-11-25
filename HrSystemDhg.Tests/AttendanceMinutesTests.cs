@@ -5,7 +5,7 @@ using Xunit;
 public class AttendanceMinutesTests
 {
     private static readonly DateTime Day = new(2026, 11, 23);
-    private static readonly WorkRule Rule = new() { UsePunchWindows = true, StartHour = 6, StartMinute = 30, DailyHours = 8, BreakMinutes = 0, WorkingWeekdays = "0,1,2,3,4,6" };
+    private static readonly WorkRule Rule = new() { UsePunchWindows = true, CreditFullDayForValidPunches = false, CheckOutFrom = TimeSpan.FromHours(11.5), StartHour = 6, StartMinute = 30, DailyHours = 8, BreakMinutes = 0, WorkingWeekdays = "0,1,2,3,4,6" };
     [Theory]
     [InlineData(6, 30, true)] [InlineData(10, 30, true)] [InlineData(10, 31, false)] [InlineData(6, 29, false)]
     public void CheckInWindow(int hour, int minute, bool allowed) => Assert.Equal(allowed, AttendanceMinutes.CheckIn(Rule, Day.AddHours(hour).AddMinutes(minute)));
@@ -62,4 +62,26 @@ public class AttendanceMinutesTests
         Assert.Equal(25m, AttendanceMinutes.UnpaidLeaveDeduction(rule, 1500m, Day, [half, half]));
         Assert.Equal(0m, AttendanceMinutes.UnpaidLeaveDeduction(rule, 1500m, Day, []));
     }
+    [Theory]
+    [InlineData(6.5, 12.5)]
+    [InlineData(10.5, 12.5)]
+    [InlineData(10.5, 15.5)]
+    public void AnyValidWindowPairCreditsEightHours(double first, double last)
+    {
+        var rule = new WorkRule { UsePunchWindows = true, DailyHours = 8, BreakMinutes = 0 };
+        Assert.Equal(0, AttendanceMinutes.Missing(rule,Day,Day.AddHours(first),Day.AddHours(last),[]));
+        Assert.Equal(8m, AttendanceMinutes.CreditedHours(rule,Day,Day.AddHours(first),Day.AddHours(last),[]));
+        Assert.Equal(0m, PayrollSalaryPolicy.Deduction(rule,400m,AttendanceMinutes.Missing(rule,Day,Day.AddHours(first),Day.AddHours(last),[]),26));
+    }
+    [Fact]
+    public void InvalidOrMissingWindowPunchDoesNotEarnFullCredit()
+    {
+        var rule = new WorkRule { UsePunchWindows = true, DailyHours = 8 };
+        Assert.False(AttendanceMinutes.CheckOut(rule,Day.AddHours(12).AddMinutes(29)));
+        Assert.True(AttendanceMinutes.CheckOut(rule,Day.AddHours(12.5)));
+        Assert.False(AttendanceMinutes.ValidPair(rule,Day.AddHours(10.5),Day.AddHours(11.5)));
+        Assert.Equal(480,AttendanceMinutes.Missing(rule,Day,Day.AddHours(10.5),null,[]));
+        Assert.Equal(0m,AttendanceMinutes.CreditedHours(rule,Day,null,Day.AddHours(12.5),[]));
+    }
+
 }

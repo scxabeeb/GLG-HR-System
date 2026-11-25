@@ -13,3 +13,9 @@ HR preparation applies attendance deductions. Attendance waivers and net-pay ove
 Salary days are stored on each recalculated run, defaulting to 26. New payroll calculations use salary-based minute deductions, with daily required hours from the effective work rule; legacy fixed-rate settings are retained only as historical reference. Old run metadata stays null until recalculation, preserving paid snapshots. Recalculate unapproved runs to adopt the new policy before submission.
 
 Daily attendance entries carry rounding to keep their sum equal to the rounded monthly deduction. For example, 26 full absent days on a 400 salary deduct exactly 400, not 399.88 from independently rounding each day.
+
+From 24 November 2026, the default window policy credits the full eight-hour day for any valid check-in from 06:30–10:30 and checkout from 12:30–15:30 EAT. Elapsed time between these punches does not create a shortage. Original timestamps remain stored. Both punches are required; missing valid punches have an absence reason, with approved leave still excused. Rules expose a full-day-credit checkbox; turning it off retains actual-duration calculation. Older rule versions and paid payroll remain preserved. Rebuild attendance and recalculate unapproved runs to apply the effective policy.
+
+Payroll details show a deduction table with current attendance context and saved calculation amounts. Payslips show only the saved deduction breakdown so historical amounts are not inferred from newer attendance summaries.
+
+Deduction adjustments and waivers append their reasons instead of replacing the original formula, preserving the source explanation shown in payroll and payslip tables.

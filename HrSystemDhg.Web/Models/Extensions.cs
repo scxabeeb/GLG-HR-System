@@ -70,9 +70,10 @@ public partial class SalaryVersion
 public partial class WorkRule
 {
     public bool UsePunchWindows { get; set; }
+    public bool CreditFullDayForValidPunches { get; set; } = true;
     public TimeSpan CheckInFrom { get; set; } = new(6, 30, 0);
     public TimeSpan CheckInUntil { get; set; } = new(10, 30, 0);
-    public TimeSpan CheckOutFrom { get; set; } = new(11, 30, 0);
+    public TimeSpan CheckOutFrom { get; set; } = new(12, 30, 0);
     public TimeSpan CheckOutUntil { get; set; } = new(15, 30, 0);
     public string MinuteRateMode { get; set; } = "Salary";
     public decimal SalaryDivisor { get; set; } = 30;
@@ -99,6 +100,7 @@ public partial class AttendanceDay
     public int EarlyMinutes { get; set; }
     public bool IsCorrected { get; set; }
     public string? CorrectionReason { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(250)] public string? StatusMessage { get; set; }
 }
 
 public partial class LeaveType

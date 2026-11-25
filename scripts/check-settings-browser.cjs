@@ -183,6 +183,20 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  if(!await page.getByRole('heading',{name:'Payroll approval workflow',exact:true}).isVisible())throw Error('Payroll workflow page failed');
  if(!await page.getByRole('button',{name:'Generate payroll',exact:true}).count())throw Error('Administrator cannot prepare payroll');
  if(await page.locator('form[action*="handler=Generate"] input[name="SalaryDays"]').inputValue()!=='26')throw Error('Payroll default divisor is not 26');
+ if(process.env.E2E_PAYROLL_PERIOD){
+   await page.setViewportSize({width:1280,height:1000});
+   await page.goto(base+'/Management/Payroll?PeriodId='+process.env.E2E_PAYROLL_PERIOD+'#payroll-register');
+   await page.locator('[data-payroll-details="payroll-detail-'+process.env.E2E_PAYROLL_LINE+'"]').first().click();
+   const dialog=page.locator('dialog[open]');
+   if(!await dialog.locator('.payroll-deduction-table').isVisible() || !(await dialog.textContent()).includes('15.38') || !(await dialog.textContent()).includes('check-out missing'))throw Error('Payroll deduction table did not render saved causes and amounts');
+   await dialog.getByText('Current attendance',{exact:true}).click();
+   if(!(await dialog.locator('.deduction-attendance-context').textContent()).includes('10:30 AM'))throw Error('Current attendance context is missing');
+   await page.screenshot({path:'/private/tmp/garowe-payroll-deduction-table.png',fullPage:false});
+   await page.goto(base+'/Me/Payslip?id='+process.env.E2E_PAYROLL_LINE);
+   if(!await page.getByRole('heading',{name:'Attendance deduction breakdown',exact:true}).isVisible() || !(await page.locator('.payslip-deduction-breakdown').textContent()).includes('15.38'))throw Error('Payslip deduction table is missing');
+   await page.screenshot({path:'/private/tmp/garowe-payslip-deduction-table.png',fullPage:true});
+   console.log('PASS payroll and payslip deduction tables display source, saved formula and exact amounts');
+ }
  console.log('PASS payroll workflow page, clear approval stages and administrator preparation controls');
  if(errors.length) throw Error(errors.join('; '));
  } finally { await browser.close(); }

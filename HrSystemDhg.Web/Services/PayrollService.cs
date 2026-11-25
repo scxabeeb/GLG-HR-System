@@ -33,7 +33,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
             p.WorkingDays,
             p.BranchId ?? 0,
             p.AttendanceSalaryDays ?? 0,
-            "FullMonthlySalary-SalaryMinutes-v2"
+            "FullMonthlySalary-SalaryMinutes-WindowCredit-v3"
         };
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(data))));
     }
@@ -163,6 +163,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                         calculation = $"{chargeableMinutes} chargeable min × {PayrollSalaryPolicy.Rate(rule, salary.Basic, salaryDays):0.######} {salary.Currency}/min";
                     }
 
+                    if (!string.IsNullOrWhiteSpace(day.StatusMessage)) calculation = (calculation ?? kind) + " · " + day.StatusMessage;
                     if (amount > 0)
                     {
                         // Carry rounding across daily entries so their sum equals the rounded monthly formula.
@@ -177,7 +178,8 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
                 if (salary.OvertimeEligible && (working || rule.WeekendOvertime))
                 {
                     var approved = await db.OvertimeApprovals.Where(x => x.EmployeeId == e.Id && x.Date == date).SumAsync(x => (decimal? )x.Hours) ?? 0;
-                    var extra = Math.Max(0, day.WorkedHours - (working ? rule.DailyHours : 0));
+                    var actualHours = AttendanceMinutes.CreditsFullDay(rule) ? AttendanceMinutes.Worked(day.FirstIn, day.LastOut, rule.BreakMinutes) / 60m : day.WorkedHours;
+                    var extra = Math.Max(0, actualHours - (working ? rule.DailyHours : 0));
                     overtime += Math.Min(approved, extra) * (salary.Basic / workingDays / rule.DailyHours) * rule.OvertimeMultiplier;
                 }
             }
@@ -298,7 +300,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
         foreach (var entry in waived)
         {
             entry.Applied = 0;
-            entry.Reason = reason;
+            entry.Reason = string.IsNullOrWhiteSpace(entry.Reason) ? $"Waived: {reason}" : $"{entry.Reason} · Waived: {reason}";
         }
         await db.SaveChangesAsync();
         foreach (var group in waived.GroupBy(d => d.PayrollLineId))
@@ -318,7 +320,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
 
     public async Task AdjustAsync(int deductionId, decimal amount, string reason, string actor)
     {
-        if (string.IsNullOrWhiteSpace(reason) || amount < 0)
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > 500 || amount < 0)
             throw new InvalidOperationException("Provide a reason and nonnegative amount.");
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var d = await db.PayrollDeductions.SingleAsync(x => x.Id == deductionId);
@@ -327,7 +329,7 @@ public class PayrollService(HrDbContext db, CalendarService calendar, Attendance
         if (p.Status != "Calculated" || l.Revision != p.Revision)
             throw new InvalidOperationException("Only current calculated payroll can be adjusted.");
         d.Applied = amount;
-        d.Reason = reason;
+        d.Reason = string.IsNullOrWhiteSpace(d.Reason) ? $"Adjusted: {reason}" : $"{d.Reason} · Adjusted: {reason}";
         await db.SaveChangesAsync();
         l.AttendanceApplied = await db.PayrollDeductions.Where(x => x.PayrollLineId == l.Id).SumAsync(x => x.Applied);
         l.Net = l.NetOverride ?? Math.Max(0, l.Gross - l.AttendanceApplied - l.UnpaidLeave);

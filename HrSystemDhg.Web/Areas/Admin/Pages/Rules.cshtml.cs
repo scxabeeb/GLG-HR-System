@@ -14,7 +14,7 @@ public class RulesModel(HrDbContext db) : PageModel
     public WorkRule Rule { get; set; } = new()
     {
         EffectiveFrom = HrSystemDhg.Web.Services.BusinessClock.Today,
-        UsePunchWindows = true, StartHour = 6, StartMinute = 30, DailyHours = 8, BreakMinutes = 0, GraceMinutes = 0, WorkingWeekdays = "0,1,2,3,4,6"
+        UsePunchWindows = true, IncompletePolicy = "Absent", StartHour = 6, StartMinute = 30, DailyHours = 8, BreakMinutes = 0, GraceMinutes = 0, WorkingWeekdays = "0,1,2,3,4,6"
     };
 
     [BindProperty]
@@ -78,10 +78,12 @@ public class RulesModel(HrDbContext db) : PageModel
 
         if (Rule.UsePunchWindows) { Rule.StartHour = Rule.CheckInFrom.Hours; Rule.StartMinute = Rule.CheckInFrom.Minutes; }
         Rule.WorkingWeekdays = string.Join(",", Rule.WorkingWeekdays.Split(',').Select(int.Parse).Distinct().OrderBy(x => x));
+        if (AttendanceMinutes.CreditsFullDay(Rule)) Rule.IncompletePolicy = "Absent";
+        if (Rule.UsePunchWindows && Rule.CreditFullDayForValidPunches) Rule.IncompletePolicy = "Absent";
         Rule.Id = 0;
         db.WorkRules.Add(Rule);
         db.DeductionRules.Add(new() { EffectiveFrom = Rule.EffectiveFrom, BranchId = Rule.BranchId, AbsenceMultiplier = Absence, LatePerMinute = Late });
-        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action =  $"Added attendance rule from {Rule.EffectiveFrom:yyyy-MM-dd}; {Rule.DailyHours} hours, days {Rule.WorkingWeekdays}; {AttendanceMinutes.Formula(Rule)}" });
+        db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action =  $"Added attendance rule from {Rule.EffectiveFrom:yyyy-MM-dd}; {Rule.DailyHours} hours, days {Rule.WorkingWeekdays}; {(AttendanceMinutes.CreditsFullDay(Rule) ? "full-day credit for valid window pair; missing pair absent" : "actual-duration attendance")}" });
         await db.SaveChangesAsync();
         if (payrollId.HasValue)
             return RedirectToPage("/Payroll", null, new { area = "Management", PeriodId = payrollId }, $"payroll-{payrollId}");
@@ -116,13 +118,13 @@ public class RulesModel(HrDbContext db) : PageModel
         return RedirectToPage();
     }
 
-    private const string CsvColumns = "EffectiveFrom,BranchId,DepartmentId,ShiftId,DailyHours,StartHour,StartMinute,BreakMinutes,GraceMinutes,WorkingWeekdays,IncompletePolicy,OvertimeMultiplier,WeekendOvertime,Absence,Late,UsePunchWindows,CheckInFrom,CheckInUntil,CheckOutFrom,CheckOutUntil,MinuteRateMode,SalaryDivisor,FixedMinuteRate";
+    private const string CsvColumns = "EffectiveFrom,BranchId,DepartmentId,ShiftId,DailyHours,StartHour,StartMinute,BreakMinutes,GraceMinutes,WorkingWeekdays,IncompletePolicy,OvertimeMultiplier,WeekendOvertime,Absence,Late,UsePunchWindows,CheckInFrom,CheckInUntil,CheckOutFrom,CheckOutUntil,MinuteRateMode,SalaryDivisor,FixedMinuteRate,CreditFullDayForValidPunches";
 
     public IActionResult OnGetSample(string? dataset)
     {
         if (dataset == "shifts") return RegistrationCsv.Download("shifts-sample", "Name", [["Morning shift"]]);
         if (dataset == "holidays") return RegistrationCsv.Download("holidays-sample", "Name,Date,BranchId", [["Example holiday", BusinessClock.Today.AddDays(1), null]]);
-        return RegistrationCsv.Download("work-rules-sample", CsvColumns, [[BusinessClock.Today, null, null, null, 8, 6, 30, 0, 0, "0,1,2,3,4,6", "Flag", 1.5m, false, 1, 0, true, "06:30", "10:30", "11:30", "15:30", "Salary", 30, 0]]);
+        return RegistrationCsv.Download("work-rules-sample", CsvColumns, [[BusinessClock.Today, null, null, null, 8, 6, 30, 0, 0, "0,1,2,3,4,6", "Absent", 1.5m, false, 1, 0, true, "06:30", "10:30", "12:30", "15:30", "Salary", 26, 0, true]]);
     }
 
     public async Task<IActionResult> OnGetExportAsync(string? dataset)
@@ -141,7 +143,7 @@ public class RulesModel(HrDbContext db) : PageModel
         Response.Headers.CacheControl = "no-store";
         var deductions = (await db.DeductionRules.AsNoTracking().OrderByDescending(x => x.Id).ToListAsync())
             .ToLookup(x => (x.BranchId, x.EffectiveFrom));
-        return RegistrationCsv.Download("work-rules", CsvColumns, records.Select(x => new object?[] { x.EffectiveFrom, x.BranchId, x.DepartmentId, x.ShiftId, x.DailyHours, x.StartHour, x.StartMinute, x.BreakMinutes, x.GraceMinutes, x.WorkingWeekdays, x.IncompletePolicy, x.OvertimeMultiplier, x.WeekendOvertime, deductions[(x.BranchId, x.EffectiveFrom)].FirstOrDefault()?.AbsenceMultiplier, deductions[(x.BranchId, x.EffectiveFrom)].FirstOrDefault()?.LatePerMinute, x.UsePunchWindows, x.CheckInFrom, x.CheckInUntil, x.CheckOutFrom, x.CheckOutUntil, x.MinuteRateMode, x.SalaryDivisor, x.FixedMinuteRate }));
+        return RegistrationCsv.Download("work-rules", CsvColumns, records.Select(x => new object?[] { x.EffectiveFrom, x.BranchId, x.DepartmentId, x.ShiftId, x.DailyHours, x.StartHour, x.StartMinute, x.BreakMinutes, x.GraceMinutes, x.WorkingWeekdays, x.IncompletePolicy, x.OvertimeMultiplier, x.WeekendOvertime, deductions[(x.BranchId, x.EffectiveFrom)].FirstOrDefault()?.AbsenceMultiplier, deductions[(x.BranchId, x.EffectiveFrom)].FirstOrDefault()?.LatePerMinute, x.UsePunchWindows, x.CheckInFrom, x.CheckInUntil, x.CheckOutFrom, x.CheckOutUntil, x.MinuteRateMode, x.SalaryDivisor, x.FixedMinuteRate, x.CreditFullDayForValidPunches }));
     }
 
     public Task<IActionResult> OnPostImportAsync(IFormFile? upload, string? dataset)
@@ -174,6 +176,7 @@ public class RulesModel(HrDbContext db) : PageModel
             Rule.MinuteRateMode = row.Get<string>("MinuteRateMode");
             Rule.SalaryDivisor = row.Get<decimal>("SalaryDivisor");
             Rule.FixedMinuteRate = row.Get<decimal>("FixedMinuteRate");
+            Rule.CreditFullDayForValidPunches = row.Get<bool>("CreditFullDayForValidPunches");
             Rule.EffectiveFrom = row.Get<DateTime>("EffectiveFrom");
             Rule.BranchId = row.Get<int?>("BranchId");
             Rule.DepartmentId = row.Get<int?>("DepartmentId");

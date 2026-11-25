@@ -17,7 +17,7 @@ public static class AttendanceMinuteChecks
         var department = new Department { Name = "Minute checks", Code = key, BranchId = branch.Id };
         db.Add(department); await db.SaveChangesAsync();
         db.EmployeeAssignments.Add(new() { EmployeeId = employee.Id, BranchId = branch.Id, DepartmentId = department.Id, EffectiveFrom = date });
-        db.WorkRules.Add(new() { BranchId = branch.Id, EffectiveFrom = date, UsePunchWindows = true, DailyHours = 8, StartHour = 6, StartMinute = 30, BreakMinutes = 0, GraceMinutes = 0, WorkingWeekdays = "0,1,2,3,4,6" });
+        db.WorkRules.Add(new() { BranchId = branch.Id, EffectiveFrom = date, UsePunchWindows = true, CreditFullDayForValidPunches = false, DailyHours = 8, StartHour = 6, StartMinute = 30, BreakMinutes = 0, GraceMinutes = 0, WorkingWeekdays = "0,1,2,3,4,6" });
         db.SalaryVersions.Add(new() { EmployeeId = employee.Id, EffectiveFrom = date, Basic = 1500, IsDraft = false });
         db.ZkPunchs.AddRange(new() { DeviceId = device.Id, Pin = key, PunchTime = date.AddHours(10.5) }, new() { DeviceId = device.Id, Pin = key, PunchTime = date.AddHours(15.5) });
         await db.SaveChangesAsync();
@@ -33,6 +33,7 @@ public static class AttendanceMinuteChecks
         await new PayrollService(db, calendar, attendance).WaiveAttendanceAsync(period.Id, employee.Id, "Fixture waiver", "minute-fixture");
         await db.Entry(line).ReloadAsync();
         check(line.AttendanceApplied == 0 && line.Net == 1500m, "attendance waivers also cover missing-minute deductions");
+        check(await db.PayrollDeductions.AnyAsync(d=>d.PayrollLineId==line.Id && d.Reason!=null && d.Reason.Contains("basic ÷ 26") && d.Reason.Contains("Fixture waiver")), "waiver preserves the original deduction formula for the breakdown table");
         // Regression for the reported 400 -> 92.31 proration: six eligible days in a 26-day month.
         var fullSalaryBranch = new Branch { Name = "Full salary " + key, Code = "FULL" + key };
         db.Branchs.Add(fullSalaryBranch); await db.SaveChangesAsync();
@@ -43,7 +44,7 @@ public static class AttendanceMinuteChecks
         db.Employees.Add(fullSalaryEmployee); await db.SaveChangesAsync();
         db.EmployeeAssignments.Add(new() { EmployeeId = fullSalaryEmployee.Id, BranchId = fullSalaryBranch.Id, DepartmentId = fullSalaryDept.Id, EffectiveFrom = hire });
         db.SalaryVersions.Add(new() { EmployeeId = fullSalaryEmployee.Id, Basic = 400m, EffectiveFrom = hire, IsDraft = false });
-        db.WorkRules.Add(new() { BranchId = fullSalaryBranch.Id, EffectiveFrom = new(2026,11,1), DailyHours = 8, BreakMinutes = 0, UsePunchWindows = true, WorkingWeekdays = "0,1,2,3,4,6" });
+        db.WorkRules.Add(new() { BranchId = fullSalaryBranch.Id, EffectiveFrom = new(2026,11,1), DailyHours = 8, BreakMinutes = 0, UsePunchWindows = true, CreditFullDayForValidPunches = false, WorkingWeekdays = "0,1,2,3,4,6" });
         for(var d=hire; d<=new DateTime(2026,11,30); d=d.AddDays(1))
         {
             if(d.DayOfWeek==DayOfWeek.Friday)continue;
@@ -68,6 +69,50 @@ public static class AttendanceMinuteChecks
         await fullSalaryPayroll.CalculateAsync(fullSalaryPeriod.Id,true,"full-month-absence");
         var absentLine = await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==fullSalaryPeriod.Id && l.Revision==3);
         check(absentLine.Basic==400m && absentLine.AttendanceApplied==400m && absentLine.Net==0m,"26 absent days deduct exactly the full 400 salary without daily-rounding residue");
+        // The new policy credits any valid window pair, independently of elapsed time.
+        var creditDate = new DateTime(2026,11,24);
+        var creditBranch = new Branch { Name = "Window credit " + key, Code = "CREDIT" + key };
+        db.Branchs.Add(creditBranch);await db.SaveChangesAsync();
+        var creditDept = new Department { Name = "Window credit", Code = "CREDIT" + key, BranchId = creditBranch.Id };
+        db.Departments.Add(creditDept);await db.SaveChangesAsync();
+        var creditEmployee = new Employee { EmployeeNumber="CREDIT"+key, FullName="Window credit fixture", WorkEmail="credit"+key+"@example.test", HireDate=creditDate, RegistrationComplete=true, ZkPin="CREDIT"+key };
+        db.Employees.Add(creditEmployee);await db.SaveChangesAsync();
+        db.EmployeeAssignments.Add(new(){EmployeeId=creditEmployee.Id,BranchId=creditBranch.Id,DepartmentId=creditDept.Id,EffectiveFrom=creditDate});
+        db.SalaryVersions.Add(new(){EmployeeId=creditEmployee.Id,Basic=400m,EffectiveFrom=creditDate,IsDraft=false});
+        var creditRule = new WorkRule { BranchId=creditBranch.Id,EffectiveFrom=creditDate,UsePunchWindows=true,CreditFullDayForValidPunches=true,DailyHours=8,BreakMinutes=0,IncompletePolicy="Absent",WorkingWeekdays="0,1,2,3,4,6" };
+        db.WorkRules.Add(creditRule);
+        db.ZkPunchs.AddRange(new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=creditDate.AddHours(10.5)},new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=creditDate.AddHours(12.5)});
+        var creditPeriod = new PayrollPeriod {BranchId=creditBranch.Id,From=creditDate,To=creditDate};db.PayrollPeriods.Add(creditPeriod);await db.SaveChangesAsync();
+        await attendance.RebuildAsync(creditEmployee.Id,creditDate);
+        var creditedDay=await db.AttendanceDays.SingleAsync(d=>d.EmployeeId==creditEmployee.Id && d.Date==creditDate);
+        check(creditedDay.WorkedHours==8m && creditedDay.MissingMinutes==0 && creditedDay.Status=="Present" && creditedDay.FirstIn==creditDate.AddHours(10.5) && creditedDay.LastOut==creditDate.AddHours(12.5),"10:30 check-in and 12:30 checkout credit eight hours while retaining actual times");
+        await fullSalaryPayroll.CalculateAsync(creditPeriod.Id,true,"window-credit");
+        var creditLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==creditPeriod.Id && l.Revision==1);
+        check(creditLine.Basic==400m && creditLine.AttendanceApplied==0m && creditLine.Net==400m,"valid window pair causes no attendance deduction despite two elapsed hours");
+        db.ZkPunchs.AddRange(new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=creditDate.AddHours(6.5)},new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=creditDate.AddHours(15.5)});await db.SaveChangesAsync();
+        await attendance.RebuildAsync(creditEmployee.Id,creditDate);
+        check(creditedDay.WorkedHours==8m && creditedDay.FirstIn==creditDate.AddHours(6.5) && creditedDay.LastOut==creditDate.AddHours(15.5),"multiple scans retain earliest valid check-in and latest valid checkout with eight-hour credit");
+        db.ZkPunchs.RemoveRange(await db.ZkPunchs.Where(p=>p.Pin==creditEmployee.ZkPin && p.PunchTime<creditDate.AddHours(11)).ToListAsync());await db.SaveChangesAsync();
+        await attendance.RebuildAsync(creditEmployee.Id,creditDate);
+        check(creditedDay.Status=="Absent" && creditedDay.MissingMinutes==480 && creditedDay.StatusMessage!.Contains("check-in missing"),"checkout-only window attendance is absent with a missing check-in reason");
+        await fullSalaryPayroll.CalculateAsync(creditPeriod.Id,true,"window-credit");
+        creditLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==creditPeriod.Id && l.Revision==2);
+        check(creditLine.AttendanceApplied==15.38m && creditLine.Net==384.62m,"missing valid check-in deducts one unexcused day using basic divided by 26");
+        db.ZkPunchs.RemoveRange(await db.ZkPunchs.Where(p=>p.Pin==creditEmployee.ZkPin).ToListAsync());
+        db.ZkPunchs.AddRange(new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=creditDate.AddHours(10.5)},new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=creditDate.AddHours(12).AddMinutes(29)});await db.SaveChangesAsync();
+        await attendance.RebuildAsync(creditEmployee.Id,creditDate);
+        check(creditedDay.Status=="Absent" && creditedDay.LastOut==null && creditedDay.StatusMessage!.Contains("check-out missing"),"12:29 checkout is preserved raw but excluded from the 12:30 window");
+        var creditLeaveType=new LeaveType{Name="Window paid "+key,IsPaid=true};db.LeaveTypes.Add(creditLeaveType);await db.SaveChangesAsync();
+        var creditLeave=new LeaveRequest{EmployeeId=creditEmployee.Id,LeaveTypeId=creditLeaveType.Id,From=creditDate,To=creditDate,Status="Approved",Reason="Window leave fixture"};db.LeaveRequests.Add(creditLeave);await db.SaveChangesAsync();
+        await fullSalaryPayroll.CalculateAsync(creditPeriod.Id,true,"window-credit");
+        creditLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==creditPeriod.Id && l.Revision==3);
+        check(creditLine.AttendanceApplied==0m && creditLine.Net==400m && creditedDay.Status=="On leave","approved full paid leave excuses missing punches under window credit");
+        creditLeave.StartTime=TimeSpan.FromHours(6.5);creditLeave.EndTime=TimeSpan.FromHours(10.5);
+        db.ZkPunchs.Add(new(){DeviceId=device.Id,Pin=creditEmployee.ZkPin!,PunchTime=creditDate.AddHours(12.5)});await db.SaveChangesAsync();
+        await fullSalaryPayroll.CalculateAsync(creditPeriod.Id,true,"window-credit");
+        creditLine=await db.PayrollLines.SingleAsync(l=>l.PayrollPeriodId==creditPeriod.Id && l.Revision==4);
+        check(creditedDay.WorkedHours==4m && creditedDay.MissingMinutes==0 && creditLine.AttendanceApplied==0m && creditLine.Net==400m,"partial paid leave plus valid window pair satisfies the full day without double credit");
+        check(await db.WorkRules.AnyAsync(r=>r.BranchId==null && r.EffectiveFrom==new DateTime(2026,11,23) && !r.CreditFullDayForValidPunches) && await db.WorkRules.AnyAsync(r=>r.BranchId==null && r.EffectiveFrom==creditDate && r.CreditFullDayForValidPunches && r.CheckOutFrom==TimeSpan.FromHours(12.5)),"window-credit migration preserves earlier rules and installs the new effective 12:30 checkout rule");
         var friday = date.AddDays(4);
         await attendance.RebuildAsync(employee.Id, friday);
         var weekend = await db.AttendanceDays.SingleAsync(d => d.EmployeeId == employee.Id && d.Date == friday);

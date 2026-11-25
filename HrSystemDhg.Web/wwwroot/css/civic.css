@@ -543,3 +543,9 @@
 @media(max-width:480px){.registration-fields,.registration-aside{grid-template-columns:1fr}.employee-registration .registration-footer{align-items:stretch;flex-direction:column}.registration-footer .actions{display:grid;grid-template-columns:1fr 1.5fr}.registration-footer .actions>*{text-align:center;font-size:.8rem}.registration-section>.registration-section-heading{margin-bottom:1rem}}
 
 .employee-registration .registration-footer{color:var(--civic-ink)}
+
+.attendance-status-message{display:block;max-width:30ch;margin-top:.3rem;color:#64748b}.payroll-deduction-table td{vertical-align:top}.payroll-deduction-table td:nth-child(3){min-width:230px;white-space:normal}.payroll-deduction-table tfoot{font-weight:700}.payslip-deduction-breakdown{padding:1.2rem 0;max-width:none}.payslip-deduction-breakdown td{vertical-align:top;white-space:normal}.payslip-deduction-breakdown th,.payslip-deduction-breakdown td{padding:.65rem;font-size:.8rem}
+
+.civic-content .payroll-deduction-link{padding:0;border:0;min-height:32px;background:transparent;color:var(--civic-blue);font:inherit;text-decoration:underline;cursor:pointer}.civic-content .payroll-deduction-link:hover{background:#eef3ff;color:#163b9b}
+
+.payroll-detail:has(.payroll-deduction-table){width:min(1180px,96vw);max-width:96vw}.payroll-deduction-table :is(th,td){padding:.65rem;font-size:.8rem}.payroll-deduction-table td:nth-child(n+4):nth-child(-n+6),.payslip-deduction-breakdown td:nth-child(n+4){white-space:nowrap;text-align:right}.deduction-attendance-context{display:grid;grid-template-columns:1fr auto;gap:.3rem .6rem;margin:.7rem 0;font-size:.75rem}.deduction-attendance-context :is(dt,dd){margin:0}.deduction-attendance-context dt{color:#64748b}.payroll-deduction-table details>summary{font-size:.75rem}

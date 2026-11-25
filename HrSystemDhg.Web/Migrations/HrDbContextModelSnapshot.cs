@@ -355,6 +355,10 @@ namespace HrSystemDhg.Web.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<string>("StatusMessage")
+                        .HasMaxLength(250)
+                        .HasColumnType("varchar(250)");
+
                     b.Property<decimal>("WorkedHours")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1921,6 +1925,9 @@ namespace HrSystemDhg.Web.Migrations
 
                     b.Property<TimeSpan>("CheckOutUntil")
                         .HasColumnType("time(6)");
+
+                    b.Property<bool>("CreditFullDayForValidPunches")
+                        .HasColumnType("tinyint(1)");
 
                     b.Property<decimal>("DailyHours")
                         .HasPrecision(18, 2)

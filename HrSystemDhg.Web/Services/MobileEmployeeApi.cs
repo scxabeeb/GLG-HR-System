@@ -108,9 +108,9 @@ public static class MobileEmployeeApi
         {
             var records = await db.AttendanceDays.AsNoTracking().Where(d => d.EmployeeId == employeeId)
                 .OrderByDescending(d => d.Date).Take(PageSize)
-                .Select(d => new { d.Date, d.Status, d.FirstIn, d.LastOut, d.WorkedHours, d.LateMinutes, d.MissingMinutes }).ToListAsync(ct);
+                .Select(d => new { d.Date, d.Status, d.FirstIn, d.LastOut, d.WorkedHours, d.LateMinutes, d.MissingMinutes, d.StatusMessage }).ToListAsync(ct);
             return Rows(records.Select(d => new Row(d.Date.ToString("dd MMM yyyy"), d.Status,
-                $"Time in {d.FirstIn?.ToString("hh:mm tt") ?? "—"} EAT · Time out {d.LastOut?.ToString("hh:mm tt") ?? "—"} · {d.WorkedHours:0.##} hours · {d.LateMinutes} min late · {d.MissingMinutes} min missing · EAT (UTC+3)")));
+                $"Time in {d.FirstIn?.ToString("hh:mm tt") ?? "—"} EAT · Time out {d.LastOut?.ToString("hh:mm tt") ?? "—"} · {d.WorkedHours:0.##} credited hours · {d.LateMinutes} min late · {d.MissingMinutes} min missing · {d.StatusMessage} · EAT (UTC+3)")));
         }
 
         if (section == "payroll")

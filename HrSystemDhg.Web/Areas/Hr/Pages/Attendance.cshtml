@@ -32,7 +32,7 @@
     {
         <div class="table-scroll">
             <table class="workspace-table">
-                <thead><tr><th>Employee</th><th>Date</th><th>Time in (EAT)</th><th>Time out (EAT)</th><th>Worked / scheduled</th><th>Late / early</th><th>Missing minutes</th><th>Status</th></tr></thead>
+                <thead><tr><th>Employee</th><th>Date</th><th>Time in (EAT)</th><th>Time out (EAT)</th><th>Credited / scheduled</th><th>Late / early</th><th>Missing minutes</th><th>Status</th></tr></thead>
                 <tbody>
                 @foreach (var day in Model.Items)
                 {
@@ -44,7 +44,7 @@
                         <td>@(day.LastOut?.ToString("hh:mm tt") ?? "—")</td>
                         <td>@day.WorkedHours.ToString("0.##") / @day.ExpectedHours.ToString("0.##") hrs</td>
                         <td>@day.LateMinutes / @day.EarlyMinutes min</td><td>@day.MissingMinutes min</td>
-                        <td><span class="badge @tone">@day.Status</span>@if (day.IsCorrected) { <small> · Corrected</small> }</td>
+                        <td><span class="badge @tone">@day.Status</span>@if(!string.IsNullOrWhiteSpace(day.StatusMessage)){<small class="attendance-status-message">@day.StatusMessage</small>}@if(!string.IsNullOrEmpty(day.StatusMessage)){<small class="attendance-status-message">@day.StatusMessage</small>}@if(!string.IsNullOrWhiteSpace(day.StatusMessage)){<small class="attendance-status-message">@day.StatusMessage</small>}@if (day.IsCorrected) { <small> · Corrected</small> }</td>
                     </tr>
                 }
                 </tbody>

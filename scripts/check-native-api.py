@@ -176,8 +176,28 @@ try:
         import runpy
         runpy.run_path(str(root/'scripts/check-office-connector.py'))['run'](root,database,sql)
     if os.environ.get('DHG_SETTINGS_BROWSER_CHECK') == '1':
+        payroll_fixture = None
+        if os.environ.get('DHG_PAYROLL_TABLE_CHECK') == '1':
+            from datetime import datetime, timezone, timedelta
+            today=datetime.now(timezone.utc)+timedelta(hours=3)
+            workday=today.strftime('%Y-%m-%d');month=today.strftime('%Y-%m-01')
+            sql("INSERT INTO "+database+".Branchs (Name,Code,City,Address,Timezone,IsActive) VALUES ('Deduction table fixture','DEDTABLE','','','Africa/Mogadishu',1)")
+            branch=sql("SELECT Id FROM "+database+".Branchs WHERE Code='DEDTABLE'").strip()
+            sql("INSERT INTO "+database+".Departments (Name,Code,BranchId,IsActive,RequiresSubDepartment) VALUES ('Payroll fixture','DEDTABLE',"+branch+",1,0)")
+            department=sql("SELECT Id FROM "+database+".Departments WHERE Code='DEDTABLE'").strip()
+            sql("INSERT INTO "+database+".Employees (EmployeeNumber,FullName,WorkEmail,HireDate,Status,RegistrationComplete,Phone,Gender,Nationality,PersonalEmail,Address,EmergencyContact,EmergencyRelation,EmergencyPhone,MaritalStatus,Dependents,EmploymentType) VALUES ('PAY-TABLE','Deduction table employee','paytable@example.test','"+month+"','Active',1,'','','','','','','','','',0,'Permanent')")
+            employee=sql("SELECT Id FROM "+database+".Employees WHERE EmployeeNumber='PAY-TABLE'").strip()
+            sql("INSERT INTO "+database+".EmployeeAssignments (EmployeeId,BranchId,DepartmentId,JobTitle,EffectiveFrom,Grade) VALUES ("+employee+","+branch+","+department+",'Officer','"+month+"','')")
+            sql("INSERT INTO "+database+".PayrollPeriods (`From`,`To`,WorkingDays,BranchId,Status,Revision,SourceHash,AttendanceSalaryDays) VALUES ('"+month+"','"+workday+"',0,"+branch+",'Calculated',1,'',26)")
+            period=sql("SELECT MAX(Id) FROM "+database+".PayrollPeriods").strip()
+            sql("INSERT INTO "+database+".PayrollLines (PayrollPeriodId,EmployeeId,Revision,BranchId,DepartmentId,Basic,AllowanceTotal,Overtime,Gross,AttendanceCalculated,AttendanceApplied,UnpaidLeave,Net,Currency) VALUES ("+period+","+employee+",1,"+branch+","+department+",400,0,0,400,15.38,15.38,0,384.62,'USD')")
+            line=sql("SELECT MAX(Id) FROM "+database+".PayrollLines").strip()
+            sql("INSERT INTO "+database+".PayrollDeductions (PayrollLineId,Date,Type,Calculated,Applied,Reason) VALUES ("+line+",'"+workday+"','Absence',15.38,15.38,'480 absent min x 0.032051 USD/min (basic / 26 / 480); check-in recorded, valid check-out missing')")
+            sql("INSERT INTO "+database+".AttendanceDays (EmployeeId,Date,FirstIn,WorkedHours,LateMinutes,Status,ExpectedHours,EarlyMinutes,MissingMinutes,IsCorrected,StatusMessage) VALUES ("+employee+",'"+workday+"','"+workday+" 10:30:00',0,0,'Absent',8,0,480,0,'Check-in recorded; valid check-out missing.')")
+            payroll_fixture=(period,line)
         browserenv=os.environ.copy()
         browserenv.update({'E2E_USER':email,'E2E_PASSWORD':newpassword,'E2E_BASE':'http://127.0.0.1:5199'})
+        if payroll_fixture: browserenv.update({'E2E_PAYROLL_PERIOD':payroll_fixture[0],'E2E_PAYROLL_LINE':payroll_fixture[1]})
         subprocess.run(['node',str(root/'scripts/check-settings-browser.cjs')],env=browserenv,check=True)
     token=administrator
     req('v2/auth/logout',{});req('v2/auth/me',expected=401)

@@ -48,4 +48,8 @@
     <p>Calculated attendance deductions @line.AttendanceCalculated.ToString("N2") · Waived @Math.Max(0, line.AttendanceCalculated - line.AttendanceApplied).ToString("N2")</p>
     @if (line.NetOverride.HasValue) { <p>Manual net adjustment · @line.OverrideReason</p> }
     <small>Revision @line.Revision</small>
+    <section class="payslip-deduction-breakdown"><h2>Attendance deduction breakdown</h2><p>Saved amounts for this payslip. The reason column shows the attendance issue and calculation used.</p>
+    @if(Model.Deductions.Count==0){<p>No attendance deductions were calculated.</p>}
+    else{<div class="table-scroll"><table><thead><tr><th>Date</th><th>Cause</th><th>Calculation / reason</th><th>Calculated</th><th>Applied</th><th>Waived</th></tr></thead><tbody>@foreach(var d in Model.Deductions){<tr><td>@d.Date.ToString("dd MMM yyyy")</td><td>@d.Type</td><td>@d.Reason</td><td>@line.Currency @d.Calculated.ToString("N2")</td><td>@line.Currency @d.Applied.ToString("N2")</td><td>@line.Currency @Math.Max(0,d.Calculated-d.Applied).ToString("N2")</td></tr>}</tbody><tfoot><tr><th colspan="3">Total attendance deductions</th><td>@line.Currency @Model.Deductions.Sum(d=>d.Calculated).ToString("N2")</td><td>@line.Currency @Model.Deductions.Sum(d=>d.Applied).ToString("N2")</td><td>@line.Currency @Model.Deductions.Sum(d=>Math.Max(0,d.Calculated-d.Applied)).ToString("N2")</td></tr></tfoot></table></div>}
+    </section>
 </article>

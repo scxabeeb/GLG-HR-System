@@ -13,6 +13,7 @@ public class PayslipModel(HrDbContext db) : PageModel
     public PayrollLine Line = null !;
     public PayrollPeriod Period = null !;
     public Employee Employee = null !;
+    public List<PayrollDeduction> Deductions = [];
     public async Task<IActionResult> OnGetAsync(int id)
     {
         var line = await db.PayrollLines.SingleOrDefaultAsync(x => x.Id == id);
@@ -25,6 +26,7 @@ public class PayslipModel(HrDbContext db) : PageModel
                 return NotFound();
         }
 
+        Deductions = await db.PayrollDeductions.AsNoTracking().Where(d=>d.PayrollLineId==id).OrderBy(d=>d.Date).ThenBy(d=>d.Id).ToListAsync();
         Line = line;
         Period = await db.PayrollPeriods.SingleAsync(x => x.Id == line.PayrollPeriodId);
         Employee = await db.Employees.SingleAsync(x => x.Id == line.EmployeeId);

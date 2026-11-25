@@ -33,13 +33,14 @@
 </div>
 <p>Worked minutes = time out − time in − unpaid break. Approved leave reduces required attendance minutes. Non-working days and holidays have no attendance deduction.</p>
 <hr /><h2>3. Check-in and checkout windows</h2>
-<label class="inline"><input asp-for="Rule.UsePunchWindows" /> Use attendance windows and deduct minutes short of the daily requirement</label>
+<label class="inline"><input asp-for="Rule.UsePunchWindows" /> Use attendance time windows</label>
 <div class="grid">
 <label>Check-in opens (EAT)<input name="Rule.CheckInFrom" type="time" value='@Model.Rule.CheckInFrom.ToString(@"hh\:mm")' required /></label>
 <label>Check-in closes (EAT)<input name="Rule.CheckInUntil" type="time" value='@Model.Rule.CheckInUntil.ToString(@"hh\:mm")' required /></label>
 <label>Checkout opens (EAT)<input name="Rule.CheckOutFrom" type="time" value='@Model.Rule.CheckOutFrom.ToString(@"hh\:mm")' required /></label>
 <label>Checkout closes (EAT)<input name="Rule.CheckOutUntil" type="time" value='@Model.Rule.CheckOutUntil.ToString(@"hh\:mm")' required /></label>
 </div>
+<label class="inline"><input asp-for="Rule.CreditFullDayForValidPunches" /> Credit the full scheduled day when both punches are within their windows</label><p>With full-day credit enabled, any valid pair counts as the required daily hours, even when less time passes between punches. Actual punch timestamps remain unchanged. Both punches are required; an incomplete pair is absent with a reason. The incomplete-punch policy below applies when full-day credit is disabled.</p>
 <p>Punches outside the windows remain in the raw log. A missing valid check-in or checkout follows the incomplete-punch policy below.</p>
 <hr /><h2>4. Deduction formula and rate</h2>
 <div class="grid">
@@ -66,14 +67,14 @@
 <div class="actions"><button>Save new effective version</button><a class="button secondary" href="/Admin/Settings">Main settings</a></div>
 </form>
 <section class="card table-scroll"><h2>Policy versions</h2>
-<table class="workspace-table"><thead><tr><th>Effective</th><th>Scope</th><th>Working days</th><th>Hours / break</th><th>Check-in / checkout (EAT)</th><th>Deduction</th><th>Manage</th></tr></thead><tbody>
+<table class="workspace-table"><thead><tr><th>Effective</th><th>Scope</th><th>Working days</th><th>Hours / break</th><th>Check-in / checkout (EAT)</th><th>Attendance credit</th><th>Manage</th></tr></thead><tbody>
 @foreach(var r in Model.Rules){<tr>
 <td>@r.EffectiveFrom.ToString("dd MMM yyyy")</td>
 <td>@(Model.Branches.FirstOrDefault(x=>x.Id==r.BranchId)?.Name ?? "All branches") · @(Model.Departments.FirstOrDefault(x=>x.Id==r.DepartmentId)?.Name ?? "All departments") · @(Model.Shifts.FirstOrDefault(x=>x.Id==r.ShiftId)?.Name ?? "All shifts")</td>
 <td>@string.Join(", ", r.WorkingWeekdays.Split(',').Select(n=>dayNames[int.Parse(n)]))</td>
 <td>@r.DailyHours hours / @r.BreakMinutes min</td>
 <td>@if(r.UsePunchWindows){<span>@r.CheckInFrom.ToString(@"hh\:mm")–@r.CheckInUntil.ToString(@"hh\:mm")<br />@r.CheckOutFrom.ToString(@"hh\:mm")–@r.CheckOutUntil.ToString(@"hh\:mm")</span>}else{<span>Fixed shift @r.StartHour:@r.StartMinute.ToString("00")</span>}</td>
-<td>@(r.UsePunchWindows ? AttendanceMinutes.Formula(r) : "Fixed shift late / early minutes")</td>
+<td>@(AttendanceMinutes.CreditsFullDay(r) ? "Full scheduled day for a valid pair; absent if a punch is missing" : r.UsePunchWindows ? "Actual minutes against required hours" : "Fixed shift late / early minutes")</td>
 <td><a asp-route-templateId="@r.Id">Change this rule</a></td>
 </tr>}
 </tbody></table></section>
