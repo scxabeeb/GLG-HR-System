@@ -5,7 +5,7 @@
 @inject ModuleAccess ModulePermissions
 @{
     var signedIn = User.Identity?.IsAuthenticated == true;
-    var portalRole = User.IsInRole("Admin") ? "Administrator" : User.IsInRole("Management") ? "Management" : User.IsInRole("HR") ? "Human resources" : User.IsInRole("Finance") ? "Finance" : User.IsInRole("General Secretary") ? "General Secretary" : "Employee workspace";
+    var portalRole = User.IsInRole("Admin") ? "Administrator" : User.IsInRole("General Secretary") ? "General Secretary" : User.IsInRole("Management") ? "Management" : User.IsInRole("HR") ? "Human resources" : User.IsInRole("Finance") ? "Finance" : User.IsInRole("General Secretary") ? "General Secretary" : "Employee workspace";
     var operationsActor = OperationsDb.ActorId;
     var isErrorPage = ViewContext.HttpContext.Request.Path.StartsWithSegments("/Error");
     var brand = isErrorPage ? new PortalBranding.Brand("Garowe City Management System", "Garowe City", "Management System", "Garowe Local Government", "/images/garowe-local-government.jpg") : await Branding.GetAsync();

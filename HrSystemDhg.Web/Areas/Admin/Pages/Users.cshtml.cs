@@ -28,7 +28,12 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         Restricted = (await db.UserModuleRestrictions.AsNoTracking().Where(r => ids.Contains(r.UserId)).ToListAsync())
             .GroupBy(r => r.UserId).ToDictionary(g => g.Key, g => g.Select(r => r.Module).ToHashSet());
         foreach (var u in Items)
-            Roles[u.Id] = string.Join(", ", await users.GetRolesAsync(u));
+        {
+            var assigned = await users.GetRolesAsync(u);
+            Roles[u.Id] = string.Join(", ", assigned);
+            if (assigned.Contains("General Secretary") && !assigned.Contains("Management"))
+                Roles[u.Id] += ", Management (included with General Secretary)";
+        }
     }
 
     private string Actor => User.Identity!.Name!;
@@ -56,8 +61,6 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         var u = await users.FindByIdAsync(id);
         if (u == null)
             return NotFound();
-        if (!remove && role != "Admin" && u.EmployeeId == null && !await users.IsInRoleAsync(u, "Admin"))
-            return BadRequest("Link an employee before assigning an operational role.");
         if (await users.IsInRoleAsync(u, role) == !remove)
             return RedirectToPage();
         var result = remove ? await users.RemoveFromRoleAsync(u, role) : await users.AddToRoleAsync(u, role);
@@ -159,15 +162,23 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
             ModelState.AddModelError("", "Enter a temporary password of 10–128 characters.");
         if (!new[] { "Admin", "HR", "Management", "Finance", "General Secretary", "Chairman", "Employee" }.Contains(role))
             ModelState.AddModelError("", "Select a valid role.");
-        if (role != "Admin" && employeeId == null)
-            ModelState.AddModelError("", "Select an employee profile for this account.");
         if (employeeId != null && (!await db.Employees.AnyAsync(x => x.Id == employeeId) || await db.Users.AnyAsync(x => x.EmployeeId == employeeId)))
             ModelState.AddModelError("", "Select an employee who does not already have a login account.");
         if (!string.IsNullOrWhiteSpace(email) && await db.Users.AnyAsync(x => x.NormalizedEmail == email.Trim().ToUpperInvariant() || x.NormalizedUserName == email.Trim().ToUpperInvariant()))
             ModelState.AddModelError("", "An account already uses this email address.");
         if (!ModelState.IsValid) { await OnGetAsync(); return Page(); }
         email = email.Trim();
-        await using var transaction = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync() : null;
+        await using var transaction = db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted) : null;
+        if (employeeId.HasValue)
+        {
+            var profiles = await db.Employees.FromSqlInterpolated($"SELECT * FROM Employees WHERE Id = {employeeId.Value} FOR UPDATE").IgnoreQueryFilters().ToListAsync();
+            if (profiles.Count == 0 || await db.Users.AnyAsync(x => x.EmployeeId == employeeId.Value))
+            {
+                ModelState.AddModelError("", "This employee already has a login account. Select another employee or leave the profile unlinked.");
+                await OnGetAsync();
+                return Page();
+            }
+        }
         var u = new ApplicationUser
         {
             UserName = email,
@@ -190,6 +201,29 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         if (transaction != null) await transaction.CommitAsync();
         TempData["Success"] = "Account created. The user must change their temporary password at first sign-in.";
         return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostLinkAsync(string id, int employeeId)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.ReadCommitted);
+        var accounts = await db.Users.FromSqlInterpolated($"SELECT * FROM AspNetUsers WHERE Id = {id} FOR UPDATE").ToListAsync();
+        var account = accounts.SingleOrDefault();
+        if (account == null) return NotFound();
+        if (account.EmployeeId.HasValue) return BadRequest("This account already has an employee profile.");
+        var profiles = await db.Employees.FromSqlInterpolated($"SELECT * FROM Employees WHERE Id = {employeeId} FOR UPDATE").IgnoreQueryFilters().ToListAsync();
+        if (profiles.Count == 0 || await db.Users.AnyAsync(u => u.EmployeeId == employeeId))
+        {
+            ModelState.AddModelError("", "Select an available employee who does not already have a login.");
+            await OnGetAsync();
+            return Page();
+        }
+        account.EmployeeId = employeeId;
+        var result = await users.UpdateSecurityStampAsync(account);
+        if (!result.Succeeded) return BadRequest("Unable to link this employee profile.");
+        await Log($"User {id}: linked employee profile {employeeId}");
+        await transaction.CommitAsync();
+        TempData["Success"] = "Employee profile linked. The user should sign in again to access their personal records.";
+        return RedirectToPage(new { Search });
     }
 
     private const string CsvColumns = "Email,Role,EmployeeId,TemporaryPassword";

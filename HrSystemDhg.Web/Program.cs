@@ -26,6 +26,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(o =>
     o.Lockout.MaxFailedAccessAttempts = 5;
 }).AddEntityFrameworkStores<HrDbContext>().AddDefaultTokenProviders();
 builder.Services.AddScoped<IPasswordHasher<ApplicationUser>, SafePasswordHasher>();
+builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, RoleHierarchyClaimsTransformation>();
 builder.Services.AddAuthentication().AddBearerToken(NativeMobileApi.Scheme, o =>
 {
     o.BearerTokenExpiration = TimeSpan.FromHours(8);

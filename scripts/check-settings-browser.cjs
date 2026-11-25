@@ -221,6 +221,36 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
  await page.locator('.user-card details').first().locator('summary').first().click();
  const restore=page.locator('form[action*="handler=MenuAccess"]');await restore.locator('details').filter({has:page.locator('select[name="access[tasks.manage]"]')}).locator('summary').click();await restore.locator('select[name="access[tasks.manage]"]').selectOption('Allow');await restore.getByRole('button',{name:'Save menu permissions',exact:true}).click();
  console.log('PASS menu/submenu permission editor, direct URL denial and hidden task editor');
+ await page.goto(base+'/Admin/Users');
+ const createUserForm=page.locator('form[action*="handler=Create"]');
+ const userCsrf=await createUserForm.locator('[name="__RequestVerificationToken"]').inputValue();
+ for(const [account,role] of [['secretary-check@example.test','General Secretary'],['unlinked-check@example.test','Employee']]) {
+   const response=await page.request.post(base+'/Admin/Users?handler=Create',{form:{__RequestVerificationToken:userCsrf,email:account,password:'Secretary!check8401',role,employeeId:''}});
+   if(response.status()!==200 || !(await response.text()).includes(account))throw Error('Cannot create '+role+' without employee profile');
+ }
+ const secretaryContext=await browser.newContext();
+ try {
+   const login=await secretaryContext.request.post(base+'/api/mobile/v2/auth/login',{data:{username:'secretary-check@example.test',password:'Secretary!check8401'}});
+   if(login.status()!==200)throw Error('Secretary sign-in failed');
+   const temporaryToken=(await login.json()).accessToken;
+   const changed=await secretaryContext.request.post(base+'/api/mobile/v2/auth/password',{headers:{Authorization:'Bearer '+temporaryToken},data:{current:'Secretary!check8401',password:'Secretary!updated8401'}});
+   if(changed.status()!==200)throw Error('Secretary temporary password change failed');
+   const token=(await changed.json()).accessToken;
+   const options=await secretaryContext.request.get(base+'/api/mobile/v2/manage/options?module=meetings',{headers:{Authorization:'Bearer '+token}});
+   if(options.status()!==200 || !(await options.json()).canAssign)throw Error('Secretary does not inherit Management staff access on mobile');
+   const secretaryPage=await secretaryContext.newPage();await secretaryPage.goto(base+'/Identity/Account/Login');await secretaryPage.locator('#Username').fill('secretary-check@example.test');await secretaryPage.locator('#Password').fill('Secretary!updated8401');await secretaryPage.locator('.auth-submit').click();await secretaryPage.waitForURL('**/Management/Dashboard');
+   if((await secretaryPage.goto(base+'/Management/Payroll')).status()!==200)throw Error('Secretary cannot open Management payroll');
+   const adminOnly=await secretaryPage.request.get(base+'/Admin/Users',{maxRedirects:0});if(adminOnly.status()!==302 || !(adminOnly.headers().location||'').includes('/Denied'))throw Error('Secretary unexpectedly received Admin access');
+ } finally {await secretaryContext.close();}
+ // A profile can be linked after account creation without generating another login.
+ await page.goto(base+'/Admin/Users?Search=unlinked-check@example.test');
+ const unlinked=page.locator('.user-card');await unlinked.locator('details').first().locator('summary').first().click();
+ const linkForm=unlinked.locator('form[action*="handler=Link"]');
+ const linkToken=await linkForm.locator('[name="__RequestVerificationToken"]').inputValue();
+ const accountId=await linkForm.locator('[name="id"]').inputValue();
+ const available=await linkForm.locator('select option[value]:not([value=""])').first().getAttribute('value');
+ if(available){const linked=await page.request.post(base+'/Admin/Users?handler=Link',{form:{__RequestVerificationToken:linkToken,id:accountId,employeeId:available}});if(linked.status()!==200 || !(await linked.text()).includes('Employee profile linked'))throw Error('Cannot link profile after creating account');}
+ console.log('PASS optional employee profiles, General Secretary inherits Management on web/mobile without Admin access, and post-registration profile linking');
  console.log('PASS payroll workflow page, clear approval stages and administrator preparation controls');
  if(errors.length) throw Error(errors.join('; '));
  } finally { await browser.close(); }
