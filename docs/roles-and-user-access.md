@@ -30,3 +30,5 @@ Role definitions and permissions use existing Identity role claims. User Allow o
 Administrators can set a temporary password for another account, including another administrator. Password validation and confirmation apply. Old passwords stop working, existing web/mobile sessions are revoked, lockout counters are cleared, and the user must change the temporary password after signing in. Passwords are never included in audit messages. Use **Change my password** for the current account.
 
 Inactive accounts cannot sign in or continue authenticated requests. Reactivation requires a fresh sign-in and does not restore a revoked token. Employee, attendance and payroll history remain intact. Role assignment changes also invalidate existing sessions. Menu changes take effect on subsequent requests without requiring a new password.
+
+Passwords require at least 4 characters. Uppercase letters, lowercase letters, numbers and symbols are optional. The same policy applies to account creation, administrator resets, email recovery and web/mobile password changes. Existing passwords remain valid.

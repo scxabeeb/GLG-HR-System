@@ -12,7 +12,7 @@ public class ResetPasswordModel(PasswordRecoveryService recovery,SignInManager<A
 {
  [BindProperty(SupportsGet=true),Required,EmailAddress,StringLength(256)]public string Email{get;set;}="";
  [BindProperty(SupportsGet=true),Required,StringLength(4096)]public string Code{get;set;}="";
- [BindProperty,Required,StringLength(128,MinimumLength=10)]public string Password{get;set;}="";
+ [BindProperty,Required,StringLength(128,MinimumLength=4)]public string Password{get;set;}="";
  [BindProperty,Required,Compare(nameof(Password),ErrorMessage="Passwords do not match.")]public string ConfirmPassword{get;set;}="";
  public bool Complete{get;private set;}
  public void OnGet()=>ModelState.Clear();

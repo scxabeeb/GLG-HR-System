@@ -17,7 +17,7 @@ public static class PasswordRecoveryChecks
  {
   var services=new ServiceCollection();services.AddLogging();services.AddDataProtection().UseEphemeralDataProtectionProvider();
   services.AddDbContext<HrDbContext>(o=>o.UseMySql(connection,new MySqlServerVersion(new Version(8,0,0))));
-  services.AddIdentityCore<ApplicationUser>(o=>o.Password.RequiredLength=10).AddRoles<IdentityRole>().AddEntityFrameworkStores<HrDbContext>().AddDefaultTokenProviders();
+  services.AddIdentityCore<ApplicationUser>(o=>PasswordPolicy.Configure(o.Password)).AddRoles<IdentityRole>().AddEntityFrameworkStores<HrDbContext>().AddDefaultTokenProviders();
   services.Configure<DataProtectionTokenProviderOptions>(o=>o.TokenLifespan=TimeSpan.FromHours(1));
   using var provider=services.BuildServiceProvider();using var scope=provider.CreateScope();var users=scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();var db=scope.ServiceProvider.GetRequiredService<HrDbContext>();
   var email="reset-"+Guid.NewGuid().ToString("N")+"@test.local";var user=new ApplicationUser{UserName=email,Email=email,MustChangePassword=true};

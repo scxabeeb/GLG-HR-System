@@ -22,7 +22,7 @@ builder.Services.AddDbContext<HrDbContext>(o => o.UseMySql(cs, new MySqlServerVe
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "App_Data", "keys")));
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(o =>
 {
-    o.Password.RequiredLength = 10;
+    PasswordPolicy.Configure(o.Password);
     o.Lockout.MaxFailedAccessAttempts = 5;
 }).AddEntityFrameworkStores<HrDbContext>().AddDefaultTokenProviders();
 builder.Services.AddScoped<IPasswordHasher<ApplicationUser>, SafePasswordHasher>();

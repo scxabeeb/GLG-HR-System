@@ -16,9 +16,16 @@ public static class AccessControlChecks
     {
         var services=new ServiceCollection();services.AddLogging();services.AddDataProtection().UseEphemeralDataProtectionProvider();services.AddHttpContextAccessor();
         services.AddDbContext<HrDbContext>(o=>o.UseMySql(connection,new MySqlServerVersion(new Version(8,0,0))));
-        services.AddIdentityCore<ApplicationUser>(o=>o.Password.RequiredLength=10).AddRoles<IdentityRole>().AddEntityFrameworkStores<HrDbContext>().AddDefaultTokenProviders();
+        services.AddIdentityCore<ApplicationUser>(o=>PasswordPolicy.Configure(o.Password)).AddRoles<IdentityRole>().AddEntityFrameworkStores<HrDbContext>().AddDefaultTokenProviders();
         using var provider=services.BuildServiceProvider();using var scope=provider.CreateScope();
         var db=scope.ServiceProvider.GetRequiredService<HrDbContext>();var users=scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();var roles=scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        foreach(var password in new[]{"1234","aaaa","ABCD","!!!!"})
+        {
+            var results=await Task.WhenAll(users.PasswordValidators.Select(v=>v.ValidateAsync(users,new ApplicationUser(),password)));
+            check(results.All(r=>r.Succeeded),"four-character passwords have no composition requirements");
+        }
+        var shortResults=await Task.WhenAll(users.PasswordValidators.Select(v=>v.ValidateAsync(users,new ApplicationUser(),"abc")));
+        check(shortResults.Any(r=>r.Errors.Any(e=>e.Code=="PasswordTooShort")),"passwords shorter than four characters are rejected");
         foreach(var name in RoleAccess.BuiltInRoles)if(!await roles.RoleExistsAsync(name))await roles.CreateAsync(new(name));
         var suffix=Guid.NewGuid().ToString("N")[..8];
         var admin=new ApplicationUser{UserName="access-admin-"+suffix,Email="access-admin-"+suffix+"@example.test"};

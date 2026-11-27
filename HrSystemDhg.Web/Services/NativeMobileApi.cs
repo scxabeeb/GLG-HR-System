@@ -35,7 +35,7 @@ public static class NativeMobileApi
         }).AllowAnonymous().RequireRateLimiting("password-reset");
         auth.MapPost("/reset", async (ResetInput input, PasswordRecoveryService service) =>
         {
-            if (string.IsNullOrEmpty(input.Password) || input.Password.Length is < 10 or > 128 || string.IsNullOrEmpty(input.Code) || input.Code.Length > 4096 || !new EmailAddressAttribute().IsValid(input.Email)) return Error("Enter a valid reset code and a password of 10–128 characters.");
+            if (string.IsNullOrEmpty(input.Password) || input.Password.Length is < 4 or > 128 || string.IsNullOrEmpty(input.Code) || input.Code.Length > 4096 || !new EmailAddressAttribute().IsValid(input.Email)) return Error("Enter a valid reset code and a password of 4–128 characters.");
             var result = await service.ResetAsync(input.Email, input.Code, input.Password);
             return result.Succeeded ? Results.Ok(new { message = "Password updated. Sign in with your new password." }) : Error(string.Join(" ", result.Errors.Select(e => e.Description)));
         }).AllowAnonymous().RequireRateLimiting("password-reset");
@@ -94,7 +94,7 @@ public static class NativeMobileApi
 
     private static async Task<IResult> ChangePassword(PasswordInput input, HttpContext ctx, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn)
     {
-        if (string.IsNullOrEmpty(input.Current) || string.IsNullOrEmpty(input.Password) || input.Password.Length is < 10 or > 128) return Error("Use a password of 10–128 characters.");
+        if (string.IsNullOrEmpty(input.Current) || string.IsNullOrEmpty(input.Password) || input.Password.Length is < 4 or > 128) return Error("Use a password of 4–128 characters.");
         var user = await users.GetUserAsync(ctx.User);
         if (user == null) return Results.Unauthorized();
         var result = await users.ChangePasswordAsync(user, input.Current, input.Password);

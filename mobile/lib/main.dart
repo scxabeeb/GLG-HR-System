@@ -460,10 +460,10 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
       message(context, 'Enter your registered email.');
       return;
     }
-    if (sent && (code.text.trim().isEmpty || password.text.length < 10)) {
+    if (sent && (code.text.trim().isEmpty || password.text.length < 4)) {
       message(
         context,
-        'Enter the reset code and a password of at least 10 characters.',
+        'Enter the reset code and a password of at least 4 characters.',
       );
       return;
     }
@@ -579,8 +579,8 @@ class _PasswordScreenState extends State<PasswordScreen> {
   }
 
   Future<void> save() async {
-    if (password.text.length < 10 || password.text != confirm.text) {
-      message(context, 'Use at least 10 characters and matching passwords.');
+    if (password.text.length < 4 || password.text != confirm.text) {
+      message(context, 'Use at least 4 characters and matching passwords.');
       return;
     }
     setState(() => busy = true);
@@ -619,7 +619,7 @@ class _PasswordScreenState extends State<PasswordScreen> {
         onChanged: (value) => setState(() => show = value),
       ),
       const Text(
-        'Use at least 10 characters with uppercase, lowercase, a number and a symbol.',
+        'Use at least 4 characters.',
       ),
       FilledButton(
         onPressed: busy ? null : save,

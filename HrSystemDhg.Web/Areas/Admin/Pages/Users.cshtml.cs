@@ -95,8 +95,8 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
     public async Task<IActionResult> OnPostResetPasswordAsync(string id,string? password,string? confirm)
     {
         if(id==Own)return BadRequest("Use My profile / Change password for your own account.");
-        if(string.IsNullOrEmpty(password) || password.Length is <10 or >128 || password!=confirm)
-        {ModelState.AddModelError("","Enter matching temporary passwords of 10–128 characters.");await OnGetAsync();return Page();}
+        if(string.IsNullOrEmpty(password) || password.Length is <4 or >128 || password!=confirm)
+        {ModelState.AddModelError("","Enter matching temporary passwords of 4–128 characters.");await OnGetAsync();return Page();}
         var account=await users.FindByIdAsync(id);if(account==null)return NotFound();
         await using var transaction=await db.Database.BeginTransactionAsync();
         var token=await users.GeneratePasswordResetTokenAsync(account);
@@ -215,8 +215,8 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
             email = username;
         if (email != null && (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || email.Length > 256))
             ModelState.AddModelError("", "Enter a valid email address, or leave email blank and use a username.");
-        if (string.IsNullOrEmpty(password) || password.Length is < 10 or > 128)
-            ModelState.AddModelError("", "Enter a temporary password of 10–128 characters.");
+        if (string.IsNullOrEmpty(password) || password.Length is < 4 or > 128)
+            ModelState.AddModelError("", "Enter a temporary password of 4–128 characters.");
         role=await db.Roles.Where(r=>r.NormalizedName==users.NormalizeName(role)).Select(r=>r.Name!).FirstOrDefaultAsync()??"";
         if(role=="")ModelState.AddModelError("", "Select a valid role.");
         if (employeeId != null && (!await db.Employees.AnyAsync(x => x.Id == employeeId) || await db.Users.AnyAsync(x => x.EmployeeId == employeeId)))
