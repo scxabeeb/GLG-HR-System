@@ -10,7 +10,7 @@ exports.audit = async (page, base) => {
    const response=await page.request.get(url.href);
    if(response.status()>=400){failures.push(response.status()+' '+url.pathname+url.search);continue;}
    if(!response.headers()['content-type']?.includes('text/html'))continue;
-   const data=await page.evaluate(html=>{const doc=new DOMParser().parseFromString(html,'text/html');return {ids:[...doc.querySelectorAll('[id]')].map(n=>n.id),links:[...doc.querySelectorAll('a[href]')].map(a=>({href:a.getAttribute('href'),text:a.textContent.trim().slice(0,70)}))};},await response.text());
+   const data=await page.evaluate(html=>{const doc=new DOMParser().parseFromString(html,'text/html');return {ids:[...doc.querySelectorAll('[id]')].map(n=>n.getAttribute('id')),links:[...doc.querySelectorAll('a[href]')].map(a=>({href:a.getAttribute('href'),text:a.textContent.trim().slice(0,70)}))};},await response.text());
    const ids=new Set(data.ids);
    for(const link of data.links) {
      let next;try{next=new URL(link.href,response.url());}catch{continue;}
