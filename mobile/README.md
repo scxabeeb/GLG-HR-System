@@ -36,3 +36,5 @@ For the iOS simulator and a local server, debug builds allow `--dart-define=GARO
 Version 2.2 adds native administrator task and meeting reports with search, status and date filters, report pagination, and per-employee task completion/overdue summaries on the dashboard. Reports require administrator and module/report permissions; employees keep their personal dashboard.
 
 Version 2.3 supports automatic employee ID sign-in (for example EMP0001). New registrations receive EMPID123 as their initial password and must change it before using the workspace. Email sign-in and email password recovery remain supported.
+
+Version 2.3.1 accepts passwords with a minimum of 4 characters, without required uppercase letters, numbers or symbols. Password-change and recovery screens match the deployed server policy.

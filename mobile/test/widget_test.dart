@@ -172,7 +172,7 @@ void main() {
       await tester.ensureVisible(find.widgetWithText(FilledButton, 'Sign in'));
       await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
       await tester.pumpAndSettle();
-      expect(find.text('Enter your email or employee number.'), findsOneWidget);
+      expect(find.text('Enter your employee ID or email.'), findsOneWidget);
       expect(find.text('Enter your password.'), findsOneWidget);
       await tester.ensureVisible(find.byTooltip('Show password'));
       await tester.tap(find.byTooltip('Show password'));
