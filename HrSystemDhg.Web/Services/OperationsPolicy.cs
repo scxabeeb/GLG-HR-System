@@ -16,8 +16,14 @@ public static class OperationsPolicy
             users = users.Where(u => u.EmployeeId.HasValue && visible.Contains(u.EmployeeId.Value) || u.Id == db.ActorId);
         }
         if (module != null)
-            users = users.Where(u => !db.UserModuleRestrictions.Any(r => r.UserId == u.Id && (r.Module == module || ((module == "tasks" || module == "meetings") && r.Module == module + ".mine"))) ||
-                db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(role => role.Id == ur.RoleId && role.NormalizedName == "ADMIN")));
+        {
+            var keys=module is "tasks" or "meetings"?new[]{module,module+".mine"}:new[]{module};
+            users=users.Where(u=>
+                (!db.UserModuleRestrictions.Any(r=>r.UserId==u.Id && keys.Contains(r.Module)) &&
+                 !db.UserRoles.Any(m=>m.UserId==u.Id && db.RoleClaims.Any(c=>c.RoleId==m.RoleId && c.ClaimType==RoleAccess.DeniedMenuClaim && keys.Contains(c.ClaimValue!) &&
+                    !db.UserClaims.Any(a=>a.UserId==u.Id && a.ClaimType==RoleAccess.AllowedMenuClaim && a.ClaimValue==c.ClaimValue)))) ||
+                db.UserRoles.Any(m=>m.UserId==u.Id && db.Roles.Any(r=>r.Id==m.RoleId && r.NormalizedName=="ADMIN")));
+        }
         return users;
     }
     public static IQueryable<FleetVehicle> Vehicles(HrDbContext db)

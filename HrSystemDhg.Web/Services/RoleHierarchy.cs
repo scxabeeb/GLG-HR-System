@@ -16,11 +16,12 @@ public static class RoleHierarchy
     }
 }
 
-public sealed class RoleHierarchyClaimsTransformation : Microsoft.AspNetCore.Authentication.IClaimsTransformation
+public sealed class RoleHierarchyClaimsTransformation(HrSystemDhg.Web.Data.HrDbContext db) : Microsoft.AspNetCore.Authentication.IClaimsTransformation
 {
-    public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
+    public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
+        await new RoleAccess(db).ApplyCapabilitiesAsync(principal);
         RoleHierarchy.Apply(principal);
-        return Task.FromResult(principal);
+        return principal;
     }
 }

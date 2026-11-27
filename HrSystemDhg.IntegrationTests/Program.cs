@@ -308,6 +308,7 @@ await using (var own = new HrDbContext(options, http))
 }
 
 await AttendanceMinuteChecks.RunAsync(options, Check);
+await AccessControlChecks.RunAsync(cs,Check);
 if (Environment.GetEnvironmentVariable("DHG_PAYROLL_ONLY_CHECK") == "1")
 {
     Console.WriteLine($"{passed} payroll, leave and attendance-minute integration checks passed.");

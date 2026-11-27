@@ -18,8 +18,11 @@ public sealed class ModuleAccess(HrDbContext db)
     {
         if (blocked != null) return blocked;
         var actor = db.ActorId;
-        blocked = actor == null || db.IsAdmin ? [] :
-            (await db.UserModuleRestrictions.AsNoTracking().Where(r => r.UserId == actor).Select(r => r.Module).ToListAsync()).ToHashSet();
+        if(actor==null || db.IsAdmin)return blocked=[];
+        var roleDenied=await new RoleAccess(db).RoleDeniedAsync(actor);
+        var userDenied=await db.UserModuleRestrictions.AsNoTracking().Where(r=>r.UserId==actor).Select(r=>r.Module).ToListAsync();
+        var userAllowed=await db.UserClaims.AsNoTracking().Where(c=>c.UserId==actor && c.ClaimType==RoleAccess.AllowedMenuClaim && c.ClaimValue!=null).Select(c=>c.ClaimValue!).ToListAsync();
+        blocked=RoleAccess.Combine(roleDenied,userDenied,userAllowed);
         return blocked;
     }
 

@@ -1,0 +1,19 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.RolesModel
+@using HrSystemDhg.Web.Services
+@{ViewData["Title"]="Roles & permissions";}
+<div class="eyebrow">ADMINISTRATION / ACCESS CONTROL</div><h1>Roles &amp; permissions</h1>
+<div class="actions"><a class="button secondary" asp-page="./Users">Users &amp; assigned roles</a><a class="button secondary" asp-page="./Settings" asp-fragment="settings-access">Main settings</a></div>
+<p>Create custom roles from operational capabilities, then allow or deny menus and submenus. Multiple roles can be assigned to one account. Role denials combine; individual user overrides take precedence. A denied parent menu blocks all its submenus.</p>
+@if(TempData["RoleNotice"] is string notice){<p class="notice" role="status">@notice</p>}
+<div asp-validation-summary="All"></div>
+<details class="card workspace-tools"><summary>+ Create role</summary><form method="post" asp-page-handler="Create"><label>Role name<input name="name" maxlength="64" required placeholder="e.g. HR coordinator"/></label><fieldset><legend>Operational capabilities</legend><div class="checkbox-list">@foreach(var capability in RoleAccess.CapabilityRoles){<label><input type="checkbox" name="capabilities" value="@capability" checked="@(capability=="Employee")"/>@capability</label>}</div></fieldset><p>Choose the duties this role performs. Branch scope, record ownership and payroll/leave approval stages still apply. Full administration is granted separately with the built-in Admin role.</p><button>Create role</button></form></details>
+<section class="card"><h2>Registered roles</h2><div class="table-scroll"><table data-registration-list="roles"><thead><tr><th>Role</th><th>Type</th><th>Users</th><th>Manage</th></tr></thead><tbody>@foreach(var role in Model.Items){<tr><td>@role.Name</td><td>@(RoleAccess.BuiltIn(role.Name)?"Built-in":"Custom")</td><td>@Model.Members.GetValueOrDefault(role.Id)</td><td><a asp-page="./Roles" asp-route-id="@role.Id" asp-fragment="role-editor">Permissions</a>@if(!RoleAccess.BuiltIn(role.Name)){<form method="post" asp-page-handler="Delete" asp-route-id="@role.Id" onsubmit="return confirm('Delete this unused custom role?')"><button class="secondary">Delete</button></form>}</td></tr>}</tbody></table></div></section>
+@if(Model.Selected is { } selected){<section id="role-editor" class="card"><h2>@selected.Name · permissions</h2>
+@if(selected.Name=="Admin"){<p>Built-in Admin has full administrative access and cannot be restricted or deleted. Assign this role only to full system administrators.</p>}
+else{<form method="post" asp-page-handler="Save" class="role-permission-form"><input type="hidden" name="id" value="@selected.Id"/>
+@if(!RoleAccess.BuiltIn(selected.Name)){<fieldset><legend>Operational capabilities</legend><div class="checkbox-list">@foreach(var capability in RoleAccess.CapabilityRoles){<label><input type="checkbox" name="capabilities" value="@capability" checked="@Model.Capabilities.Contains(capability)"/>@capability</label>}</div></fieldset>}
+<p>Allow retains the role's operational capabilities. Deny blocks this menu for users who inherit it, unless an administrator sets an explicit Allow override for that user. Other roles and user overrides cannot bypass branch restrictions or approval rules.</p>
+<partial name="/Pages/Shared/_PermissionMatrix.cshtml" model="@(new PermissionMatrix(RoleAccess.Keys.ToDictionary(key=>key,key=>Model.Denied.Contains(key)?"Deny":"Allow"),false))"/>
+<button>Save role permissions</button></form>}
+</section>}

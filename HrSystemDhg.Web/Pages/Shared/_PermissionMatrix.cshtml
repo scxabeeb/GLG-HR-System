@@ -1,0 +1,20 @@
+@using HrSystemDhg.Web.Services
+@model PermissionMatrix
+@foreach(var module in ModuleAccess.Modules)
+{
+    var choice=Model.Choices.GetValueOrDefault(module.Key,Model.IncludeInherit?"Inherit":"Allow");
+    <details class="permission-module"><summary>@module.Label <span class="muted">@choice</span></summary>
+    <label class="permission-choice"><strong>Entire menu</strong><select name="access[@module.Key]" aria-label="@module.Label module access">
+        @if(Model.IncludeInherit){<option value="Inherit" selected="@(choice=="Inherit")">Inherit from roles (@(Model.InheritedDenied?.Contains(module.Key)==true?"Deny":"Allow"))</option>}
+        <option value="Allow" selected="@(choice=="Allow")">Allow</option><option value="Deny" selected="@(choice=="Deny")">Deny</option>
+    </select></label>
+    @foreach(var item in MenuPermissions.Items.Where(i=>i.Module==module.Key))
+    {
+        var selected=Model.Choices.GetValueOrDefault(item.Key,Model.IncludeInherit?"Inherit":"Allow");
+        <label class="permission-choice"><span>@item.Label</span><select name="access[@item.Key]" aria-label="@item.Label access">
+        @if(Model.IncludeInherit){<option value="Inherit" selected="@(selected=="Inherit")">Inherit from roles (@(Model.InheritedDenied?.Contains(item.Key)==true?"Deny":"Allow"))</option>}
+        <option value="Allow" selected="@(selected=="Allow")">Allow</option><option value="Deny" selected="@(selected=="Deny")">Deny</option>
+        </select></label>
+    }
+    </details>
+}

@@ -15,6 +15,11 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
     public string? CurrentUserId => Own;
     public List<ApplicationUser> Items = [];
     public List<Branch> Branches = [];
+    public List<string> AvailableRoles=[];
+    public Dictionary<string,HashSet<string>> AssignedRoles=[];
+    public Dictionary<string,HashSet<string>> InheritedDenied=[];
+    public Dictionary<string,Dictionary<string,string>> UserAccess=[];
+    public Dictionary<string,Employee> LinkedEmployees=[];
     public Dictionary<string, HashSet<string>> Restricted { get; private set; } = [];
     public List<UserBranchScope> Scopes = [];
     public Dictionary<string, string> Roles = [];
@@ -23,6 +28,9 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         Items = await db.Users.Where(u => Search == null || Search == "" || (u.Email != null && u.Email.Contains(Search)) || (u.UserName != null && u.UserName.Contains(Search)) || db.Employees.Any(e => e.Id == u.EmployeeId && (e.FullName.Contains(Search) || e.EmployeeNumber.Contains(Search)))).OrderBy(u => u.Email).ToListAsync();
         Employees = await db.Employees.Where(e => !db.Users.Any(u => u.EmployeeId == e.Id)).ToListAsync();
         Branches = await db.Branchs.ToListAsync();
+        AvailableRoles=await db.Roles.OrderBy(r=>r.Name).Select(r=>r.Name!).ToListAsync();
+        LinkedEmployees=await (from account in db.Users join employee in db.Employees on account.EmployeeId equals employee.Id select new{account.Id,Employee=employee}).ToDictionaryAsync(x=>x.Id,x=>x.Employee);
+
         Scopes = await db.UserBranchScopes.ToListAsync();
         var ids = Items.Select(u => u.Id).ToArray();
         Restricted = (await db.UserModuleRestrictions.AsNoTracking().Where(r => ids.Contains(r.UserId)).ToListAsync())
@@ -30,6 +38,10 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         foreach (var u in Items)
         {
             var assigned = await users.GetRolesAsync(u);
+            AssignedRoles[u.Id]=assigned.ToHashSet();
+            InheritedDenied[u.Id]=await new RoleAccess(db).RoleDeniedAsync(u.Id);
+            var allowed=await db.UserClaims.AsNoTracking().Where(c=>c.UserId==u.Id && c.ClaimType==RoleAccess.AllowedMenuClaim).Select(c=>c.ClaimValue!).ToListAsync();
+            UserAccess[u.Id]=RoleAccess.Keys.ToDictionary(key=>key,key=>Restricted.GetValueOrDefault(u.Id)?.Contains(key)==true?"Deny":allowed.Contains(key)?"Allow":"Inherit");
             Roles[u.Id] = string.Join(", ", assigned);
             if (assigned.Contains("General Secretary") && !assigned.Contains("Management"))
                 Roles[u.Id] += ", Management (included with General Secretary)";
@@ -47,29 +59,60 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
 
     public async Task<IActionResult> OnPostRoleAsync(string id, string role, bool remove)
     {
-        if (!new[]
-        {
-            "Admin",
-            "Management",
-            "Finance",
-            "HR",
-            "General Secretary",
-            "Chairman",
-            "Employee"
-        }.Contains(role) || id == Own && remove && role == "Admin")
-            return BadRequest();
+        role=await db.Roles.Where(r=>r.NormalizedName==users.NormalizeName(role)).Select(r=>r.Name!).FirstOrDefaultAsync()??"";
+        if (role=="" || id==Own && remove && role=="Admin")return BadRequest();
         var u = await users.FindByIdAsync(id);
         if (u == null)
             return NotFound();
         if (await users.IsInRoleAsync(u, role) == !remove)
             return RedirectToPage();
+        await using var transaction=await db.Database.BeginTransactionAsync();
         var result = remove ? await users.RemoveFromRoleAsync(u, role) : await users.AddToRoleAsync(u, role);
         if (!result.Succeeded)
             return BadRequest();
-        await users.UpdateSecurityStampAsync(u);
-        await Log($"User {id}: {(remove ? "removed" : "added")} role {role}");
+        if(!(await users.UpdateSecurityStampAsync(u)).Succeeded)return BadRequest("Unable to refresh account sessions.");
+        await Log($"User {id}: {(remove ? "removed" : "added")} role {role}");await transaction.CommitAsync();
         TempData["Success"] = "Role permissions updated.";
         return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostRolesAsync(string id,string[] roles)
+    {
+        var selected=roles.Distinct().ToHashSet();
+        var available=await db.Roles.Select(r=>r.Name!).ToListAsync();
+        if(!ModelState.IsValid || selected.Any(r=>!available.Contains(r)) || id==Own && !selected.Contains("Admin"))return BadRequest("Choose existing roles and retain your own Admin role.");
+        var account=await users.FindByIdAsync(id);if(account==null)return NotFound();
+        await using var transaction=await db.Database.BeginTransactionAsync();
+        var current=await users.GetRolesAsync(account);
+        var removed=await users.RemoveFromRolesAsync(account,current.Except(selected));
+        var added=removed.Succeeded?await users.AddToRolesAsync(account,selected.Except(current)):removed;
+        if(!added.Succeeded)return BadRequest("Unable to update roles.");
+        if(!(await users.UpdateSecurityStampAsync(account)).Succeeded)return BadRequest("Unable to refresh account sessions.");
+        await Log($"User {id}: assigned roles {string.Join(", ",selected.Order())}");await transaction.CommitAsync();
+        TempData["Success"]="Roles saved. The employee profile is unchanged. The user should sign in again.";
+        return RedirectToPage(new{Search});
+    }
+    public async Task<IActionResult> OnPostResetPasswordAsync(string id,string? password,string? confirm)
+    {
+        if(id==Own)return BadRequest("Use My profile / Change password for your own account.");
+        if(string.IsNullOrEmpty(password) || password.Length is <10 or >128 || password!=confirm)
+        {ModelState.AddModelError("","Enter matching temporary passwords of 10–128 characters.");await OnGetAsync();return Page();}
+        var account=await users.FindByIdAsync(id);if(account==null)return NotFound();
+        await using var transaction=await db.Database.BeginTransactionAsync();
+        var token=await users.GeneratePasswordResetTokenAsync(account);
+        var result=await users.ResetPasswordAsync(account,token,password);
+        if(!result.Succeeded){foreach(var error in result.Errors)ModelState.AddModelError("",error.Description);await OnGetAsync();return Page();}
+        if(account.LockoutEnabled)
+        {
+            if(!(await users.SetLockoutEndDateAsync(account,null)).Succeeded || !(await users.ResetAccessFailedCountAsync(account)).Succeeded)
+                return BadRequest("Unable to clear this account's lockout.");
+        }
+        account.MustChangePassword=true;
+        if(!(await users.UpdateAsync(account)).Succeeded)return BadRequest("Unable to update this account.");
+        if(!(await users.UpdateSecurityStampAsync(account)).Succeeded)return BadRequest("Unable to revoke existing sessions.");
+        await Log($"Administrator reset password for user {id}; change required at next sign-in");await transaction.CommitAsync();
+        TempData["Success"]="Temporary password saved. Existing web/mobile sessions are invalid and the user must change it after signing in.";
+        return RedirectToPage(new{Search});
     }
 
     public async Task<IActionResult> OnPostToggleAsync(string id)
@@ -79,11 +122,13 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         var u = await users.FindByIdAsync(id);
         if (u == null)
             return NotFound();
+        await using var transaction=await db.Database.BeginTransactionAsync();
         u.IsEnabled = !u.IsEnabled;
-        await users.UpdateAsync(u);
-        await users.UpdateSecurityStampAsync(u);
-        await Log($"User {id}: enabled={u.IsEnabled}");
-        return RedirectToPage();
+        var result=await users.UpdateAsync(u);if(!result.Succeeded)return BadRequest("Unable to update this account.");
+        if(!(await users.UpdateSecurityStampAsync(u)).Succeeded)return BadRequest("Unable to refresh account sessions.");
+        await Log($"User {id}: enabled={u.IsEnabled}");await transaction.CommitAsync();
+        TempData["Success"]=u.IsEnabled?"Account is active.":"Account is inactive; existing sessions are blocked.";
+        return RedirectToPage(new{Search});
     }
 
     public async Task<IActionResult> OnPostRevokeAsync(string id)
@@ -91,10 +136,11 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         if (id == Own) return BadRequest("You cannot revoke your own administrator access.");
         var u = await users.FindByIdAsync(id);
         if (u == null) return NotFound();
+        await using var transaction=await db.Database.BeginTransactionAsync();
         var result = await users.RemoveFromRolesAsync(u, await users.GetRolesAsync(u));
         if (!result.Succeeded) return BadRequest("Unable to revoke roles.");
-        await users.UpdateSecurityStampAsync(u);
-        await Log($"Revoked all roles for user {id}");
+        if(!(await users.UpdateSecurityStampAsync(u)).Succeeded)return BadRequest("Unable to refresh account sessions.");
+        await Log($"Revoked all roles for user {id}");await transaction.CommitAsync();
         TempData["Success"] = "All role permissions revoked. Disable the account to prevent sign-in entirely.";
         return RedirectToPage();
     }
@@ -108,6 +154,7 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
         if (await users.IsInRoleAsync(user, "Admin")) return BadRequest("Administrator accounts retain full module access.");
         var selected = blocked.ToHashSet();
         var moduleKeys = ModuleAccess.Modules.Select(m => m.Key).ToArray();
+        db.UserClaims.RemoveRange(await db.UserClaims.Where(c=>c.UserId==id && c.ClaimType==RoleAccess.AllowedMenuClaim && moduleKeys.Contains(c.ClaimValue!)).ToListAsync());
         var previous = await db.UserModuleRestrictions.Where(r => r.UserId == id && moduleKeys.Contains(r.Module)).ToListAsync();
         db.UserModuleRestrictions.RemoveRange(previous.Where(r => !selected.Contains(r.Module)));
         foreach (var module in selected.Except(previous.Select(r => r.Module)))
@@ -120,13 +167,17 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
     public async Task<IActionResult> OnPostMenuAccessAsync(string id, Dictionary<string, string> access)
     {
         var keys = ModuleAccess.Modules.Select(m => m.Key).Concat(MenuPermissions.Items.Select(m => m.Key)).ToHashSet();
-        if (!ModelState.IsValid || id == Own || access.Count != keys.Count || access.Any(x => !keys.Contains(x.Key) || x.Value is not ("Allow" or "Deny")))
-            return BadRequest("Submit a valid choice for every menu and submenu.");
+        if (!ModelState.IsValid || id == Own || access.Count != keys.Count || access.Any(x => !keys.Contains(x.Key) || x.Value is not ("Inherit" or "Allow" or "Deny")))
+            return BadRequest("Submit Inherit, Allow or Deny for every menu and submenu.");
         var user = await users.FindByIdAsync(id);
         if (user == null) return NotFound();
         if (await users.IsInRoleAsync(user, "Admin")) return BadRequest("Administrator accounts retain full access.");
         await using var transaction = await db.Database.BeginTransactionAsync();
         var selected = access.Where(x => x.Value == "Deny").Select(x => x.Key).ToHashSet();
+        var overrides=await db.UserClaims.Where(c=>c.UserId==id && c.ClaimType==RoleAccess.AllowedMenuClaim).ToListAsync();
+        db.UserClaims.RemoveRange(overrides);
+        foreach(var key in access.Where(a=>a.Value=="Allow").Select(a=>a.Key))
+            db.UserClaims.Add(new(){UserId=id,ClaimType=RoleAccess.AllowedMenuClaim,ClaimValue=key});
         var previous = await db.UserModuleRestrictions.Where(r => r.UserId == id).ToListAsync();
         db.UserModuleRestrictions.RemoveRange(previous.Where(r => keys.Contains(r.Module) && !selected.Contains(r.Module)));
         foreach (var key in selected.Except(previous.Select(r => r.Module)))
@@ -166,8 +217,8 @@ public class UsersModel(HrDbContext db, Microsoft.AspNetCore.Identity.UserManage
             ModelState.AddModelError("", "Enter a valid email address, or leave email blank and use a username.");
         if (string.IsNullOrEmpty(password) || password.Length is < 10 or > 128)
             ModelState.AddModelError("", "Enter a temporary password of 10–128 characters.");
-        if (!new[] { "Admin", "HR", "Management", "Finance", "General Secretary", "Chairman", "Employee" }.Contains(role))
-            ModelState.AddModelError("", "Select a valid role.");
+        role=await db.Roles.Where(r=>r.NormalizedName==users.NormalizeName(role)).Select(r=>r.Name!).FirstOrDefaultAsync()??"";
+        if(role=="")ModelState.AddModelError("", "Select a valid role.");
         if (employeeId != null && (!await db.Employees.AnyAsync(x => x.Id == employeeId) || await db.Users.AnyAsync(x => x.EmployeeId == employeeId)))
             ModelState.AddModelError("", "Select an employee who does not already have a login account.");
         var identifiers = new[] { users.NormalizeName(username), users.NormalizeEmail(email) }.Where(x => !string.IsNullOrEmpty(x)).ToArray();

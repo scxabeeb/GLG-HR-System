@@ -139,8 +139,7 @@ app.Use(async (context, next) =>
         var signIn = context.RequestServices.GetRequiredService<SignInManager<ApplicationUser>>();
         var user = await users.GetUserAsync(context.User);
         var native = context.Request.Path.StartsWithSegments("/api/mobile");
-        var bearer = context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase);
-        var invalidStamp = bearer && user != null && context.User.FindFirst("AspNet.Identity.SecurityStamp")?.Value != user.SecurityStamp;
+        var invalidStamp = user != null && context.User.FindFirst("AspNet.Identity.SecurityStamp")?.Value != user.SecurityStamp;
         if (user == null || !user.IsEnabled || invalidStamp || SupportSession.Expired(context.User, DateTimeOffset.UtcNow))
         {
             if (native) { context.Response.StatusCode = 401; return; }

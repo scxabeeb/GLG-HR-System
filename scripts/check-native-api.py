@@ -226,8 +226,18 @@ try:
             try:req('v2/auth/me',expected=401,auth=False);break
             except (OSError,AssertionError):time.sleep(.5)
         else:raise Exception('Browser test server failed to restart')
-        subprocess.run(['node',str(root/'scripts/check-settings-browser.cjs')],env=browserenv,check=True)
-        subprocess.run(['node',str(root/'scripts/check-registration-pagination.cjs')],env=browserenv,check=True)
+        if os.environ.get('DHG_ROLE_ONLY_CHECK') != '1':
+            subprocess.run(['node',str(root/'scripts/check-settings-browser.cjs')],env=browserenv,check=True)
+            subprocess.run(['node',str(root/'scripts/check-registration-pagination.cjs')],env=browserenv,check=True)
+        # Independent access-control checks get a fresh local rate-limit budget.
+        process.terminate();process.wait(timeout=10)
+        process=subprocess.Popen(['dotnet',str(dll)],env=appenv,cwd=root/'HrSystemDhg.Web',stdout=log,stderr=log)
+        for _ in range(40):
+            try:req('v2/auth/me',expected=401,auth=False);break
+            except (OSError,AssertionError):time.sleep(.5)
+        else:raise Exception('Access-control test server failed to restart')
+        subprocess.run(['node',str(root/'scripts/check-role-management.cjs')],env=browserenv,check=True)
+
     token=administrator
     req('v2/auth/logout',{});req('v2/auth/me',expected=401)
     print('PASS native bearer login, mandatory password change, old-token revocation, user-scoped feeds, task update audit, invalid status rejection, missing-record authorization, logout revocation')
