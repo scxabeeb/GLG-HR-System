@@ -8,6 +8,18 @@ When the ERP runs on Railway, use **Admin → Attendance devices → Edit / conf
 
 For the direct Mac cable connection, the terminal is `192.168.50.2/24`, the Mac Ethernet interface is `192.168.50.1/24`, and the terminal ADMS server is `192.168.50.1`, port `5190`, HTTPS OFF, domain mode OFF. Keep the Mac awake and online. Start the downloaded script with `python3 attendance_connector.py --config attendance-connector-ID.json`; the JSON's `listen` field must be the Mac's actual Ethernet address. `--check` tests the cloud key without reporting the terminal online. The local `/health` endpoint and the web device page distinguish connector heartbeat from actual terminal contact.
 
+### Automatic connection on this Mac
+
+Run the repository's installer once with the downloaded configuration:
+
+```sh
+python3 HrSystemDhg.Web/Connectors/install_macos_connector.py --config /path/to/attendance-connector-ID.json
+```
+
+It installs a per-user Garowe City LaunchAgent, starts the connector immediately and at each login, and restarts it if it exits. Private configuration, logs and the retained offline queue live in `~/Library/Application Support/GaroweCity/AttendanceConnector`; existing queued records are copied without overwriting an existing runtime queue. No MySQL credentials are needed. Do not run a second manual connector on the same port.
+
+If the configured Ethernet address is unavailable at login, the receiver retries every five seconds without switching to a public or wildcard interface. Reconnect the cable with the same static Mac/terminal addresses; the terminal's next ADMS contact updates its real online status. A cable or connector heartbeat alone does not mark the terminal online. Keep the Mac awake, logged in and connected to the internet for immediate cloud sync. The connector does not change network settings or rewrite the terminal's server address. To remove automatic startup, run `launchctl bootout gui/$(id -u)/so.garowecity.attendance-connector` and remove its plist from `~/Library/LaunchAgents`; preserve the private queue until it is uploaded.
+
 Configuration downloads rotate a device-specific key. Revocation and pairing changes invalidate it. Keep the JSON private; no MySQL password is required on the office Mac. The connector accepts only the paired terminal IP and serial, uses verified HTTPS to the cloud, and returns an error when forwarding fails instead of acknowledging unsaved attendance. The terminal must retry unacknowledged requests; make a real punch to verify this firmware's behavior.
 
 ## Setup on the office network

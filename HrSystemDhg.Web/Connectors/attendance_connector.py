@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Private-LAN ADMS receiver forwarding only paired terminals to the online ERP over HTTPS."""
 import argparse
+import errno
 import hashlib
 import sqlite3
 import socket
@@ -388,17 +389,37 @@ def main():
             except ConnectionError as error:
                 parser.exit(1, str(error) + '\n')
         return
-    server = http.server.ThreadingHTTPServer((config['listen'], config['port']), Handler)
-    server.daemon_threads = True
-    server.connector = connector
+    run_receiver(connector)
+
+def run_receiver(connector, server_factory=http.server.ThreadingHTTPServer, retry_seconds=5):
+    # Bind only the configured private interface. A cable may be absent at login.
+    config = connector.config
+    server = None
     threading.Thread(target=connector.heartbeat, daemon=True).start()
     threading.Thread(target=connector.replay, daemon=True).start()
-    print(utc(), 'Attendance connector listening on', config['listen'] + ':' + str(config['port']), flush=True)
     try:
+        while not connector.stop.is_set():
+            try:
+                server = server_factory((config['listen'], config['port']), Handler)
+                break
+            except OSError as error:
+                if error.errno not in (errno.EADDRNOTAVAIL, 10049):
+                    raise
+                print(utc(), 'Waiting for Ethernet address', config['listen'],
+                      '— reconnect the cable; retrying automatically.', flush=True)
+                connector.stop.wait(retry_seconds)
+        if server is None:
+            return
+        server.daemon_threads = True
+        server.connector = connector
+        print(utc(), 'Attendance connector listening on', config['listen'] + ':' + str(config['port']), flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        connector.stop.set(); server.server_close()
+        connector.stop.set()
+        if server is not None:
+            server.server_close()
+
 if __name__ == '__main__':
     main()
