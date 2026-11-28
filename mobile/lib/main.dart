@@ -953,7 +953,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
             ),
             const Divider(),
             const UiText(
-              'Garowe City · 2.5.0',
+              'Garowe City · 2.5.1',
               style: TextStyle(
                 fontFamily: 'Roboto',
                 color: Color(0xff8390a4),

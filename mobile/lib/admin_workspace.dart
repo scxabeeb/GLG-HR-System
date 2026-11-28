@@ -224,6 +224,78 @@ class _AdminModuleState extends State<AdminModule> {
     }
   }
 
+  static const creationRoutes = <String, (String, String, String)>{
+    'employees': ('register', 'Register employee', 'OnPostAsync'),
+    'register': ('register', 'Register employee', 'OnPostAsync'),
+    'assets': ('asset-edit', 'Register asset', 'OnPostAsync'),
+    'asset-edit': ('asset-edit', 'Register asset', 'OnPostAsync'),
+    'branches': ('branches', 'Add branch', 'OnPostAsync'),
+    'departments': ('departments', 'Add department', 'OnPostAsync'),
+    'sub-departments': ('sub-departments', 'Add sub-department', 'OnPostAsync'),
+    'users': ('users', 'Create user', 'OnPostCreateAsync'),
+    'roles': ('roles', 'Create role', 'OnPostCreateAsync'),
+    'devices': ('devices', 'Register device', 'OnPostAsync'),
+    'fleet': ('fleet', 'Register vehicle', 'OnPostSaveAsync'),
+    'fleet-trips': ('fleet-trips', 'Request trip', 'OnPostRequestAsync'),
+    'fleet-reports': ('fleet-reports', 'Add expense', 'OnPostExpenseAsync'),
+    'salary': ('salary', 'Register salary', 'OnPostAsync'),
+    'leave': ('leave', 'Request leave', 'OnPostCreateAsync'),
+    'leave-types': ('leave-types', 'Add leave type', 'OnPostAsync'),
+    'leave-balances': ('leave-balances', 'Add leave balance', 'OnPostAsync'),
+    'report-views': ('report-views', 'Create report', 'OnPostAsync'),
+    'rules': ('rules', 'Add work rule', 'OnPostAsync'),
+  };
+  Future<void> createRecord() async {
+    final route = creationRoutes[widget.module['key']];
+    if (route == null) return;
+    try {
+      final fresh = Map<String, dynamic>.from(
+        await widget.api.post('/api/mobile/v2/admin/${route.$1}/load', {
+          'values': <String, dynamic>{},
+        }),
+      );
+      final choices = List<Map<String, dynamic>>.from(
+        fresh['actions'] ?? [],
+      ).where((a) => a['key'] == route.$3);
+      if (choices.isEmpty) {
+        throw const ApiError('Registration is unavailable. Refresh and retry.');
+      }
+      if (!mounted) return;
+      final response = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdminAction(
+            api: widget.api,
+            module: {'key': route.$1, 'title': route.$2},
+            action: {...choices.first, 'label': route.$2, 'creating': true},
+            fields: List<Map<String, dynamic>>.from(fresh['fields'] ?? []),
+            initial: const {},
+            lookups: Map<String, dynamic>.from(fresh['lookups'] ?? {}),
+          ),
+        ),
+      );
+      if (response != null && mounted) {
+        await load();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: UiText.raw('$e')));
+      }
+    }
+  }
+
+  Widget creationButton() => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: FilledButton.icon(
+      key: const ValueKey('admin-create-record'),
+      onPressed: busy ? null : createRecord,
+      icon: const Icon(Icons.add_circle_outline),
+      label: UiText(creationRoutes[widget.module['key']]!.$2),
+    ),
+  );
+
   Future<void> detail(Map<String, dynamic> row) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -302,6 +374,8 @@ class _AdminModuleState extends State<AdminModule> {
                 ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    if (creationRoutes.containsKey(widget.module['key']))
+                      creationButton(),
                     TextField(
                       decoration: InputDecoration(
                         labelText: tr(context, 'Search records'),
@@ -351,6 +425,8 @@ class _AdminModuleState extends State<AdminModule> {
                 ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    if (creationRoutes.containsKey(widget.module['key']))
+                      creationButton(),
                     FilledButton.tonalIcon(
                       onPressed: () => action({
                         'key': 'load',
@@ -440,7 +516,23 @@ class _AdminActionState extends State<AdminAction> {
     ]) {
       indexed[(f['name'] as String).toLowerCase()] = f;
     }
-    fields = indexed.values.toList();
+    fields = indexed.values
+        .where(
+          (f) =>
+              widget.action['creating'] != true ||
+              ![
+                'id',
+                'input.id',
+                'input.version',
+                'search',
+                'pagenumber',
+                'rowsperpage',
+                'connection',
+                'viewmode',
+                'kind',
+              ].contains('${f['name']}'.toLowerCase()),
+        )
+        .toList();
     values.addAll(widget.initial);
     for (final f in fields) {
       final name = f['name'] as String;
@@ -603,7 +695,21 @@ class _AdminActionState extends State<AdminAction> {
   );
   List<Map<String, dynamic>> choicesFor(String name) {
     final key = name.split('.').last.toLowerCase();
-    final lookup = key == 'id'
+    if (key == 'parentid') {
+      return List<Map<String, dynamic>>.from(
+        widget.lookups[widget.module['key'] == 'sub-departments'
+                ? 'departments'
+                : 'branches'] ??
+            [],
+      );
+    }
+    final lookup = key == 'typeid' || key == 'leavetypeid'
+        ? 'leaveTypes'
+        : key.contains('vehicle')
+        ? 'vehicles'
+        : key == 'driverid'
+        ? 'employees'
+        : key == 'id'
         ? 'records'
         : key.contains('shift')
         ? 'shifts'

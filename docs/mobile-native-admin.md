@@ -9,3 +9,9 @@ Native modules have records, search, filters and management actions. Named picke
 Dark mode covers dialogs, bottom sheets, tabs, native fields and record text. English/Somali preferences persist across app launches. Interface vocabulary and progress templates are translated; names, entered values and business records remain unchanged. Platform date-picker month names and server-provided free-form messages may remain in the platform/server language.
 
 Validation: `scripts/check-native-admin.py` creates a private temporary MySQL instance and application, checks every module's initial schema, then checks registration, shared-branch assignment, duplicate/required-field rejection, protected Admin-role deletion, CSV sample download, unknown handler denial, non-admin denial and secret redaction. Flutter widget tests cover native admin actions at 320px, English/Somali dark-mode screen matrix, existing task/meeting forms, profile, inbox and navigation.
+
+## Registration correction in 2.5.1
+
+Module record lists and management tabs now show an explicit Register/Add/Create button. Creation loads a fresh form, rather than carrying an edited record's identifier. Employee and asset directories route to their corresponding registration modules. New-record forms hide internal identity/version and list-filter controls. Nested bound input objects now expose their editable fields, with asset photo navigation internals excluded. Department parent branches, leave types and vehicle references use named selectors.
+
+Validation adds actual asset creation to the isolated API fixture and a 320px native asset registration widget test. The complete mobile suite now contains 13 passing tests.

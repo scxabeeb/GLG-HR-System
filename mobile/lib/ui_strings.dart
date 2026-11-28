@@ -1,5 +1,20 @@
 // Shared interface vocabulary. Business records and entered values are not translated.
 const somaliStrings = <String, String>{
+  "Add branch": "Ku dar laan",
+  "Add department": "Ku dar waax",
+  "Add sub-department": "Ku dar qayb hoose",
+  "Create user": "Abuur isticmaale",
+  "Create role": "Abuur door",
+  "Register device": "Diiwaangeli qalab",
+  "Register vehicle": "Diiwaangeli gaadhi",
+  "Request trip": "Codso safar",
+  "Add expense": "Ku dar kharash",
+  "Register salary": "Diiwaangeli mushahar",
+  "Add leave type": "Ku dar nooca fasaxa",
+  "Add leave balance": "Ku dar haraaga fasaxa",
+  "Create report": "Abuur warbixin",
+  "Add work rule": "Ku dar xeer shaqo",
+
   "Leave balances": "Haraaga fasaxa",
   "Attendance corrections": "Sixitaanka xaadirinta",
   "Employee history": "Taariikhda shaqaalaha",

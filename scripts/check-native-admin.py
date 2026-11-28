@@ -52,7 +52,13 @@ with tempfile.TemporaryDirectory(prefix='garowe-admin-',dir='/private/tmp') as f
   sample=action('register','OnGetSample',{});assert sample['file'].endswith('.csv')
   a=int(sql("SELECT Id FROM Branchs WHERE Code='A'"));b=int(sql("SELECT Id FROM Branchs WHERE Code='B'"))
   action('departments','OnPostAsync',{'Name':'Admin and Finance','Code':'AF','ParentId':a,'AdditionalBranchIds':[b],'Active':True})
-  fleet=request('admin/fleet/load',{'values':{}})
+  asset=request('admin/asset-edit/load',{'values':{}})
+  assert any(field['name']=='Input.Name' for field in asset['fields']), 'Asset registration fields missing'
+  action('asset-edit','OnPostAsync',{'Input.Tag':'NATIVE-001','Input.Name':'Office laptop','Input.Category':'Computer','Input.BranchId':b,'Input.Currency':'USD','Input.Status':'Available'})
+  assert sql("SELECT COUNT(*) FROM Assets WHERE Tag='NATIVE-001'")=='1'
+  settings=request('admin/settings/load',{'values':{}})
+  assert any(field['name'].startswith('Input.') for field in settings['fields']), 'Settings fields missing'
+  fleet=request('admin/fleet/load' ,{'values':{}})
   save=next(item for item in fleet['actions'] if item['key']=='OnPostSaveAsync')
   assert any(field['name']=='Input.Plate' for field in save['fields'])
   assert next(field for field in save['fields'] if field['name']=='Input.Status')['value']=='Available'
