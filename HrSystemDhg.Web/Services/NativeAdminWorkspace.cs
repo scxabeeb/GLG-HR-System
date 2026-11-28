@@ -231,6 +231,7 @@ public static class NativeAdminWorkspace
     static object? Safe(object? value,int depth=0)
     {
         if(value==null||depth>4)return null;
+        if(value.GetType().IsEnum)return value.ToString();
         if(Simple(value.GetType()))return value;
         if(value is IDictionary dictionary){var map=new Dictionary<string,object?>();foreach(DictionaryEntry e in dictionary){var key=e.Key.ToString()??"";if(!Secret(key))map[key]=Safe(e.Value,depth+1);if(map.Count>=200)break;}return map;}
         if(value is IEnumerable sequence)return sequence.Cast<object?>().Take(200).Select(v=>Safe(v,depth+1)).ToArray();

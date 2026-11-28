@@ -55,6 +55,7 @@ with tempfile.TemporaryDirectory(prefix='garowe-admin-',dir='/private/tmp') as f
   fleet=request('admin/fleet/load',{'values':{}})
   save=next(item for item in fleet['actions'] if item['key']=='OnPostSaveAsync')
   assert any(field['name']=='Input.Plate' for field in save['fields'])
+  assert next(field for field in save['fields'] if field['name']=='Input.Status')['value']=='Available'
   action('fleet','OnPostSaveAsync',{'Input.Plate':'FIX-001','Input.Name':'Native fixture vehicle','Input.BranchId':b,'Input.Status':'Available','Input.OdometerKm':0})
   assert sql("SELECT COUNT(*) FROM FleetVehicles WHERE Plate='FIX-001'")=='1'
   csv='Kind,Name,Code,City,Address,Timezone,ParentId,Active,RequiresSub,AdditionalBranchIds\nBranch,CSV office,CSV,,,Africa/Mogadishu,,True,False,\n'
