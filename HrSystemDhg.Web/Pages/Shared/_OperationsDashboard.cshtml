@@ -2,34 +2,48 @@
 @using HrSystemDhg.Web.Services
 @using System.Globalization
 @inject ModuleAccess DashboardPermissions
+@inject PortalBranding Branding
 @{
     var blocked = await DashboardPermissions.BlockedAsync();
-    bool Allowed(string module) => ModuleAccess.Allows(blocked, module);
+    var brand = await Branding.GetAsync();
+    bool Allowed(string menu) => MenuPermissions.Allows(blocked, menu);
     var people = User.IsInRole("Admin") || User.IsInRole("HR");
     var management = User.IsInRole("Admin") || User.IsInRole("Management");
     var coverage = Math.Clamp(Model.AttendancePercent, 0, 100);
+    var employeeUrl = people && Allowed("people.directory") ? "/Hr/Employees" : ModuleAccess.Allows(blocked, "reports") && Allowed("people.reports") ? "/Reports?report=Employees" : null;
+    var payrollUrl = management && Allowed("payroll.manage") ? "/Management/Payroll" : ModuleAccess.Allows(blocked, "reports") && Allowed("payroll.reports") ? "/Reports?report=Payroll" : null;
+    var modules = new List<(string Label,string Detail,string Url,string Icon)>();
+    if(people && Allowed("people.directory")){modules.Add(("Employees","Profiles, employment and documents","/Hr/Employees","people"));}
+    if(Allowed("tasks.manage")){modules.Add(("Tasks & teams","Assignments, responsibilities and progress","/Operations/Tasks?view=created","tasks"));}
+    else if(Allowed("tasks.mine")){modules.Add(("My tasks","Your assignments and progress","/Operations/Tasks","tasks"));}
+    if(Allowed("meetings.manage")){modules.Add(("Meetings","Schedules, agendas and decisions","/Operations/Meetings?mode=manage","meetings"));}
+    else if(Allowed("meetings.mine")){modules.Add(("My meetings","Upcoming meetings and participation","/Operations/Meetings","meetings"));}
+    if(management && Allowed("assets.register")){modules.Add(("Assets","Inventory, custody and condition","/Assets","assets"));}
+    if(management && Allowed("fleet.register")){modules.Add(("Fleet","Vehicles, trips and maintenance","/Operations/Fleet","fleet"));}
+    if(Allowed("reports.hub")){modules.Add(("Main reports","Filter, review and export your data","/Reports/All","reports"));}
 }
-<div class="portal-page-heading"><div><div class="eyebrow">CITY ADMINISTRATION</div><h1>Workspace overview</h1><p>Your people, resources and daily operations, at a glance.</p></div><div class="portal-office-date"><span class="date-symbol" aria-hidden="true">▦</span><span><small>OFFICE DATE · EAST AFRICA TIME</small><strong>@BusinessClock.Today.ToString("dddd, dd MMMM yyyy")</strong></span></div></div>
+<div class="dashboard-workspace" data-no-section-index>
+<div class="portal-page-heading"><div><div class="eyebrow">CITY ADMINISTRATION</div><h1>Workspace overview</h1><p>A clear view of your people, work and resources.</p></div><div class="portal-office-date"><span class="date-symbol"><partial name="/Pages/Shared/_WorkspaceIcon.cshtml" model='"meetings"'/></span><span><small>EAST AFRICA TIME · UTC+3</small><strong>@BusinessClock.Today.ToString("dddd, dd MMMM yyyy")</strong></span></div></div>
+<section class="dashboard-welcome" aria-label="Workspace introduction"><div><span class="dashboard-welcome-label">@brand.Organization</span><h2>Welcome to your city workspace</h2><p>Review today's attendance, follow up on requests and keep your teams moving.</p><div class="actions">@if(Allowed("attendance.manage")){<a class="button" href="/Hr/Attendance">Today's attendance →</a>}<a class="button secondary" href="/Operations/Notifications">Open inbox</a></div></div><img src="@brand.LogoUrl" alt="@brand.Organization"/></section>
 <div class="portal-stat-grid">
-    <a class="portal-stat" href="@(people && Allowed("people") ? "/Hr/Employees" : "/Reports?report=Employees")"><span class="stat-caption">Active employees</span><span class="stat-symbol blue-symbol" aria-hidden="true">↗</span><strong>@Model.Employees</strong><small>Across your authorized branches</small></a>
-    <a class="portal-stat" href="/Hr/Leave"><span class="stat-caption">Leave awaiting action</span><span class="stat-symbol gold-symbol" aria-hidden="true">◷</span><strong>@Model.Leave</strong><small>Requests ready for review</small></a>
-    <a class="portal-stat" href="/Hr/Attendance"><span class="stat-caption">Attendance today</span><span class="stat-symbol green-symbol" aria-hidden="true">✓</span><strong>@Model.AttendancePercent.ToString("N0")<em>%</em></strong><small>@Model.Present of @Model.Expected expected employees covered</small></a>
-    <a class="portal-stat" href="@(User.IsInRole("Admin") ? "/Admin/Organization" : "/Reports?report=Employees")"><span class="stat-caption">Active branches</span><span class="stat-symbol violet-symbol" aria-hidden="true">⌘</span><strong>@Model.Branches</strong><small>Connected workplaces</small></a>
+@if(employeeUrl != null){<a class="portal-stat" href="@employeeUrl"><span class="stat-caption">Active employees</span><span class="stat-symbol blue-symbol"><partial name="/Pages/Shared/_WorkspaceIcon.cshtml" model='"people"'/></span><strong>@Model.Employees</strong><small>Across your authorized branches <span>→</span></small></a>}
+@if(Allowed("leave.requests")){<a class="portal-stat" href="/Hr/Leave"><span class="stat-caption">Leave awaiting action</span><span class="stat-symbol gold-symbol"><partial name="/Pages/Shared/_WorkspaceIcon.cshtml" model='"leave"'/></span><strong>@Model.Leave</strong><small>Open requests for review <span>→</span></small></a>}
+@if(Allowed("attendance.manage")){<a class="portal-stat" href="/Hr/Attendance"><span class="stat-caption">Attendance today</span><span class="stat-symbol green-symbol"><partial name="/Pages/Shared/_WorkspaceIcon.cshtml" model='"attendance"'/></span><strong>@coverage.ToString("N0")<em>%</em></strong><small>@Model.Present of @Model.Expected expected employees covered <span>→</span></small></a>}
+@if(User.IsInRole("Admin")){<a class="portal-stat" href="/Admin/Organization"><span class="stat-caption">Active branches</span><span class="stat-symbol violet-symbol"><partial name="/Pages/Shared/_WorkspaceIcon.cshtml" model='"branches"'/></span><strong>@Model.Branches</strong><small>Manage connected workplaces <span>→</span></small></a>}
 </div>
 <div class="portal-dashboard-grid">
-    <article class="card portal-headcount"><div class="panel-heading"><div><h2>People across branches</h2><p>Current employee assignments</p></div>@if(Allowed("reports")){<a href="/Reports?report=Employees">View report →</a>}</div>
-    @if(Model.Headcount.Count == 0){<div class="portal-empty"><strong>Your workforce overview starts here.</strong><p>Add your branches and employee assignments to see their distribution.</p></div>}
-    @foreach(var branch in Model.Headcount.OrderByDescending(x=>x.Value)){<div class="portal-branch-row"><div><span>@branch.Key</span><strong>@branch.Value <small>employees</small></strong></div><progress max="@Math.Max(1,Model.Employees)" value="@branch.Value" aria-label="@($"{branch.Key}: {branch.Value} employees")"></progress></div>}
-    </article>
-    <article class="card portal-coverage"><div class="panel-heading"><div><h2>Today's attendance</h2><p>Attendance and approved leave coverage</p></div></div><div class="portal-donut" style="--coverage:@coverage.ToString("0.##", CultureInfo.InvariantCulture)" role="img" aria-label="@($"{coverage:N0}% attendance coverage")"><div><strong>@coverage.ToString("N0")<small>%</small></strong><span>coverage today</span></div></div><div class="coverage-legend"><span><i></i> @Model.Present covered</span><span><i></i> @Math.Max(0,Model.Expected-Model.Present) remaining</span></div><a class="button secondary" href="/Hr/Attendance">View attendance</a></article>
-    <article class="card portal-payroll"><div class="panel-heading"><div><h2>Latest payroll</h2><p>Net payable by currency</p></div><span class="panel-tag">FINANCE</span></div>@if(Model.Costs.Count==0){<div class="portal-empty"><strong>No calculated payroll yet</strong><p>Your latest payroll totals will appear here after generation.</p></div>}@foreach(var total in Model.Costs){<div class="portal-payroll-amount"><span>@total.Key</span><strong>@total.Value.ToString("N2")</strong><small>Net payable · latest calculated run</small></div>}@if(management && Allowed("payroll")){<a class="button" href="/Management/Payroll">Open payroll →</a>}else if(Allowed("reports")){<a class="button secondary" href="/Reports?report=Payroll">View payroll report</a>}</article>
+@if(employeeUrl != null){
+<article class="card portal-headcount"><div class="panel-heading"><div><h2>People across branches</h2><p>Current employee assignments</p></div><a href="@employeeUrl">View employees →</a></div>
+@if(Model.Headcount.Count == 0){<div class="portal-empty"><strong>No employee assignments yet</strong><p>Register employees and assign them to a branch to see your workforce distribution.</p></div>}
+@foreach(var branch in Model.Headcount.OrderByDescending(x=>x.Value)){<div class="portal-branch-row"><div><span>@branch.Key</span><strong>@branch.Value <small>employees</small></strong></div><progress max="@Math.Max(1,Model.Employees)" value="@branch.Value" aria-label="@($"{branch.Key}: {branch.Value} employees")"></progress></div>}
+</article>}
+@if(Allowed("attendance.manage")){
+<article class="card portal-coverage"><div class="panel-heading"><div><h2>Today's attendance</h2><p>Attendance and approved leave coverage</p></div></div><div class="portal-donut" style="--coverage:@coverage.ToString("0.##", CultureInfo.InvariantCulture)" role="img" aria-label="@($"{coverage:N0}% attendance coverage")"><div><strong>@coverage.ToString("N0")<small>%</small></strong><span>coverage today</span></div></div><div class="coverage-legend"><span><i></i> @Model.Present covered</span><span><i></i> @Math.Max(0,Model.Expected-Model.Present) remaining</span></div><a class="button secondary" href="/Hr/Attendance">Review attendance →</a></article>}
+@if(payrollUrl != null){
+<article class="card portal-payroll"><div class="panel-heading"><div><h2>Latest payroll</h2><p>Net payable by currency</p></div><span class="panel-tag">FINANCE</span></div>@if(Model.Costs.Count==0){<div class="portal-empty"><strong>No calculated payroll yet</strong><p>Generate and calculate a payroll run to review its totals here.</p></div>}@foreach(var total in Model.Costs){<div class="portal-payroll-amount"><span>@total.Key</span><strong>@total.Value.ToString("N2")</strong><small>Net payable · latest calculated run</small></div>}<a class="button secondary" href="@payrollUrl">View payroll →</a></article>}
 </div>
-<div class="portal-section-heading"><div><h2>Your city workspace</h2><p>Go directly to the work you need to manage.</p></div></div>
+<div class="portal-section-heading"><div><h2>Explore your modules</h2><p>Open a workspace to manage records, track progress or review reports.</p></div></div>
 <div class="portal-module-grid">
-@if(people && Allowed("people")){<a class="portal-module" href="/Hr/Employees"><span class="module-glyph">♙</span><span><strong>Employees</strong><small>Profiles, registration &amp; assignments</small></span><b>↗</b></a>}
-@if(Allowed("tasks")){<a class="portal-module" href="/Operations/Tasks?view=created"><span class="module-glyph">✓</span><span><strong>Tasks &amp; teams</strong><small>Responsibilities and progress</small></span><b>↗</b></a>}
-@if(Allowed("meetings")){<a class="portal-module" href="/Operations/Meetings?mode=manage"><span class="module-glyph">▦</span><span><strong>Meetings</strong><small>Schedule, agendas &amp; minutes</small></span><b>↗</b></a>}
-@if(management && Allowed("assets")){<a class="portal-module" href="/Assets"><span class="module-glyph">▧</span><span><strong>Assets</strong><small>Equipment, custody &amp; condition</small></span><b>↗</b></a>}
-@if(management && Allowed("fleet")){<a class="portal-module" href="/Operations/Fleet"><span class="module-glyph">▰</span><span><strong>Fleet</strong><small>Vehicles, trips &amp; maintenance</small></span><b>↗</b></a>}
-@if(Allowed("reports")){<a class="portal-module" asp-area="" asp-page="/Reports/Hub"><span class="module-glyph">▤</span><span><strong>Reports</strong><small>Explore data across your modules</small></span><b>↗</b></a>}
+@foreach(var module in modules){<a class="portal-module" href="@module.Url"><span class="module-glyph"><partial name="/Pages/Shared/_WorkspaceIcon.cshtml" model="module.Icon"/></span><span><strong>@module.Label</strong><small>@module.Detail</small></span><b aria-hidden="true">→</b></a>}
+</div>
 </div>

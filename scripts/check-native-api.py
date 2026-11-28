@@ -226,6 +226,8 @@ try:
             try:req('v2/auth/me',expected=401,auth=False);break
             except (OSError,AssertionError):time.sleep(.5)
         else:raise Exception('Browser test server failed to restart')
+        if os.environ.get('DHG_WORKSPACE_DESIGN_CHECK') == '1':
+            subprocess.run(['node',str(root/'scripts/check-workspace-design.cjs')],env=browserenv,check=True)
         if os.environ.get('DHG_ROLE_ONLY_CHECK') != '1':
             subprocess.run(['node',str(root/'scripts/check-settings-browser.cjs')],env=browserenv,check=True)
             subprocess.run(['node',str(root/'scripts/check-registration-pagination.cjs')],env=browserenv,check=True)

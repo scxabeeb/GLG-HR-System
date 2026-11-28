@@ -1,5 +1,7 @@
 @page
 @model HrSystemDhg.Web.Pages.Reports.IndexModel
+@using HrSystemDhg.Web.Services
+@inject ModuleAccess ReportAccess
 @{
     ViewData["Title"] = "Reports & exports";
     (string Key, string Label)[] reports = [
@@ -7,15 +9,17 @@
         ("Payroll", "Payroll"), ("Hires", "Hires and leavers"), ("Leave", "Leave register"),
         ("Balances", "Leave balances"), ("Deductions", "Deductions"), ("Bank", "Bank payments")
     ];
+    var deniedMenus = await ReportAccess.BlockedAsync();
     var title = Model.SavedViewName ?? reports.FirstOrDefault(r => r.Key == Model.Report).Label ?? "Report";
 }
-<div class="eyebrow">GAROWE HR WORKSPACE</div>
+<div class="eyebrow">CITY REPORTING WORKSPACE</div>
 <a class="hub-back" asp-page="./Hub">← Main reports</a>
 <h1>@(Model.SavedViewName ?? "Reports & exports")</h1>
-<nav class="actions" aria-label="Reports">
+<p class="page-intro">Select a report, set your filters and export the results in your preferred format.</p>
+<nav class="actions report-switcher" aria-label="Reports">
     @foreach (var report in reports)
     {
-        if (report.Key == "Salary" && !Model.CanViewSalary) { continue; }
+        if (!MenuPermissions.Allows(deniedMenus, MenuPermissions.Report(report.Key)) || report.Key == "Salary" && !Model.CanViewSalary) { continue; }
         var active = Model.Report == report.Key;
         <a class="button @(active ? "" : "secondary")" aria-current="@(active ? "page" : null)"
            asp-page="./Index" asp-route-report="@report.Key">@report.Label</a>
@@ -27,7 +31,7 @@
     <p role="status">@message</p>
 }
 
-<form method="get" class="card">
+<form method="get" class="card report-filter-panel">
     <h2>@title filters</h2>
     <div asp-validation-summary="All"></div>
     <input type="hidden" name="Report" value="@Model.Report" />
@@ -111,7 +115,7 @@
     </form>
 }
 
-<section class="card table-scroll" aria-label="@title results">
+<section class="card table-scroll report-results" aria-label="@title results">
     <h2>@title</h2>
     @if (Model.IsPayrollReport && Model.PeriodId == null)
     {

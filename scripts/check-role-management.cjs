@@ -46,6 +46,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   }
   await userOverride('Allow');if((await staff.request.get(base+'/api/mobile/v2/manage/options?module=tasks',{headers:auth()})).status()!==200)throw Error('User Allow did not override role denial');
   await userOverride('Deny');if((await staff.request.get(base+'/api/mobile/v2/manage/options?module=tasks',{headers:auth()})).status()!==403)throw Error('User Deny did not revoke access');
+  const overviewResponse=await staffPage.goto(base+'/Management/Dashboard');if(overviewResponse.status()!==200)throw Error('Authorized management dashboard failed to open');if(await staffPage.locator('.portal-module[href="/Operations/Tasks?view=created"]').count())throw Error('Dashboard exposes denied task-management link');
   await userOverride('Inherit');if((await staff.request.get(base+'/api/mobile/v2/manage/options?module=tasks',{headers:auth()})).status()!==403)throw Error('Inherit did not restore the role restriction');
   await saveRole([]);if((await staff.request.get(base+'/api/mobile/v2/manage/options?module=tasks',{headers:auth()})).status()!==200)throw Error('Role Allow did not restore access on the existing mobile session');
   await saveRole([],['Employee']);const reduced=await staff.request.get(base+'/Hr/Employees',{maxRedirects:0});if(!(reduced.status()===403 || reduced.status()===302 && reduced.headers().location.includes('/Denied')))throw Error('Removed custom HR capability remains active on the old cookie');await saveRole([]);

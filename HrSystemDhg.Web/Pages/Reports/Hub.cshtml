@@ -36,9 +36,7 @@
     if (Db.IsAdmin)
         reports.Add(("Audit log", "Account, configuration and HR changes", "/Audit", null, "Admin"));
 }
-<div class="eyebrow">REPORTING WORKSPACE</div>
-<h1>Main reports</h1>
-<p class="page-intro">Choose a module, then open its report to filter records and download results.</p>
+<div class="report-hub-heading"><div><div class="eyebrow">REPORTING WORKSPACE</div><h1>Main reports</h1><p class="page-intro">A central place to review city operations. Choose a report, refine the data and export your results.</p></div><div class="report-hub-count"><strong>@reports.Count</strong><span>available reports</span></div></div>
 @{
     var groups = new[] {
         (Id: "all", Label: "All reports", Detail: "Every report available to your account.", Titles: reports.Select(r => r.Title).ToArray()),

@@ -98,9 +98,9 @@
     let previous;
     input.addEventListener('input', () => {
         const query = input.value.trim().toLowerCase();
-        if (query && !previous) previous = new Map(roots.map(group => [group, group.open]));
+        if (query && !previous) previous = new Map([...sidebar.querySelectorAll('details[data-menu]')].map(group => [group, group.open]));
         [...roots, ...hubs].forEach(item => { item.hidden = !!query && !item.textContent.toLowerCase().includes(query); });
-        if (query) roots.filter(item => !item.hidden).forEach(item => { item.open = true; });
+        if (query) roots.filter(item => !item.hidden).forEach(item => { item.open = true; item.querySelectorAll('details[data-menu]').forEach(child => { if (child.textContent.toLowerCase().includes(query)) child.open = true; }); });
         else if (previous) { previous.forEach((open, group) => { group.open = open; }); previous = undefined; }
         if (message) message.hidden = !query || [...roots, ...hubs].some(item => !item.hidden);
     });
