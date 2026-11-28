@@ -94,9 +94,7 @@ public static class ZkAttendancePush
             .ExecuteUpdateAsync(set => set.SetProperty(c => c.SentUtc, now).SetProperty(c => c.ExpiresUtc, now.AddMinutes(3)), ct);
         if (claimed == 0) return poll;
 
-        var payload = command.FingerSlot is int slot
-            ? $"ENROLL_FP PIN={command.Pin}\tFID={slot}\tRETRY=3\tOVERWRITE=0"
-            : $"DATA UPDATE USERINFO PIN={command.Pin}\tName={command.Name}\tPri=0";
+        var payload = ZkEmployeeCommands.Payload(command);
         return Results.Text($"C:{command.Id}:{payload}\r\n", "text/plain", Encoding.UTF8);
     }
 

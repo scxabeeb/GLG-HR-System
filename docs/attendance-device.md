@@ -69,3 +69,9 @@ Railway deployments resolve the public source using edge-replaced `X-Real-IP` an
 The Windows package includes **Show computer IP.cmd**, which lists current private IPv4 addresses with adapter names and subnet prefixes. **Start connector.cmd** performs the same local detection and lets you select an adapter by number; choose Ethernet connected to the terminal. `R` rescans after plugging in a cable and `M` permits manual entry. Detection does not change Windows network settings. A missing Ethernet address must be configured in Windows first. The web server cannot detect a remote Windows computer's private adapter addresses; run this tool on that computer.
 
 **Button-based setup:** open `Open Windows setup.cmd` from the Windows ZIP. The setup window provides **Scan computer IP**, **Use selected IP**, and **Save & start connector** buttons. Select the Ethernet adapter and a downloaded device configuration. The GUI needs Python Tcl/Tk; the existing command-line tools remain available.
+
+### Face enrollment
+
+Admin device configuration and the employee attendance-terminal section offer face enrollment separately from fingerprint enrollment. Send the employee profile first. Select visible-light face (PUSH biometric type 9) or infrared face (type 2), and explicitly confirm the selected hardware supports that technology and remote enrollment. K40 Pro is fingerprint-only; these controls cannot add a face camera to it. Profile pictures are not biometric templates.
+
+Enrollment sends `ENROLL_BIO` with the employee PIN, three retries and overwrite disabled. Requests expire after three minutes; queued, sent and terminal-result states remain visible. Terminal acknowledgment is not independent verification that a usable face template was captured: follow the terminal prompts and verify a face scan afterward. Compatibility must be tested on the actual face-capable terminal and firmware. Existing profile-sync and fingerprint commands remain unchanged.

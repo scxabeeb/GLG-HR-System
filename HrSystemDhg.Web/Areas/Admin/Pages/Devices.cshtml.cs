@@ -74,16 +74,22 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
         return RedirectToPage(null, null, $"device-{id}");
     }
 
-    public async Task<IActionResult> OnPostEmployeeAsync(int id, int employeeId, string operation, int fingerSlot)
+    public async Task<IActionResult> OnPostEmployeeAsync(int id, int employeeId, string operation, int fingerSlot, int faceType = 9, bool faceSupported = false)
     {
         var device = await db.ZkDevices.FindAsync(id);
         if (device?.PushSerial == null || device.PushAddress == null) return NotFound();
-        if (!ModelState.IsValid || operation is not ("sync" or "enroll") || fingerSlot is < 0 or > 9) return BadRequest();
+        if (!ModelState.IsValid || operation is not ("sync" or "enroll" or "face") || fingerSlot is < 0 or > 9) return BadRequest();
 
         var employee = await db.Employees.FindAsync(employeeId);
         if (employee == null || !ZkEmployeeCommands.ValidPin(employee.ZkPin))
         {
             TempData["DeviceNotice"] = "Choose an employee with a numeric ZKTeco PIN of up to nine digits, without leading zeros.";
+            return RedirectToPage();
+        }
+
+        if (operation == "face" && (!faceSupported || faceType is not (2 or 9)))
+        {
+            TempData["DeviceNotice"] = "Face enrollment requires a face-capable terminal. K40 Pro supports fingerprint enrollment only. Confirm the selected terminal supports face enrollment.";
             return RedirectToPage();
         }
 
@@ -95,7 +101,7 @@ public class DevicesModel(HrDbContext db, IWebHostEnvironment env) : PageModel
             return RedirectToPage();
         }
 
-        db.ZkDeviceCommands.Add(ZkEmployeeCommands.Create(device, employee, operation == "enroll" ? fingerSlot : null));
+        db.ZkDeviceCommands.Add(ZkEmployeeCommands.Create(device, employee, operation == "enroll" ? fingerSlot : null, operation == "face" ? faceType : null));
         db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Queued terminal {operation} for employee {employeeId} on device {id}" });
         await db.SaveChangesAsync();
         TempData["DeviceNotice"] = "Command queued. Refresh this page to check the terminal’s response.";

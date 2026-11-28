@@ -125,7 +125,7 @@
         @if (device.PushSerial != null)
         {
             <form method="post" asp-page-handler="Employee" asp-route-id="@device.Id">
-                <h3>Employee sync and fingerprint enrollment</h3>
+                <h3>Employee sync and biometric enrollment</h3>
                 <p>Assign a unique ZKTeco PIN when registering the employee in HR. Send the profile to create or update a normal user on the terminal. Confirm the PIN belongs to that employee on the terminal before sending.</p>
                 <div class="grid">
                     <label>Employee
@@ -145,6 +145,13 @@
                 </div>
                 <button name="operation" value="sync">Send employee to terminal</button>
                 <button name="operation" value="enroll" class="secondary">Start fingerprint enrollment</button>
+                <details class="card"><summary>Face enrollment (compatible terminals)</summary>
+                    <p>K40 Pro has no face camera. Use this only with a face-capable terminal. The employee must stand in front of that terminal; uploading a profile photo does not enroll a biometric face.</p>
+                    <label>Face technology<select name="faceType"><option value="9">Visible-light face</option><option value="2">Infrared face</option></select></label>
+                    <label><input type="checkbox" name="faceSupported" value="true" /> I confirm the selected terminal supports this face technology and remote enrollment.</label>
+                    <button name="operation" value="face" class="secondary">Start face enrollment</button>
+                    <p>The terminal may reject unsupported commands. Check its response below. Existing face templates will not be overwritten.</p>
+                </details>
                 <p>Wait for the profile to be acknowledged before enrolling a new terminal user. Have the employee stand at the reader and follow its prompts.</p>
             </form>
             <h3>Recent terminal commands</h3>
@@ -156,7 +163,7 @@
                     _ when command.ExpiresUtc <= DateTime.UtcNow => command.SentUtc == null ? "Expired before sending" : "No terminal acknowledgement",
                     _ => command.SentUtc == null ? "Queued" : "Sent · awaiting terminal"
                 };
-                <p>@(command.FingerSlot == null ? "Employee sync" : "Fingerprint enrollment") · PIN @command.Pin · @status</p>
+                <p>@ZkEmployeeCommands.Label(command) · PIN @command.Pin · @status</p>
             }
         }
     </article></details>

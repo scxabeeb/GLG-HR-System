@@ -76,7 +76,7 @@ public class EmployeesModel(HrDbContext db) : PageModel
             .Where(c => pins.Contains(c.Pin) && db.Employees.Any(e => e.ZkPin == c.Pin) &&
                 db.ZkDevices.Any(d => d.Id == c.DeviceId && d.PushSerial == c.Serial && d.PushAddress == c.Address))
             .OrderByDescending(c => c.Id).ToListAsync();
-        Commands = commands.DistinctBy(c => (c.Pin, c.DeviceId, IsEnrollment: c.FingerSlot != null)).ToLookup(c => c.Pin);
+        Commands = commands.DistinctBy(c => (c.Pin, c.DeviceId, c.FingerSlot, c.BiometricType)).ToLookup(c => c.Pin);
     }
 
     public static string Status(ZkDeviceCommand command) => command.Result switch
@@ -87,9 +87,9 @@ public class EmployeesModel(HrDbContext db) : PageModel
         _ => command.SentUtc == null ? "Queued" : "Sent · awaiting terminal"
     };
 
-    public async Task<IActionResult> OnPostTerminalAsync(int employeeId, int terminalId, string operation, int fingerSlot)
+    public async Task<IActionResult> OnPostTerminalAsync(int employeeId, int terminalId, string operation, int fingerSlot, int faceType = 9, bool faceSupported = false)
     {
-        if (!ModelState.IsValid || operation is not ("sync" or "enroll") || fingerSlot is < 0 or > 9) return BadRequest();
+        if (!ModelState.IsValid || operation is not ("sync" or "enroll" or "face") || fingerSlot is < 0 or > 9) return BadRequest();
         var employee = await db.Employees.SingleOrDefaultAsync(e => e.Id == employeeId);
         var terminal = await db.ZkDevices.SingleOrDefaultAsync(d => d.Id == terminalId && d.PushSerial != null && d.PushAddress != null);
         if (employee == null || terminal == null) return NotFound();
@@ -99,17 +99,23 @@ public class EmployeesModel(HrDbContext db) : PageModel
             return RedirectToPage("./Employees", null, new { expandedEmployeeId = employeeId, Search, Department, StatusFilter, RowsPerPage, PageNumber }, $"employee-{employeeId}");
         }
 
+        if (operation == "face" && (!faceSupported || faceType is not (2 or 9)))
+        {
+            TempData["TerminalNotice"] = "Face enrollment requires a face-capable terminal. K40 Pro supports fingerprint enrollment only. Confirm the selected terminal supports face enrollment.";
+            return RedirectToPage();
+        }
+
         var now = DateTime.UtcNow;
         var slot = operation == "enroll" ? (int?)fingerSlot : null;
         if (await db.ZkDeviceCommands.AnyAsync(c => c.DeviceId == terminalId && c.Serial == terminal.PushSerial &&
-            c.Address == terminal.PushAddress && c.Pin == employee.ZkPin && c.FingerSlot == slot &&
+            c.Address == terminal.PushAddress && c.Pin == employee.ZkPin && c.FingerSlot == slot && c.BiometricType == (operation == "face" ? (int?)faceType : null) &&
             c.Result == null && c.ExpiresUtc > now))
         {
             TempData["TerminalNotice"] = "That command is already pending.";
             return RedirectToPage("./Employees", null, new { expandedEmployeeId = employeeId, Search, Department, StatusFilter, RowsPerPage, PageNumber }, $"employee-{employeeId}");
         }
 
-        db.ZkDeviceCommands.Add(ZkEmployeeCommands.Create(terminal, employee, slot));
+        db.ZkDeviceCommands.Add(ZkEmployeeCommands.Create(terminal, employee, slot, operation == "face" ? faceType : null));
         db.AuditLogs.Add(new() { Actor = User.Identity!.Name!, Action = $"Queued terminal {operation} for employee {employeeId} on device {terminalId}" });
         await db.SaveChangesAsync();
         TempData["TerminalNotice"] = "Command queued. Refresh the employee directory to check the terminal’s response.";

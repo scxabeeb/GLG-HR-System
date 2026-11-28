@@ -2211,6 +2211,9 @@ namespace HrSystemDhg.Web.Migrations
                         .HasMaxLength(45)
                         .HasColumnType("varchar(45)");
 
+                    b.Property<int?>("BiometricType")
+                        .HasColumnType("int");
+
                     b.Property<int>("DeviceId")
                         .HasColumnType("int");
 

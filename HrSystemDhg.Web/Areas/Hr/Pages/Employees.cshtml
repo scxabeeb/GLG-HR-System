@@ -121,10 +121,17 @@
                                         </select></label>
                                         <button name="operation" value="sync" class="secondary" title="Confirm that this PIN belongs to the employee on the terminal">Send employee</button>
                                         <button name="operation" value="enroll">Enroll fingerprint</button>
+                <details class="card"><summary>Face enrollment (compatible terminals)</summary>
+                    <p>K40 Pro has no face camera. Use this only with a face-capable terminal. The employee must stand in front of that terminal; uploading a profile photo does not enroll a biometric face.</p>
+                    <label>Face technology<select name="faceType"><option value="9">Visible-light face</option><option value="2">Infrared face</option></select></label>
+                    <label><input type="checkbox" name="faceSupported" value="true" /> I confirm the selected terminal supports this face technology and remote enrollment.</label>
+                    <button name="operation" value="face" class="secondary">Start face enrollment</button>
+                    <p>The terminal may reject unsupported commands. Check its response below. Existing face templates will not be overwritten.</p>
+                </details>
                                     </form>
                                     @foreach (var command in Model.Commands[employee.ZkPin!])
                                     {
-                                        <p>@Model.Terminals.FirstOrDefault(d => d.Id == command.DeviceId)?.Name · @(command.FingerSlot.HasValue ? "Fingerprint" : "Profile") · @HrSystemDhg.Web.Pages.Hr.EmployeesModel.Status(command)</p>
+                                        <p>@Model.Terminals.FirstOrDefault(d => d.Id == command.DeviceId)?.Name · @ZkEmployeeCommands.Label(command) · @HrSystemDhg.Web.Pages.Hr.EmployeesModel.Status(command)</p>
                                     }
                                 }
                             </section>

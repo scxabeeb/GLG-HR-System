@@ -11,6 +11,7 @@ public sealed class ZkDeviceCommand
     [MaxLength(9)] public string Pin { get; set; } = "";
     [MaxLength(64)] public string Name { get; set; } = "";
     public int? FingerSlot { get; set; }
+    public int? BiometricType { get; set; }
     public DateTime ExpiresUtc { get; set; }
     public DateTime? SentUtc { get; set; }
     public int? Result { get; set; }
