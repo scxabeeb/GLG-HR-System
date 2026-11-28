@@ -69,10 +69,45 @@ class UiPreferencesScope extends InheritedNotifier<UiPreferences> {
       ?.notifier;
 }
 
-String tr(BuildContext context, String value) =>
-    UiPreferencesScope.maybeOf(context)?.language == 'so'
-    ? (somaliStrings[value] ?? value)
-    : value;
+final _somaliFolded = {
+  for (final entry in somaliStrings.entries)
+    entry.key.toLowerCase(): entry.value,
+};
+
+String tr(BuildContext context, String value) {
+  if (UiPreferencesScope.maybeOf(context)?.language != 'so') return value;
+  if (somaliStrings.containsKey(value)) return somaliStrings[value]!;
+  final label = value.replaceAllMapped(
+    RegExp(r'([a-z])([A-Z])'),
+    (m) => '${m[1]} ${m[2]}',
+  );
+  if (_somaliFolded.containsKey(label.toLowerCase())) {
+    return _somaliFolded[label.toLowerCase()]!;
+  }
+  final patterns = <RegExp, String Function(RegExpMatch)>{
+    RegExp(r'^(\d+) selected$'): (m) => '${m[1]} la xushay',
+    RegExp(r'^Page (\d+)$'): (m) => 'Bogga ${m[1]}',
+    RegExp(r'^Assigned to (.+)$'): (m) => 'Loo qoondeeyey ${m[1]}',
+    RegExp(r'^Due (.+)$'): (m) => 'Wakhtiga kama dambaysta ah ${m[1]}',
+    RegExp(r'^Revision (.+)$'): (m) => 'Dib-u-eegis ${m[1]}',
+    RegExp(r'^Status · (.+)$'): (m) =>
+        'Xaalad · ${somaliStrings[m[1]] ?? m[1]}',
+    RegExp(r'^(\d+) of (\d+) completed$'): (m) =>
+        '${m[1]} ka mid ah ${m[2]} waa la dhammaystiray',
+    RegExp(r'^(\d+) of (\d+) checked in$'): (m) =>
+        '${m[1]} ka mid ah ${m[2]} ayaa yimid',
+    RegExp(r'^(\d+) open · (\d+) in progress$'): (m) =>
+        '${m[1]} furan · ${m[2]} socda',
+    RegExp(r'^Team task · (.+)$'): (m) => 'Hawl kooxeed · ${m[1]}',
+    RegExp(r'^Parent task · (.+)$'): (m) => 'Hawsha weyn · ${m[1]}',
+    RegExp(r'^Ends · (.+)$'): (m) => 'Dhammaadka · ${m[1]}',
+  };
+  for (final entry in patterns.entries) {
+    final match = entry.key.firstMatch(value);
+    if (match != null) return entry.value(match);
+  }
+  return value;
+}
 
 // Record strings use .raw: language changes must not alter names or entered data.
 class UiText extends StatelessWidget {
@@ -130,6 +165,10 @@ class UiText extends StatelessWidget {
         resolved = style!.copyWith(color: const Color(0xffb6c8e1));
       } else if (color == const Color(0xff1745c3)) {
         resolved = style!.copyWith(color: const Color(0xffa5c3ff));
+      } else if (color.computeLuminance() < .20) {
+        resolved = style!.copyWith(
+          color: Theme.of(context).colorScheme.onSurface,
+        );
       }
     }
     return Text(
@@ -230,6 +269,34 @@ ThemeData civicDarkTheme(ThemeData base) {
       ),
     ),
     drawerTheme: DrawerThemeData(backgroundColor: scheme.surface),
+    iconTheme: IconThemeData(color: scheme.primary),
+    dialogTheme: DialogThemeData(
+      backgroundColor: scheme.surface,
+      titleTextStyle: TextStyle(
+        color: scheme.onSurface,
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: scheme.surface,
+      modalBackgroundColor: scheme.surface,
+    ),
+    snackBarTheme: const SnackBarThemeData(
+      backgroundColor: Color(0xff223e69),
+      contentTextStyle: TextStyle(color: Color(0xffe1eaf8)),
+    ),
+    datePickerTheme: DatePickerThemeData(backgroundColor: scheme.surface),
+    timePickerTheme: TimePickerThemeData(backgroundColor: scheme.surface),
+    tabBarTheme: TabBarThemeData(
+      labelColor: scheme.primary,
+      unselectedLabelColor: const Color(0xffb6c8e1),
+    ),
+    expansionTileTheme: ExpansionTileThemeData(
+      textColor: scheme.onSurface,
+      collapsedTextColor: scheme.onSurface,
+      iconColor: scheme.primary,
+    ),
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
       fillColor: const Color(0xff101d31),
       labelStyle: const TextStyle(color: Color(0xffb6c8e1)),

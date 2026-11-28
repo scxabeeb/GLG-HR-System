@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
 import 'meeting_room.dart';
 import 'management.dart';
+import 'admin_workspace.dart';
 import 'reports.dart';
 export 'api.dart' show parseServer;
 
@@ -17,7 +18,7 @@ const paper = Color(0xfff3f6fc);
 void main() {
   const url = String.fromEnvironment(
     'GAROWE_HR_URL',
-    defaultValue: 'https://garowe-hr-production.up.railway.app',
+    defaultValue: 'https://erp.garowecity.pl.so',
   );
   runApp(GaroweHrApp(server: parseServer(url, allowLoopback: kDebugMode)));
 }
@@ -921,6 +922,20 @@ class _EmployeeShellState extends State<EmployeeShell> {
                 account('profile');
               },
             ),
+            if (widget.api.isAdmin)
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const UiText('Administration'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdminWorkspace(api: widget.api),
+                    ),
+                  );
+                },
+              ),
             const UiDisplayPreferences(),
             ListTile(
               leading: const Icon(Icons.logout, color: Color(0xffb64141)),
@@ -938,7 +953,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
             ),
             const Divider(),
             const UiText(
-              'Garowe City · 2.4.0',
+              'Garowe City · 2.5.0',
               style: TextStyle(
                 fontFamily: 'Roboto',
                 color: Color(0xff8390a4),
@@ -1232,7 +1247,7 @@ class DashboardMetric extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: blue, size: 22),
+            Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
             const SizedBox(height: 12),
             UiText.raw(
               value,
@@ -1578,7 +1593,7 @@ class _WorkListState extends State<WorkList> {
         children: [
           for (final option in options)
             ChoiceChip(
-              label: UiText.raw(option),
+              label: UiText(option),
               selected: filter == option,
               onSelected: (_) => setState(() => filter = option),
             ),
@@ -2137,7 +2152,7 @@ class PayslipScreen extends StatelessWidget {
         ])
           Card(
             child: ListTile(
-              title: UiText.raw(label),
+              title: UiText(label),
               trailing: UiText('${p['currency']} ${money(p[key])}'),
             ),
           ),

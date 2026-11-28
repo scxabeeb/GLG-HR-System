@@ -37,6 +37,7 @@ class Api {
   String? token;
   String? email;
   bool mustChange = false;
+  bool isAdmin = false;
   VoidCallback? onUnauthorized;
 
   Future<bool> restore() async {
@@ -58,6 +59,7 @@ class Api {
     final data = await get('/api/mobile/v2/auth/me') as Map<String, dynamic>;
     email = data['email'] as String?;
     mustChange = data['mustChangePassword'] == true;
+    isAdmin = data['isAdmin'] == true;
   }
 
   Future<void> login(String username, String password) async {
@@ -94,6 +96,7 @@ class Api {
   Future<void> clear() async {
     token = null;
     email = null;
+    isAdmin = false;
     await _storage.delete(key: 'garowe-native-token');
   }
 

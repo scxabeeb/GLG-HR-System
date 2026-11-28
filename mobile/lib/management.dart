@@ -139,7 +139,9 @@ class PeoplePicker extends StatelessWidget {
       Container(
         constraints: const BoxConstraints(maxHeight: 260),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xffdce3ef)),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
           borderRadius: BorderRadius.circular(12),
         ),
         child: ListView(
@@ -366,7 +368,7 @@ class _TaskEditorState extends State<TaskEditor> {
               for (var i = 0; i < 4; i++)
                 DropdownMenuItem(
                   value: i,
-                  child: UiText.raw(['Low', 'Normal', 'High', 'Urgent'][i]),
+                  child: UiText(['Low', 'Normal', 'High', 'Urgent'][i]),
                 ),
             ],
             onChanged: (v) => setState(() => priority = v!),

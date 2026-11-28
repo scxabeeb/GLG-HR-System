@@ -49,7 +49,7 @@ public static class NativeMobileApi
         auth.MapGet("/me", async (HttpContext ctx, UserManager<ApplicationUser> users) =>
         {
             var user = await users.GetUserAsync(ctx.User);
-            return user == null ? Results.Unauthorized() : Results.Ok(new { user.Email, user.MustChangePassword });
+            return user == null ? Results.Unauthorized() : Results.Ok(new { user.Email, user.MustChangePassword, IsAdmin = ctx.User.IsInRole("Admin") });
         }).RequireAuthorization(Policy);
 
         var api = app.MapGroup("/api/mobile/v2").RequireAuthorization(Policy);
