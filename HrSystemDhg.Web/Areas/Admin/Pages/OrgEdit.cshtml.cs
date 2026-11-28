@@ -19,6 +19,8 @@ public class OrgEditModel(HrDbContext db) : PageModel
     [BindProperty]
     public string Name { get; set; } = "";
 
+    [BindProperty] public List<int> AdditionalBranchIds { get; set; } = [];
+
     [BindProperty]
     public string Code { get; set; } = "";
 
@@ -45,7 +47,7 @@ public class OrgEditModel(HrDbContext db) : PageModel
     public record UnitRow(int Id, string Name, string Code, string Parent, string Location, bool Active);
     public IEnumerable<UnitRow> UnitRows => (Kind switch
     {
-        "Department" => Departments.Select(d => new UnitRow(d.Id,d.Name,d.Code,Branches.FirstOrDefault(b=>b.Id==d.BranchId)?.Name ?? "—","",d.IsActive)),
+        "Department" => Departments.Select(d => new UnitRow(d.Id,d.Name,d.Code,string.Join(", ", Branches.Where(b=>d.ServesBranch(b.Id)).Select(b=>b.Name)),"",d.IsActive)),
         "SubDepartment" => Subs.Select(s => new UnitRow(s.Id,s.Name,"",Departments.FirstOrDefault(d=>d.Id==s.DepartmentId)?.Name ?? "—","",s.IsActive)),
         _ => Branches.Select(b => new UnitRow(b.Id,b.Name,b.Code,"",string.Join(" · ",new[]{b.City,b.Address,b.Timezone}.Where(v=>!string.IsNullOrWhiteSpace(v))),b.IsActive))
     }).Where(r=>string.IsNullOrWhiteSpace(Search) || (r.Name+" "+r.Code+" "+r.Parent+" "+r.Location).Contains(Search,StringComparison.OrdinalIgnoreCase)).OrderBy(r=>r.Name);
@@ -82,6 +84,7 @@ public class OrgEditModel(HrDbContext db) : PageModel
                 Name = d.Name;
                 Code = d.Code;
                 ParentId = d.BranchId;
+                AdditionalBranchIds = d.AdditionalBranches.Select(b => b.BranchId).ToList();
                 RequiresSub = d.RequiresSubDepartment;
                 Active = d.IsActive;
             }
@@ -137,11 +140,19 @@ public class OrgEditModel(HrDbContext db) : PageModel
             }
             else if (Kind == "Department")
             {
-                if (string.IsNullOrWhiteSpace(Code) || !Branches.Any(x => x.Id == ParentId) || await db.Departments.AnyAsync(x => x.Id != Id && x.BranchId == ParentId && x.Code == Code))
-                    throw new InvalidOperationException("Select a branch and unique department code.");
+                var branchIds = AdditionalBranchIds.Append(ParentId).Distinct().ToArray();
+                if (string.IsNullOrWhiteSpace(Code) || branchIds.Any(id => !Branches.Any(b => b.Id == id)))
+                    throw new InvalidOperationException("Select valid branches and a department code.");
+                if (await db.Departments.AnyAsync(x => x.Id != Id && x.Code == Code &&
+                    (branchIds.Contains(x.BranchId) || x.AdditionalBranches.Any(b => branchIds.Contains(b.BranchId)))))
+                    throw new InvalidOperationException("This department code is already used in one of the selected branches.");
                 var d = Id == 0 ? new Department() : await db.Departments.SingleAsync(x => x.Id == Id);
-                if (Id > 0 && d.BranchId != ParentId && await db.EmployeeAssignments.AnyAsync(x => x.DepartmentId == Id))
-                    throw new InvalidOperationException("Departments with assignment history cannot move branches. Create a new department and transfer employees.");
+                if (Id > 0 && await db.EmployeeAssignments.AnyAsync(x => x.DepartmentId == Id && !branchIds.Contains(x.BranchId)))
+                    throw new InvalidOperationException("A branch with employee assignment history cannot be removed. Transfer employees or retain that branch to preserve history.");
+                var additional = branchIds.Where(id => id != ParentId).ToArray();
+                d.AdditionalBranches.RemoveAll(b => !additional.Contains(b.BranchId));
+                foreach (var branchId in additional.Where(id => !d.AdditionalBranches.Any(b => b.BranchId == id)))
+                    d.AdditionalBranches.Add(new DepartmentBranch { BranchId = branchId });
                 d.Name = Name;
                 d.Code = Code;
                 d.BranchId = ParentId;
@@ -186,11 +197,11 @@ public class OrgEditModel(HrDbContext db) : PageModel
         return result is RedirectToPageResult ? RedirectToPage(null, null, new { Kind }, "organization-list") : result;
     }
 
-    private const string CsvColumns = "Kind,Name,Code,City,Address,Timezone,ParentId,Active,RequiresSub";
+    private const string CsvColumns = "Kind,Name,Code,City,Address,Timezone,ParentId,Active,RequiresSub,AdditionalBranchIds";
 
     public IActionResult OnGetSample()
     {
-        return RegistrationCsv.Download("organization-units-sample", CsvColumns, [["Branch", "Example office", "EXAMPLE", "Garowe", "", "Africa/Mogadishu", null, true, false]]);
+        return RegistrationCsv.Download("organization-units-sample", CsvColumns, [["Branch", "Example office", "EXAMPLE", "Garowe", "", "Africa/Mogadishu", null, true, false, null]]);
     }
 
     public async Task<IActionResult> OnGetExportAsync()
@@ -200,9 +211,9 @@ public class OrgEditModel(HrDbContext db) : PageModel
         var departments = await db.Departments.AsNoTracking().OrderBy(x => x.Id).ToListAsync();
         var units = await db.SubDepartments.AsNoTracking().OrderBy(x => x.Id).ToListAsync();
         return RegistrationCsv.Download("organization-units", CsvColumns,
-            records.Select(x => new object?[] { "Branch", x.Name, x.Code, x.City, x.Address, x.Timezone, null, x.IsActive, false })
-                .Concat(departments.Select(x => new object?[] { "Department", x.Name, x.Code, null, null, null, x.BranchId, x.IsActive, x.RequiresSubDepartment }))
-                .Concat(units.Select(x => new object?[] { "SubDepartment", x.Name, null, null, null, null, x.DepartmentId, x.IsActive, false })));
+            records.Select(x => new object?[] { "Branch", x.Name, x.Code, x.City, x.Address, x.Timezone, null, x.IsActive, false, null })
+                .Concat(departments.Select(x => new object?[] { "Department", x.Name, x.Code, null, null, null, x.BranchId, x.IsActive, x.RequiresSubDepartment, string.Join(";", x.AdditionalBranches.Select(b=>b.BranchId)) }))
+                .Concat(units.Select(x => new object?[] { "SubDepartment", x.Name, null, null, null, null, x.DepartmentId, x.IsActive, false, null })));
     }
 
     public Task<IActionResult> OnPostImportAsync(IFormFile? upload)
@@ -219,6 +230,7 @@ public class OrgEditModel(HrDbContext db) : PageModel
             Active = row.Get<bool>("Active");
             RequiresSub = row.Get<bool>("RequiresSub");
             ParentId = row.Get<int?>("ParentId") ?? 0;
+            AdditionalBranchIds = row.List("AdditionalBranchIds").Select(value => int.TryParse(value, out var id) && id > 0 ? id : throw new FormatException("Use semicolon-separated branch IDs.")).ToList();
             if (Kind == "Department" && string.IsNullOrWhiteSpace(Code))
                 throw new FormatException("Enter a department code.");
             if (Kind == "SubDepartment" && await db.SubDepartments.AnyAsync(x => x.DepartmentId == ParentId && x.Name == Name))

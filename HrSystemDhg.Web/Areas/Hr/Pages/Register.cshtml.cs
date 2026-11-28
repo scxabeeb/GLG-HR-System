@@ -65,7 +65,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
         SubDepartments = await db.SubDepartments.Where(x => x.IsActive).ToListAsync();
     }
 
-    public async Task<IActionResult> OnGetDepartmentsAsync(int branchId) => new JsonResult(await db.Departments.Where(x => x.BranchId == branchId && x.IsActive).Select(x => new { x.Id, x.Name }).ToListAsync());
+    public async Task<IActionResult> OnGetDepartmentsAsync(int branchId) => new JsonResult(await db.Departments.Where(x => (x.BranchId == branchId || x.AdditionalBranches.Any(b => b.BranchId == branchId)) && x.IsActive).Select(x => new { x.Id, x.Name }).ToListAsync());
     public async Task<IActionResult> OnGetSubDepartmentsAsync(int departmentId) => new JsonResult(await db.SubDepartments.Where(x => x.DepartmentId == departmentId && x.IsActive).Select(x => new { x.Id, x.Name }).ToListAsync());
     public async Task<IActionResult> OnPostAsync([FromServices] Microsoft.AspNetCore.Identity.UserManager<ApplicationUser> users)
     {
@@ -85,7 +85,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
             ModelState.AddModelError(nameof(Email), "An account already uses this email address.");
         if (!ModelState.IsValid) return Page();
         var dept = await db.Departments.SingleOrDefaultAsync(x => x.Id == DepartmentId && x.IsActive);
-        if (dept == null || dept.BranchId != BranchId || (dept.RequiresSubDepartment && SubDepartmentId == null) || (SubDepartmentId != null && !await db.SubDepartments.AnyAsync(x => x.Id == SubDepartmentId && x.DepartmentId == DepartmentId && x.IsActive)) || !await db.Branchs.AnyAsync(x => x.Id == dept.BranchId && x.IsActive) || (Hire > HrSystemDhg.Web.Services.BusinessClock.Today && !(await db.Settings.FirstOrDefaultAsync() ?? new()).AllowFutureHires) || string.IsNullOrWhiteSpace(Name) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(Email))
+        if (dept == null || !dept.ServesBranch(BranchId) || (dept.RequiresSubDepartment && SubDepartmentId == null) || (SubDepartmentId != null && !await db.SubDepartments.AnyAsync(x => x.Id == SubDepartmentId && x.DepartmentId == DepartmentId && x.IsActive)) || !await db.Branchs.AnyAsync(x => x.Id == BranchId && x.IsActive) || (Hire > HrSystemDhg.Web.Services.BusinessClock.Today && !(await db.Settings.FirstOrDefaultAsync() ?? new()).AllowFutureHires) || string.IsNullOrWhiteSpace(Name) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(Email))
         {
             ModelState.AddModelError("", "Valid active department, employee details and hire date are required.");
             return Page();
@@ -124,7 +124,7 @@ public class RegisterModel(HrDbContext db, DocumentService? documents = null) : 
             };
             db.Employees.Add(e);
             await db.SaveChangesAsync();
-            db.EmployeeAssignments.Add(new() { EmployeeId = e.Id, BranchId = dept.BranchId, DepartmentId = dept.Id, SubDepartmentId = SubDepartmentId, JobTitle = Title, EffectiveFrom = Hire });
+            db.EmployeeAssignments.Add(new() { EmployeeId = e.Id, BranchId = BranchId, DepartmentId = dept.Id, SubDepartmentId = SubDepartmentId, JobTitle = Title, EffectiveFrom = Hire });
             var u = new ApplicationUser
             {
                 UserName = Number,

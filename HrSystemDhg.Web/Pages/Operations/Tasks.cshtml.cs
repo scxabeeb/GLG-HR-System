@@ -148,11 +148,9 @@ public class TasksModel(HrDbContext db, OperationsNotices notices, ModuleAccess 
                     AssignmentOptions[editing.AssigneeId] = await db.Users.Where(u => u.Id == editing.AssigneeId)
                         .Select(u => u.Email ?? u.UserName).SingleOrDefaultAsync() ?? "Current assignee";
             }
-            Departments = await (from department in db.Departments
-                                 join branch in db.Branchs on department.BranchId equals branch.Id
-                                 where department.IsActive && branch.IsActive
-                                 orderby branch.Name, department.Name
-                                 select new DepartmentOption(department.Id, branch.Name + " / " + department.Name)).ToListAsync();
+            Departments = await db.Departments.Where(d => d.IsActive && db.Branchs.Any(b => b.IsActive &&
+                (b.Id == d.BranchId || d.AdditionalBranches.Any(link => link.BranchId == b.Id))))
+                .OrderBy(d => d.Name).Select(d => new DepartmentOption(d.Id, d.Name)).ToListAsync();
         }
     }
 
@@ -193,7 +191,7 @@ public class TasksModel(HrDbContext db, OperationsNotices notices, ModuleAccess 
             if (Input.DepartmentId is int departmentId)
             {
                 if (!await db.Departments.AnyAsync(d => d.Id == departmentId && d.IsActive &&
-                    db.Branchs.Any(b => b.Id == d.BranchId && b.IsActive)))
+                    db.Branchs.Any(b => (b.Id == d.BranchId || d.AdditionalBranches.Any(link => link.BranchId == b.Id)) && b.IsActive)))
                     ModelState.AddModelError("Input.DepartmentId", "Select an active department in your branch scope.");
 
                 var today = BusinessClock.Today;

@@ -17,8 +17,16 @@ public partial class Branch
     public bool IsActive { get; set; } = true;
 }
 
+public sealed class DepartmentBranch
+{
+    public int DepartmentId { get; set; }
+    public int BranchId { get; set; }
+}
+
 public partial class Department
 {
+    public List<DepartmentBranch> AdditionalBranches { get; set; } = [];
+    public bool ServesBranch(int branchId) => BranchId == branchId || AdditionalBranches.Any(b => b.BranchId == branchId);
     public int Id { get; set; }
     public string Name { get; set; } = "";
     public string Code { get; set; } = "";

@@ -46,7 +46,7 @@ public class ReportViewsModel(HrDbContext db) : PageModel
         if (string.IsNullOrWhiteSpace(Input.Name) || Input.Name.Length > 160 || Input.Description?.Length > 500 || Input.Status?.Length > 80 ||
             Input.DateRange is not ("ThisMonth" or "LastMonth" or "ThisYear") || SelectedColumns.Length == 0 || SelectedColumns.Any(c => c < 0 || c >= columns.Length))
             ModelState.AddModelError("", "Enter a report name, valid date range and at least one available column.");
-        if (Input.BranchId != null && !await db.Branchs.AnyAsync(b => b.Id == Input.BranchId) || Input.DepartmentId != null && !await db.Departments.AnyAsync(d => d.Id == Input.DepartmentId && (Input.BranchId == null || d.BranchId == Input.BranchId)))
+        if (Input.BranchId != null && !await db.Branchs.AnyAsync(b => b.Id == Input.BranchId) || Input.DepartmentId != null && !await db.Departments.AnyAsync(d => d.Id == Input.DepartmentId && (Input.BranchId == null || (d.BranchId == Input.BranchId || d.AdditionalBranches.Any(b => b.BranchId == Input.BranchId)))))
             ModelState.AddModelError("", "Choose a valid branch and department belonging to that branch.");
         if (await db.SavedReportViews.AnyAsync(v => v.Name == (Input.Name ?? "").Trim() && v.Id != Input.Id)) ModelState.AddModelError("", "A report with this name already exists.");
         if (!ModelState.IsValid) { await Load(); return Page(); }

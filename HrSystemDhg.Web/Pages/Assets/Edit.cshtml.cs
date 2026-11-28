@@ -64,7 +64,7 @@ public class EditModel(HrDbContext db) : PageModel
 
         if (!await db.Branchs.AnyAsync(x => x.Id == Input.BranchId))
             ModelState.AddModelError("Input.BranchId", "Select an authorized branch.");
-        if (Input.DepartmentId != null && !await db.Departments.AnyAsync(x => x.Id == Input.DepartmentId && x.BranchId == Input.BranchId))
+        if (Input.DepartmentId != null && !await db.Departments.AnyAsync(x => x.Id == Input.DepartmentId && (x.BranchId == Input.BranchId || x.AdditionalBranches.Any(b => b.BranchId == Input.BranchId))))
             ModelState.AddModelError("Input.DepartmentId", "Select a department in the asset’s branch.");
         if (Input.EmployeeId != null && Input.EmployeeId != asset?.EmployeeId)
         {
@@ -190,9 +190,8 @@ public class EditModel(HrDbContext db) : PageModel
     {
         AssetId = id;
         Branches = await db.Branchs.OrderBy(x => x.Name).Select(x => new SelectListItem(x.Name, x.Id.ToString())).ToListAsync();
-        Departments = await (from department in db.Departments join branch in db.Branchs on department.BranchId equals branch.Id
-            orderby branch.Name, department.Name
-            select new SelectListItem(branch.Name + " / " + department.Name, department.Id.ToString())).ToListAsync();
+        Departments = await db.Departments.OrderBy(d => d.Name)
+            .Select(d => new SelectListItem(d.Name, d.Id.ToString())).ToListAsync();
         Employees = await db.Employees.Where(x => x.Status == "Active" || x.Id == Input.EmployeeId).OrderBy(x => x.FullName)
             .Select(x => new SelectListItem(x.FullName + " · " + x.EmployeeNumber, x.Id.ToString())).ToListAsync();
         if (id == null)

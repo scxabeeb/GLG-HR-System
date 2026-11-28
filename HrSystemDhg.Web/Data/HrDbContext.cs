@@ -26,6 +26,7 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
     public DbSet<FleetServiceEntry> FleetServiceEntries => Set<FleetServiceEntry>();
     public DbSet<Branch> Branchs => Set<Branch>();
     public DbSet<Department> Departments => Set<Department>();
+    public DbSet<DepartmentBranch> DepartmentBranches => Set<DepartmentBranch>();
     public DbSet<SubDepartment> SubDepartments => Set<SubDepartment>();
     public DbSet<EmployeeNumberSequence> EmployeeNumberSequences => Set<EmployeeNumberSequence>();
     public DbSet<Employee> Employees => Set<Employee>();
@@ -164,6 +165,10 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
         b.Entity<LeaveRequest>().HasOne<Employee>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<LeaveBalance>().HasOne<Employee>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<PayrollLine>().HasOne<Employee>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DepartmentBranch>().HasKey(x => new { x.DepartmentId, x.BranchId });
+        b.Entity<Department>().HasMany(x => x.AdditionalBranches).WithOne().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<DepartmentBranch>().HasOne<Branch>().WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Department>().Navigation(x => x.AdditionalBranches).AutoInclude();
         b.Entity<Department>().HasOne<Branch>().WithMany().HasForeignKey(x => x.BranchId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SubDepartment>().HasOne<Department>().WithMany().HasForeignKey(x => x.DepartmentId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<LeaveRequest>().HasOne<LeaveType>().WithMany().HasForeignKey(x => x.LeaveTypeId).OnDelete(DeleteBehavior.Restrict);
@@ -182,7 +187,7 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
         b.Entity<OvertimeApproval>().HasQueryFilter(x => !Restricted || VisibleEmployeeIds.Contains(x.EmployeeId));
         b.Entity<CorrectionRequest>().HasQueryFilter(x => !Restricted || VisibleEmployeeIds.Contains(x.EmployeeId));
         b.Entity<Branch>().HasQueryFilter(x => !Scoped || UserBranchScopes.Any(s => s.UserId == ActorId && s.BranchId == x.Id));
-        b.Entity<Department>().HasQueryFilter(x => Branchs.Any(b => b.Id == x.BranchId));
+        b.Entity<Department>().HasQueryFilter(x => Branchs.Any(b => b.Id == x.BranchId || x.AdditionalBranches.Any(link => link.BranchId == b.Id)));
         b.Entity<SubDepartment>().HasQueryFilter(x => Departments.Any(d => d.Id == x.DepartmentId));
         b.Entity<PayrollPeriod>().HasQueryFilter(x => !Scoped || (x.BranchId != null && UserBranchScopes.Any(s => s.UserId == ActorId && s.BranchId == x.BranchId)));
         b.Entity<SalaryVersion>().HasIndex(x => new { x.EmployeeId, x.EffectiveFrom }).IsUnique();

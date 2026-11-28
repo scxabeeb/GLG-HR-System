@@ -26,3 +26,9 @@ The language selector and sun/moon button are available on sign-in and workspace
 Employee numbering starts again at EMP0001 when available, but terminal PINs stay above the previous known PIN range so retained terminal fingerprints cannot accidentally match new staff. Physical terminal users/fingerprints are not erased. Backups are outside the public web root; only Admin can download backup data. This is a permanent maintenance action, not a normal employee deletion screen.
 
 The optional `DHG_RESET_CHECK=1` browser check exercises this workflow only on the disposable loopback fixture. Never point this destructive test at a real-data server.
+
+### Departments across branches
+
+A department retains its primary branch and can serve additional branches selected in Settings → Departments. Existing department IDs, assignments and history are preserved. Registration and transfers choose the employee's actual branch explicitly; department membership is validated for that branch. Department reports can span offices while branch reports, device assignments, payroll and branch-based access continue using each employee assignment's branch. Organization CSV files include semicolon-separated AdditionalBranchIds. A department branch with employee assignment history cannot be removed. No departments are merged automatically.
+
+Employee directory headers, expanded employee headers and navigation hover states now use explicit dark surfaces and readable foreground colors in dark mode.

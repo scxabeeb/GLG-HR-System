@@ -14,6 +14,7 @@ public class DetailsModel(HrDbContext db) : PageModel
     public List<Education> Education = [];
     public List<WorkExperience> Experience = [];
     public List<EmployeeAssignment> Assignments = [];
+    public List<Branch> Branches = [];
     public List<Department> Departments = [];
     public List<SubDepartment> SubDepartments = [];
     public async Task<IActionResult> OnGetAsync(int employeeId)
@@ -24,6 +25,7 @@ public class DetailsModel(HrDbContext db) : PageModel
         Education = await db.Educations.Where(x => x.EmployeeId == employeeId).ToListAsync();
         Experience = await db.WorkExperiences.Where(x => x.EmployeeId == employeeId).ToListAsync();
         Assignments = await db.EmployeeAssignments.Where(x => x.EmployeeId == employeeId).OrderByDescending(x => x.EffectiveFrom).ToListAsync();
+        Branches = await db.Branchs.Where(x => x.IsActive).ToListAsync();
         Departments = await db.Departments.Where(x => x.IsActive).ToListAsync();
         SubDepartments = await db.SubDepartments.Where(x => x.IsActive).ToListAsync();
         return Page();
@@ -94,10 +96,10 @@ public class DetailsModel(HrDbContext db) : PageModel
         return await Save(employeeId, "added work experience");
     }
 
-    public async Task<IActionResult> OnPostTransferAsync(int employeeId, int departmentId, int? subDepartmentId, string title, DateTime effective)
+    public async Task<IActionResult> OnPostTransferAsync(int employeeId, int branchId, int departmentId, int? subDepartmentId, string title, DateTime effective)
     {
         var d = await db.Departments.SingleOrDefaultAsync(x => x.Id == departmentId && x.IsActive);
-        if (d == null || !await db.Branchs.AnyAsync(x => x.Id == d.BranchId && x.IsActive) || !await db.Employees.AnyAsync(x => x.Id == employeeId) || effective == default || effective < (await db.Employees.SingleAsync(x => x.Id == employeeId)).HireDate || string.IsNullOrWhiteSpace(title) || (d.RequiresSubDepartment && subDepartmentId == null) || (subDepartmentId != null && !await db.SubDepartments.AnyAsync(x => x.Id == subDepartmentId && x.DepartmentId == departmentId && x.IsActive)))
+        if (d == null || !d.ServesBranch(branchId) || !await db.Branchs.AnyAsync(x => x.Id == branchId && x.IsActive) || !await db.Employees.AnyAsync(x => x.Id == employeeId) || effective == default || effective < (await db.Employees.SingleAsync(x => x.Id == employeeId)).HireDate || string.IsNullOrWhiteSpace(title) || (d.RequiresSubDepartment && subDepartmentId == null) || (subDepartmentId != null && !await db.SubDepartments.AnyAsync(x => x.Id == subDepartmentId && x.DepartmentId == departmentId && x.IsActive)))
             return BadRequest();
         var current = await db.EmployeeAssignments.Where(x => x.EmployeeId == employeeId).OrderByDescending(x => x.EffectiveFrom).FirstOrDefaultAsync();
         if (current != null)
@@ -107,13 +109,13 @@ public class DetailsModel(HrDbContext db) : PageModel
             current.EffectiveTo = effective.AddDays(-1);
         }
 
-        db.EmployeeAssignments.Add(new() { EmployeeId = employeeId, BranchId = d.BranchId, DepartmentId = departmentId, SubDepartmentId = subDepartmentId, JobTitle = title, EffectiveFrom = effective });
+        db.EmployeeAssignments.Add(new() { EmployeeId = employeeId, BranchId = branchId, DepartmentId = departmentId, SubDepartmentId = subDepartmentId, JobTitle = title, EffectiveFrom = effective });
         return await Save(employeeId, "changed assignment");
     }
 
     private const string EducationColumns = "Institution,Qualification,Field";
     private const string ExperienceColumns = "Employer,Title,From,To";
-    private const string TransferColumns = "DepartmentId,SubDepartmentId,Title,Effective";
+    private const string TransferColumns = "BranchId,DepartmentId,SubDepartmentId,Title,Effective";
 
     public async Task<IActionResult> OnGetSampleAsync(int employeeId, string dataset)
     {
@@ -122,7 +124,7 @@ public class DetailsModel(HrDbContext db) : PageModel
         {
             "education" => RegistrationCsv.Download("education-sample", EducationColumns, [["Example college", "Diploma", "Administration"]]),
             "experience" => RegistrationCsv.Download("experience-sample", ExperienceColumns, [["Example employer", "Officer", BusinessClock.Today.AddYears(-2), BusinessClock.Today.AddYears(-1)]]),
-            "assignments" => RegistrationCsv.Download("assignments-sample", TransferColumns, [[1, null, "Officer", BusinessClock.Today]]),
+            "assignments" => RegistrationCsv.Download("assignments-sample", TransferColumns, [[1, 1, null, "Officer", BusinessClock.Today]]),
             _ => NotFound()
         };
     }
@@ -144,7 +146,7 @@ public class DetailsModel(HrDbContext db) : PageModel
             case "assignments":
                 var assignments = await db.EmployeeAssignments.AsNoTracking().Where(x => x.EmployeeId == employeeId).OrderBy(x => x.EffectiveFrom).ToListAsync();
                 return RegistrationCsv.Download("assignments", TransferColumns,
-                    assignments.Select(x => new object?[] { x.DepartmentId, x.SubDepartmentId, x.JobTitle, x.EffectiveFrom }));
+                    assignments.Select(x => new object?[] { x.BranchId, x.DepartmentId, x.SubDepartmentId, x.JobTitle, x.EffectiveFrom }));
             default:
                 return NotFound();
         }
@@ -161,7 +163,7 @@ public class DetailsModel(HrDbContext db) : PageModel
             "experience" => await RegistrationCsv.ImportAsync(this, db, upload, ExperienceColumns, row =>
                 OnPostExperienceAsync(employeeId, row.Get<string>("Employer"), row.Get<string>("Title"), row.Get<DateTime>("From"), row.Get<DateTime?>("To")), Back),
             "assignments" => await RegistrationCsv.ImportAsync(this, db, upload, TransferColumns, row =>
-                OnPostTransferAsync(employeeId, row.Get<int>("DepartmentId"), row.Get<int?>("SubDepartmentId"), row.Get<string>("Title"), row.Get<DateTime>("Effective")), Back),
+                OnPostTransferAsync(employeeId, row.Get<int>("BranchId"), row.Get<int>("DepartmentId"), row.Get<int?>("SubDepartmentId"), row.Get<string>("Title"), row.Get<DateTime>("Effective")), Back),
             _ => NotFound()
         };
     }

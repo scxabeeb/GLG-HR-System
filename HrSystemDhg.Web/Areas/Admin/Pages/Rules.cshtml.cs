@@ -72,7 +72,7 @@ public class RulesModel(HrDbContext db) : PageModel
             "Flag",
             "Absent",
             "Half day"
-        }.Contains(Rule.IncompletePolicy) || (Rule.DepartmentId != null && !Departments.Any(x => x.Id == Rule.DepartmentId && (Rule.BranchId == null || x.BranchId == Rule.BranchId))))
+        }.Contains(Rule.IncompletePolicy) || (Rule.DepartmentId != null && !Departments.Any(x => x.Id == Rule.DepartmentId && (Rule.BranchId == null || (x.BranchId == Rule.BranchId || x.AdditionalBranches.Any(b => b.BranchId == Rule.BranchId))))))
         {
             ModelState.AddModelError("", "Enter valid rule values and a consistent organization scope.");
             return Page();

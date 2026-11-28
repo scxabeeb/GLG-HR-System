@@ -55,3 +55,14 @@
 [data-theme=dark] .dashboard-workspace .portal-branch-row strong,[data-theme=dark] .dashboard-workspace .portal-branch-row small,[data-theme=dark] .dashboard-workspace .portal-donut>div>span,[data-theme=dark] .dashboard-workspace .portal-payroll-amount>small{color:#b8cdeb}
 [data-theme=dark] .workspace-section-index{background:#18273e;border-color:#30425b}
 [data-theme=dark] .workspace-section-index strong{color:#b9cce6}
+
+/* Directory headers inherit the page surface instead of the global white header. */
+[data-theme=dark] .civic-shell .workspace-list-heading,
+[data-theme=dark] .civic-shell .employee-overview,
+[data-theme=dark] .civic-shell .employee-sheet-header{background:#18273e;color:#e1eaf8;border-color:#435875}
+[data-theme=dark] .civic-shell .workspace-list-heading small{color:#b9cce6}
+[data-theme=dark] .civic-shell .employee-directory-expanded>td{background:#18273e}
+[data-theme=dark] .civic-shell .workspace-tabs a:hover,
+[data-theme=dark] .civic-shell .workspace-tabs a:focus-visible{background:#223e69;color:#fff}
+
+.civic-shell .workspace-list-heading{height:auto;min-height:0;border-top:0;padding:0 0 .65rem;letter-spacing:normal}

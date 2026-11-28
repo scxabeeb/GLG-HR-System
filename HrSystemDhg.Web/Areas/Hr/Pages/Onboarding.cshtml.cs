@@ -224,7 +224,7 @@ public class OnboardingModel(HrDbContext db, CalendarService calendar, DocumentS
                     {
                         var assignment=await db.EmployeeAssignments.Where(x=>x.EmployeeId==EmployeeId).OrderByDescending(x=>x.EffectiveFrom).FirstAsync();
                         var department=await db.Departments.SingleAsync(x=>x.Id==assignment.DepartmentId);
-                        if(!department.IsActive||department.BranchId!=assignment.BranchId||!await db.Branchs.AnyAsync(x=>x.Id==assignment.BranchId&&x.IsActive)||(department.RequiresSubDepartment&&assignment.SubDepartmentId==null)||(assignment.SubDepartmentId!=null&&!await db.SubDepartments.AnyAsync(x=>x.Id==assignment.SubDepartmentId&&x.DepartmentId==department.Id&&x.IsActive)))
+                        if(!department.IsActive||!department.ServesBranch(assignment.BranchId)||!await db.Branchs.AnyAsync(x=>x.Id==assignment.BranchId&&x.IsActive)||(department.RequiresSubDepartment&&assignment.SubDepartmentId==null)||(assignment.SubDepartmentId!=null&&!await db.SubDepartments.AnyAsync(x=>x.Id==assignment.SubDepartmentId&&x.DepartmentId==department.Id&&x.IsActive)))
                             throw new InvalidOperationException("Complete registration under an active, valid organization assignment.");
                     }
                     Employee.RegistrationComplete = SalaryCount > 0;

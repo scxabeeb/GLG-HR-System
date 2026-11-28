@@ -526,6 +526,21 @@ namespace HrSystemDhg.Web.Migrations
                     b.ToTable("Departments");
                 });
 
+            modelBuilder.Entity("HrSystemDhg.Web.Models.DepartmentBranch", b =>
+                {
+                    b.Property<int>("DepartmentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("int");
+
+                    b.HasKey("DepartmentId", "BranchId");
+
+                    b.HasIndex("BranchId");
+
+                    b.ToTable("DepartmentBranches");
+                });
+
             modelBuilder.Entity("HrSystemDhg.Web.Models.Education", b =>
                 {
                     b.Property<int>("Id")
@@ -2534,6 +2549,21 @@ namespace HrSystemDhg.Web.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("HrSystemDhg.Web.Models.DepartmentBranch", b =>
+                {
+                    b.HasOne("HrSystemDhg.Web.Models.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HrSystemDhg.Web.Models.Department", null)
+                        .WithMany("AdditionalBranches")
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HrSystemDhg.Web.Models.Education", b =>
                 {
                     b.HasOne("HrSystemDhg.Web.Models.Employee", null)
@@ -2921,6 +2951,11 @@ namespace HrSystemDhg.Web.Migrations
             modelBuilder.Entity("HrSystemDhg.Web.Models.Asset", b =>
                 {
                     b.Navigation("Photo");
+                });
+
+            modelBuilder.Entity("HrSystemDhg.Web.Models.Department", b =>
+                {
+                    b.Navigation("AdditionalBranches");
                 });
 
             modelBuilder.Entity("HrSystemDhg.Web.Models.WorkMeeting", b =>

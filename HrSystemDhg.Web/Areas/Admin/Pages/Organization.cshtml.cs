@@ -30,7 +30,7 @@ public class OrganizationModel(HrDbContext db) : PageModel
             case "Branch":
                 var branch = await db.Branchs.FindAsync(id); if (branch == null) return NotFound();
                 unit = branch; name = branch.Name;
-                used = await db.Departments.AnyAsync(x => x.BranchId == id) || await db.ZkDevices.AnyAsync(x => x.BranchId == id) ||
+                used = await db.Departments.AnyAsync(x => x.BranchId == id || x.AdditionalBranches.Any(b => b.BranchId == id)) || await db.ZkDevices.AnyAsync(x => x.BranchId == id) ||
                     await db.EmployeeAssignments.AnyAsync(x => x.BranchId == id) || await db.UserBranchScopes.AnyAsync(x => x.BranchId == id) ||
                     await db.WorkRules.AnyAsync(x => x.BranchId == id) || await db.DeductionRules.AnyAsync(x => x.BranchId == id) ||
                     await db.PayrollPeriods.AnyAsync(x => x.BranchId == id) || await db.PayrollLines.AnyAsync(x => x.BranchId == id) ||
