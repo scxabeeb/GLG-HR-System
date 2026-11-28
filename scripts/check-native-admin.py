@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory(prefix='garowe-admin-',dir='/private/tmp') as f
    time.sleep(.25)
   else:raise Exception('Disposable MySQL failed')
   password='Fixture!'+secrets.token_hex(12)
-  env=os.environ.copy();env.update({'ConnectionStrings__DefaultConnection':'Server=127.0.0.1;Port=3312;Database=native_admin_fixture;User=root;Password=;','Bootstrap__Email':'admin@example.test','Bootstrap__Password':password,'ASPNETCORE_ENVIRONMENT':'Development','ASPNETCORE_URLS':'http://127.0.0.1:5198','Logging__LogLevel__Default':'Warning','Attendance__AutomaticClosingEnabled':'false'})
+  env=os.environ.copy();env.update({'ConnectionStrings__DefaultConnection':'Server=127.0.0.1;Port=3312;Database=native_admin_fixture;User=root;Password=;','Bootstrap__Email':'admin@example.test','Bootstrap__Password':password,'ASPNETCORE_ENVIRONMENT':'Development','ASPNETCORE_URLS':'http://127.0.0.1:5198','Logging__LogLevel__Default':'Warning','Attendance__AutomaticClosingEnabled':'false','Automation__DisableWorker':'true'})
   dll=root/'HrSystemDhg.Web/bin/Debug/net8.0/HrSystemDhg.Web.dll'
   subprocess.run(['dotnet',str(dll),'--migrate'],env=env,cwd=root/'HrSystemDhg.Web',check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   log=open(p/'app.log','w');app=subprocess.Popen(['dotnet',str(dll)],env=env,cwd=root/'HrSystemDhg.Web',stdout=log,stderr=log)
@@ -74,6 +74,7 @@ with tempfile.TemporaryDirectory(prefix='garowe-admin-',dir='/private/tmp') as f
   action('register','OnPostAsync',{'Name':'','Email':'invalid','Title':'','Hire':'2026-01-01','BranchId':b,'DepartmentId':dept},400)
   action('roles','OnPostDeleteAsync',{'id':sql("SELECT Id FROM AspNetRoles WHERE Name='Admin'")},400)
   action('branches','OnPostAsync',{'Name':'Duplicate','Code':'A','Timezone':'Africa/Mogadishu','Active':True},400)
+  if os.environ.get('DHG_AUTOMATION_CHECK')=='1':exec((root/'scripts/check-automation-api.py').read_text())
   request('admin/data-reset/load',{'values':{}},404)
   request('admin/users/action/DeleteDatabase',{'values':{}},404)
   request('admin/catalog',expected=401,auth=False)

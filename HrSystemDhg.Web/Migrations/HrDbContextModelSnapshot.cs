@@ -398,6 +398,135 @@ namespace HrSystemDhg.Web.Migrations
                     b.ToTable("AuditLogs");
                 });
 
+            modelBuilder.Entity("HrSystemDhg.Web.Models.AutomationEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime?>("DeliveredUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("varchar(80)");
+
+                    b.Property<Guid>("Generation")
+                        .HasColumnType("char(36)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(250)
+                        .HasColumnType("varchar(250)");
+
+                    b.Property<int?>("LastHttpStatus")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LeaseUntilUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("varchar(24)");
+
+                    b.Property<DateTime>("NextAttemptUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptUtc");
+
+                    b.ToTable("AutomationEvents");
+                });
+
+            modelBuilder.Entity("HrSystemDhg.Web.Models.AutomationReminder", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(180)
+                        .HasColumnType("varchar(180)");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AutomationReminders");
+                });
+
+            modelBuilder.Entity("HrSystemDhg.Web.Models.AutomationSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowReminders")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("Attendance")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("CallbackKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<Guid>("Generation")
+                        .HasColumnType("char(36)");
+
+                    b.Property<bool>("IncludeContacts")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("IncludePayrollAmounts")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("Meetings")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("Payroll")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("ProtectedWebhookSecret")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("varchar(2048)");
+
+                    b.Property<string>("ReminderKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<bool>("Tasks")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("WebhookUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("varchar(2048)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AutomationSettings");
+                });
+
             modelBuilder.Entity("HrSystemDhg.Web.Models.Branch", b =>
                 {
                     b.Property<int>("Id")

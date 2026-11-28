@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace HrSystemDhg.Web.Data;
-public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAccessor? http = null) : IdentityDbContext<ApplicationUser>(options)
+public partial class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAccessor? http = null) : IdentityDbContext<ApplicationUser>(options)
 {
     public DbSet<UserModuleRestriction> UserModuleRestrictions => Set<UserModuleRestriction>();
     public DbSet<OperationsNotification> OperationsNotifications => Set<OperationsNotification>();
@@ -57,6 +57,9 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
     public DbSet<CorrectionRequest> CorrectionRequests => Set<CorrectionRequest>();
     public DbSet<SavedReportView> SavedReportViews => Set<SavedReportView>();
     public DbSet<SystemSettings> Settings => Set<SystemSettings>();
+    public DbSet<AutomationSettings> AutomationSettings => Set<AutomationSettings>();
+    public DbSet<AutomationEvent> AutomationEvents => Set<AutomationEvent>();
+    public DbSet<AutomationReminder> AutomationReminders => Set<AutomationReminder>();
     public string? ActorId => http?.HttpContext?.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
     private bool PayrollWorkspace => http?.HttpContext?.GetRouteValue("area")?.ToString() == "Management" &&
         http.HttpContext.GetRouteValue("page")?.ToString() == "/Payroll" &&
@@ -78,6 +81,8 @@ public class HrDbContext(DbContextOptions<HrDbContext> options, IHttpContextAcce
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<AutomationEvent>().HasIndex(e=>new{e.Status,e.NextAttemptUtc});
+        b.Entity<AutomationEvent>().Property(e=>e.Payload).HasColumnType("longtext");
         b.Entity<EmployeeNumberSequence>().HasData(new EmployeeNumberSequence { Id = 1, NextNumber = 1 });
         b.Entity<MeetingAgendaItem>().HasOne<WorkMeeting>().WithMany().HasForeignKey(x => x.MeetingId);
         b.Entity<AgendaItem>().HasIndex(x => new { x.OwnerId, x.Completed, x.Date });

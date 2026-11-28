@@ -33,6 +33,7 @@ public sealed class EmployeeDataReset(HrDbContext db, IWebHostEnvironment env, D
         await Add<Microsoft.AspNetCore.Identity.IdentityRole>("Roles");
         await Add<Employee>("Employees"); await Add<EmployeeAssignment>("EmployeeAssignments"); await Add<Education>("Educations");
         await Add<WorkExperience>("WorkExperiences"); await Add<EmployeeDocument>("EmployeeDocuments"); await Add<SalaryVersion>("SalaryVersions");
+        tables["HrAutomationEvents"]=JsonSerializer.SerializeToElement(await db.AutomationEvents.AsNoTracking().Where(e=>e.Module=="attendance"||e.Module=="payroll").OrderBy(e=>e.Id).ToListAsync(),Json);
         await Add<AttendanceDay>("AttendanceDays"); await Add<ZkPunch>("ZkPunchs"); await Add<ZkPunchReview>("ZkPunchReviews"); await Add<ZkDeviceCommand>("ZkDeviceCommands");
         await Add<LeaveRequest>("LeaveRequests"); await Add<LeaveBalance>("LeaveBalances"); await Add<CorrectionRequest>("CorrectionRequests"); await Add<OvertimeApproval>("OvertimeApprovals");
         await Add<PayrollPeriod>("PayrollPeriods"); await Add<PayrollLine>("PayrollLines"); await Add<PayrollDeduction>("PayrollDeductions"); await Add<Payslip>("Payslips");
@@ -84,6 +85,7 @@ public sealed class EmployeeDataReset(HrDbContext db, IWebHostEnvironment env, D
         pins.AddRange(await db.ZkDeviceCommands.Select(x=>x.Pin).ToListAsync());
         var nextPin = Math.Max(await db.EmployeeNumberSequences.MaxAsync(x=>x.NextPin), pins.Select(x=>int.TryParse(x,out var pin)&&pin>=0&&pin<=999999999?pin+1:1).DefaultIfEmpty(1).Max());
         var files = await db.EmployeeDocuments.IgnoreQueryFilters().Select(x => x.StoragePath).ToListAsync();
+        await db.AutomationEvents.Where(e=>e.Module=="attendance"||e.Module=="payroll").ExecuteDeleteAsync();
         await db.PayrollDeductions.ExecuteDeleteAsync(); await db.Payslips.ExecuteDeleteAsync(); await db.PayrollLines.IgnoreQueryFilters().ExecuteDeleteAsync(); await db.PayrollPeriods.IgnoreQueryFilters().ExecuteDeleteAsync();
         await db.CorrectionRequests.IgnoreQueryFilters().ExecuteDeleteAsync(); await db.OvertimeApprovals.IgnoreQueryFilters().ExecuteDeleteAsync();
         await db.LeaveRequests.IgnoreQueryFilters().ExecuteDeleteAsync(); await db.LeaveBalances.IgnoreQueryFilters().ExecuteDeleteAsync(); await db.AttendanceDays.IgnoreQueryFilters().ExecuteDeleteAsync();

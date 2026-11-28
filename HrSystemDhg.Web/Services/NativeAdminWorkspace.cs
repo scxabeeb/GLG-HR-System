@@ -47,6 +47,7 @@ public static class NativeAdminWorkspace
         new("devices", "Attendance devices", "Administration", typeof(Pages.Admin.DevicesModel)),
         new("rules", "Attendance & deduction rules", "Administration", typeof(Pages.Admin.RulesModel)),
         new("leave-types", "Leave types", "Administration", typeof(Pages.Admin.LeaveTypesModel)),
+        new("automation", "Automation & n8n", "Administration", typeof(Pages.Admin.AutomationModel)),
         new("settings", "System settings", "Administration", typeof(Pages.Admin.SettingsModel)),
         new("report-views", "Report settings", "Reports", typeof(Pages.Admin.ReportViewsModel)),
         new("reports", "Main reports", "Reports", typeof(Pages.Reports.IndexModel)),

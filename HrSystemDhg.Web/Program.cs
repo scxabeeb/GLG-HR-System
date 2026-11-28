@@ -83,6 +83,9 @@ builder.Services.AddScoped<PortalBranding>();
 builder.Services.AddHttpClient("whatsapp", client => client.Timeout = TimeSpan.FromSeconds(12))
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHostedService<WhatsAppWorker>();
+builder.Services.AddHttpClient("automation",client=>client.Timeout=TimeSpan.FromSeconds(15)).ConfigurePrimaryHttpMessageHandler(AutomationSecurity.Handler);
+builder.Services.AddScoped<AutomationDelivery>();
+builder.Services.AddHostedService<AutomationWorker>();
 builder.Services.AddHostedService<AttendanceDeadlineWorker>();
 builder.Services.AddRateLimiter(options => options.AddPolicy("fleet-gps", context =>
     RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -237,6 +240,7 @@ app.MapGet("/api/mobile/v1/{section}", MobileEmployeeApi.Read).RequireAuthorizat
 NativeMobileApi.Map(app);
 NativeOperationsManagement.Map(app);
 NativeAdminWorkspace.Map(app);
+AutomationApi.Map(app);
 foreach (var path in new[] { "/iclock/cdata", "/iclock/cdata.aspx" })
 {
     app.MapGet(path, ZkAttendancePush.Poll).AllowAnonymous().RequireRateLimiting("attendance-push");
