@@ -32,3 +32,7 @@ The optional `DHG_RESET_CHECK=1` browser check exercises this workflow only on t
 A department retains its primary branch and can serve additional branches selected in Settings → Departments. Existing department IDs, assignments and history are preserved. Registration and transfers choose the employee's actual branch explicitly; department membership is validated for that branch. Department reports can span offices while branch reports, device assignments, payroll and branch-based access continue using each employee assignment's branch. Organization CSV files include semicolon-separated AdditionalBranchIds. A department branch with employee assignment history cannot be removed. No departments are merged automatically.
 
 Employee directory headers, expanded employee headers and navigation hover states now use explicit dark surfaces and readable foreground colors in dark mode.
+
+### Shared dark-mode component coverage
+
+Dark surfaces now cover expanded employee and user details, role permissions, task subtasks, payroll dialogs and workflow stages, meeting invite lists, report summaries, registration panels and pagination. Screen-specific overrides preserve print output and light mode. The synthetic-record browser check `scripts/check-dark-components.cjs` checks 4.5:1 text contrast at 390px and 1280px, focus/hover states, light-mode surfaces and print backgrounds. It exercises shared components; it does not claim a signed-in crawl of every production page.

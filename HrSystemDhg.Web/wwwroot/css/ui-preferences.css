@@ -66,3 +66,46 @@
 [data-theme=dark] .civic-shell .workspace-tabs a:focus-visible{background:#223e69;color:#fff}
 
 .civic-shell .workspace-list-heading{height:auto;min-height:0;border-top:0;padding:0 0 .65rem;letter-spacing:normal}
+
+/* Shared dark surfaces for record details, forms and module workspaces. */
+@media screen {
+[data-theme=dark] .civic-shell{--dark-surface:#18273e;--dark-raised:#213650;--dark-text:#e1eaf8;--dark-muted:#b9cce6;--dark-border:#435875}
+[data-theme=dark] .civic-shell :is(.employee-detail-grid>section,.workspace-list-item,.task-parent,.task-subtask,.access-form,.permission-module,.payroll-detail,dialog,.report-hub-count,.payroll-stage-list,.registration-info,.meeting-invite-directory,.meeting-invite-field){background:var(--dark-surface);color:var(--dark-text);border-color:var(--dark-border)}
+[data-theme=dark] .civic-shell :is(.registration-number,.registration-photo-preview,.employee-sheet-photo,.workspace-shortcuts a,.payroll-generation-note,.payroll-recalculate-form,.meeting-invite-directory>summary,.payroll-summary>div,.steps a,.panel-tag,.module-glyph,.user-monogram,.list-page-links a,.list-page-links span){background:var(--dark-raised);color:var(--dark-text);border-color:var(--dark-border)}
+[data-theme=dark] .civic-shell :is(.user-heading h2,.user-heading strong,.user-editor-body strong,.employee-detail-grid strong,.employee-facts dd,.payroll-detail dd,.payroll-stage-list strong,.payroll-generation-note strong,.meeting-invite-option strong,.registration-info strong,.workspace-shortcuts strong){color:var(--dark-text)}
+[data-theme=dark] .civic-shell :is(.user-heading p,.user-editor-note,.users-hint,.users-directory p,.users-overview span,.permission-module .muted,.user-editor-body small,.employee-facts dt,.employee-detail-grid small,.registration-info p,.registration-help,.payroll-stage-list small,.payroll-generation-form small,.meeting-invite-option small,.list-pagination,.hint,.muted,.text-muted,figcaption){color:var(--dark-muted)}
+[data-theme=dark] .civic-shell :is(header:not(.civic-topbar),.employee-sheet-nav,.employee-document,fieldset,hr,.permission-choice,.meeting-invite-option,.payroll-stage-list li){border-color:var(--dark-border)}
+[data-theme=dark] .civic-content header:not(.civic-hero){background:var(--dark-surface);color:var(--dark-text)}
+[data-theme=dark] .civic-shell :is(.user-row-action,.employee-sheet-nav a,.users-overview strong,.payroll-generation-note a,.meeting-invite-directory summary){color:#a9c8ff}
+[data-theme=dark] .civic-shell :is(.hub-card:hover,.portal-module:hover,.workspace-list-item:hover,.meeting-invite-option:hover,.list-page-links a:hover,.list-page-links a:focus-visible,.report-switcher .button.secondary:hover){background:#253f63;color:#e1eaf8;border-color:#719cff}
+[data-theme=dark] .civic-shell :is(.steps .active,.steps a[aria-current],.list-page-links [aria-current=page],.payroll-stage-list .is-current,.payroll-stage-list .is-current>span){background:#2759d5;color:#fff;border-color:#719cff}
+[data-theme=dark] .civic-shell .payroll-stage-list .is-current :is(strong,small){color:#fff}
+[data-theme=dark] .civic-shell :is(.status-positive,.badge.status-positive,.payroll-success,.payroll-stage-list .is-complete>span){background:#153e32;color:#c2eddb;border-color:#34765e}
+[data-theme=dark] .civic-shell :is(.status-warning,.badge.status-warning){background:#493819;color:#ffe1a3;border-color:#8f743f}
+[data-theme=dark] .civic-shell :is(.status-negative,.badge.status-negative,.error,.registration-errors.validation-summary-errors){background:#4a2331;color:#ffe0e5;border-color:#92516a}
+[data-theme=dark] .civic-shell .user-active{background:#153e32!important;color:#c2eddb!important}
+[data-theme=dark] .civic-shell .user-inactive{background:#304057!important;color:#d6e0ef!important}
+[data-theme=dark] .civic-shell :is(input:focus,select:focus,textarea:focus){background:#101d31;color:#e5edfa;border-color:#8fb4ff;box-shadow:0 0 0 3px #719cff33}
+[data-theme=dark] .civic-shell :is(input:disabled,select:disabled,textarea:disabled,.list-page-links [aria-disabled=true],.list-page-links button:disabled){background:#20324b;color:#b7c9e2;border-color:#435875}
+[data-theme=dark] .civic-shell input[type=file]::file-selector-button{background:#223e69;color:#d5e6ff;border-color:#435875}
+[data-theme=dark] .civic-shell :is(.password-toggle,.menu-toggle,.skip-link){background:#223e69;color:#e1eaf8;border-color:#435875}
+[data-theme=dark] .civic-shell .civic-content button.payroll-deduction-link{background:#223e69;color:#d5e6ff;border-color:#435875}
+[data-theme=dark] .civic-shell .civic-content button.payroll-deduction-link:hover{background:#2759d5;color:#fff}
+[data-theme=dark] .civic-shell :is(.user-section-nav a:target,.access-form:target){border-color:#8fb4ff;box-shadow:0 0 0 2px #719cff33}
+[data-theme=dark] .civic-shell :is(.blue-symbol,.gold-symbol,.green-symbol,.violet-symbol){background:#253f63;color:#d5e6ff}
+[data-theme=dark] .civic-shell .portal-branch-row progress,[data-theme=dark] .civic-shell .portal-branch-row progress::-webkit-progress-bar{background:#30425b}
+[data-theme=dark] .civic-shell a:focus-visible,[data-theme=dark] .civic-shell button:focus-visible,[data-theme=dark] .civic-shell summary:focus-visible{outline:3px solid #8fb4ff;outline-offset:3px}
+}
+@media screen {
+[data-theme=dark] .civic-shell .report-hub-count strong{color:#a9c8ff}
+[data-theme=dark] .civic-shell .report-hub-count span{color:#b9cce6}
+[data-theme=dark] .civic-shell .meeting-entry .meeting-live{background:#153e32;color:#c2eddb}
+[data-theme=dark] .civic-shell .meeting-entry .meeting-closed{background:#304057;color:#d6e0ef}
+}
+@media screen {
+[data-theme=dark] .civic-shell :is(.registration-heading p,.registration-section-heading p,.registration-aside p,.employee-registration small,.registration-next ul,.registration-footer p,.registration-optional,.attendance-status-message,.deduction-attendance-context dt,.workspace-shortcuts a span,.workspace-tools>summary small,.hub-section-heading p,.hub-link-caption,.payroll-manage-grid p,.payroll-policy p,.invite-selection-heading small,.invite-directory-tools>span,.meeting-invite-directory>summary span,.list-pagination p,.table-scroll-hint){color:#b9cce6}
+[data-theme=dark] .civic-shell :is(.workspace-tools>summary,.payroll-secondary-action summary,.payroll-policy summary,.panel-heading>a,.meeting-share-panel .meeting-copy-status,.workspace-section-index a){color:#a9c8ff}
+[data-theme=dark] .civic-shell :is(.workspace-table .payroll-net,.registration-auto){color:#9de1be}
+[data-theme=dark] .civic-shell :is(.required-mark,.registration-required){color:#ffb3bb}
+[data-theme=dark] .dashboard-workspace :is(.portal-empty strong,.portal-empty p,.portal-stat>small>span){color:#b9cce6}
+}
