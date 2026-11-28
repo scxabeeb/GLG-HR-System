@@ -6,6 +6,13 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  try{
   const page=await browser.newPage();await page.goto(base+'/Identity/Account/Login');await page.locator('#Username').fill(process.env.E2E_USER);await page.locator('#Password').fill(process.env.E2E_PASSWORD);await page.locator('.auth-submit').click();await page.waitForURL('**/Admin/Dashboard');
   const csrf=await page.request.post(base+'/Admin/DataReset',{form:{Confirmation:'RESET EMPLOYEE DATA'}});if(csrf.status()!==400)throw Error('Reset accepts missing CSRF');
+  await page.goto(base+'/Admin/Users?Search=secretary-check');
+  const link=page.locator('form[action*="handler=Link"]');
+  if(await link.count()){
+   const token=await link.locator('[name=__RequestVerificationToken]').inputValue(),user=await link.locator('[name=id]').inputValue();
+   const employee=await link.locator('select option[value]:not([value=""])').first().getAttribute('value');
+   if(employee)await page.request.post(base+'/Admin/Users?handler=Link',{form:{__RequestVerificationToken:token,id:user,employeeId:employee}});
+  }
   await page.goto(base+'/Admin/DataReset');const before=await page.locator('tbody').textContent();
   if(!/Employees\s*[1-9]/.test(before))throw Error('Reset fixture has no employees');
   await page.getByRole('button',{name:'Create reset backup',exact:true}).click();await page.waitForLoadState('networkidle');
@@ -15,7 +22,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   const form=page.locator('form').filter({has:page.locator('input[name=Confirmation]')});const token=await form.locator('[name=__RequestVerificationToken]').inputValue();
   const rejected=await page.request.post(base+'/Admin/DataReset',{form:{__RequestVerificationToken:token,BackupId:id,Confirmation:'wrong'}});if(!(await rejected.text()).includes('type RESET EMPLOYEE DATA exactly'))throw Error('Reset accepts an incorrect confirmation');
   if((await page.locator('tbody').textContent())!==before)throw Error('Invalid reset changed records');
-  await page.locator('#Confirmation').fill('RESET EMPLOYEE DATA');await page.getByRole('button',{name:'Delete employee data and employee accounts',exact:true}).click();await page.waitForLoadState('networkidle');
+  await page.locator('#Confirmation').fill('RESET EMPLOYEE DATA');await page.getByRole('button',{name:'Delete HR data and other login accounts',exact:true}).click();await page.waitForLoadState('networkidle');
   if(!await page.getByRole('status').filter({hasText:'Employee, attendance, salary, payroll and leave records cleared.'}).count())throw Error('Reset did not complete');
   const counts=await page.locator('tbody tr td:last-child').allTextContents();if(counts.some(x=>x.trim()!=='0'))throw Error('HR records remain after reset');
   if((await page.request.get(base+'/Admin/Devices')).status()!==200||(await page.request.get(base+'/Admin/Organization')).status()!==200)throw Error('Reset lost administrator or configuration access');
@@ -23,6 +30,10 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   await page.getByRole('button',{name:'Create reset backup',exact:true}).click();await page.waitForLoadState('networkidle');
   const afterId=new URL(page.url()).searchParams.get('BackupId');const after=await(await page.request.get(base+'/Admin/DataReset?handler=Download&id='+afterId)).json();
   const oldPins=['Employees','ZkPunchs','ZkPunchReviews','ZkDeviceCommands'].flatMap(key=>data.tables[key].map(row=>Number(row.ZkPin??row.Pin))).filter(value=>Number.isInteger(value)&&value>=0&&value<=999999999);
+  const protectedRoles=data.tables.Roles.filter(role=>['Admin','General Secretary'].includes(role.Name)).map(role=>role.Id);
+  const protectedUsers=new Set(data.tables.UserRoles.filter(role=>protectedRoles.includes(role.RoleId)).map(role=>role.UserId));
+  if(after.tables.Users.some(user=>!protectedUsers.has(user.Id)) || after.tables.Users.length!==protectedUsers.size)throw Error('Reset did not retain exactly Admin and General Secretary accounts');
+  if(!after.tables.Users.some(user=>user.Email==='secretary-check@example.test'&&user.EmployeeId===null))throw Error('General Secretary account was removed or kept a deleted employee link');
   const counter=after.tables.EmployeeNumberSequences[0];if(counter.NextNumber!==1||counter.NextPin<Math.max(0,...oldPins)+1)throw Error('Reset reuses a previously assigned terminal PIN');
   for(const key of ['AssetEmployees','AssetActivityEmployees','VehicleDrivers','TripDrivers'])if(JSON.stringify(data.tables[key].map(x=>x.Id))!==JSON.stringify(after.tables[key].map(x=>x.Id)))throw Error('Reset removed records from another module');
   console.log('PASS employee reset: authenticated Admin + CSRF + backup + exact confirmation; HR records removed, administrator/configuration retained, backup retained');

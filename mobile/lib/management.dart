@@ -1,3 +1,4 @@
+import 'ui_preferences.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'reports.dart';
@@ -23,16 +24,16 @@ Future<void> confirmManage(
   final yes = await showDialog<bool>(
     context: context,
     builder: (c) => AlertDialog(
-      title: Text(title),
-      content: const Text('Participants or assignees will see this change.'),
+      title: UiText.raw(title),
+      content: const UiText('Participants or assignees will see this change.'),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(c, false),
-          child: const Text('Keep'),
+          child: const UiText('Keep'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(c, true),
-          child: const Text('Confirm'),
+          child: const UiText('Confirm'),
         ),
       ],
     ),
@@ -73,7 +74,7 @@ class ManagementActions extends StatelessWidget {
             if (module == 'tasks') ...[
               FilledButton.icon(
                 icon: const Icon(Icons.add),
-                label: Text(
+                label: UiText.raw(
                   options['canAssign'] == true
                       ? 'Create task'
                       : 'Personal task',
@@ -83,7 +84,7 @@ class ManagementActions extends StatelessWidget {
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.groups_outlined),
-                label: const Text('Team tasks'),
+                label: const UiText('Team tasks'),
                 onPressed: () =>
                     openManager(context, TeamTasks(api: api), refresh),
               ),
@@ -91,7 +92,7 @@ class ManagementActions extends StatelessWidget {
             if (module == 'meetings' && options['canOrganize'] == true)
               FilledButton.icon(
                 icon: const Icon(Icons.add),
-                label: const Text('Schedule meeting'),
+                label: const UiText('Schedule meeting'),
                 onPressed: () =>
                     openManager(context, MeetingEditor(api: api), refresh),
               ),
@@ -118,11 +119,11 @@ class PeoplePicker extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text(
+      UiText.raw(
         single ? 'Assigned employee' : 'Select employees',
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      if (people.isEmpty) const Text('No eligible accounts available.'),
+      if (people.isEmpty) const UiText('No eligible accounts available.'),
       if (!single && people.isNotEmpty)
         TextButton(
           onPressed: () {
@@ -133,7 +134,7 @@ class PeoplePicker extends StatelessWidget {
             }
             changed();
           },
-          child: const Text('Select / clear all'),
+          child: const UiText('Select / clear all'),
         ),
       Container(
         constraints: const BoxConstraints(maxHeight: 260),
@@ -147,7 +148,7 @@ class PeoplePicker extends StatelessWidget {
             for (final p in people)
               CheckboxListTile(
                 dense: true,
-                title: Text(p['name'] ?? 'Employee'),
+                title: UiText.raw(p['name'] ?? 'Employee'),
                 value: selected.contains(p['id']),
                 onChanged: (value) {
                   if (single) selected.clear();
@@ -162,7 +163,7 @@ class PeoplePicker extends StatelessWidget {
           ],
         ),
       ),
-      Text('${selected.length} selected'),
+      UiText('${selected.length} selected'),
     ],
   );
 }
@@ -293,17 +294,21 @@ class _TaskEditorState extends State<TaskEditor> {
       if (loading)
         const Center(child: CircularProgressIndicator())
       else if (error != null)
-        Text(error!)
+        UiText.raw(error!)
       else ...[
-        if (widget.team != null) Text('Parent task · ${widget.team!['title']}'),
+        if (widget.team != null)
+          UiText('Parent task · ${widget.team!['title']}'),
         TextField(
           controller: title,
           readOnly: teamAssignment,
           maxLength: 160,
-          decoration: InputDecoration(
-            labelText: widget.team == null
-                ? 'Task name'
-                : 'Subtask / responsibility',
+          decoration: localizeDecoration(
+            context,
+            InputDecoration(
+              labelText: widget.team == null
+                  ? 'Task name'
+                  : 'Subtask / responsibility',
+            ),
           ),
         ),
         TextField(
@@ -311,22 +316,26 @@ class _TaskEditorState extends State<TaskEditor> {
           maxLength: 2500,
           minLines: 3,
           maxLines: 6,
-          decoration: const InputDecoration(
-            labelText: 'Description / instructions',
+          decoration: localizeDecoration(
+            context,
+            const InputDecoration(labelText: 'Description / instructions'),
           ),
         ),
         if (teamAssignment)
           TextField(
             controller: responsibility,
             maxLength: 1000,
-            decoration: const InputDecoration(
-              labelText: 'Team responsibility (when applicable)',
+            decoration: localizeDecoration(
+              context,
+              const InputDecoration(
+                labelText: 'Team responsibility (when applicable)',
+              ),
             ),
           ),
         if (!widget.createTeam) ...[
           OutlinedButton.icon(
             icon: const Icon(Icons.calendar_today_outlined),
-            label: Text(
+            label: UiText.raw(
               due == null ? 'Set due date' : date(due!.toIso8601String()),
             ),
             onPressed: busy
@@ -344,17 +353,20 @@ class _TaskEditorState extends State<TaskEditor> {
           if (due != null)
             TextButton(
               onPressed: () => setState(() => due = null),
-              child: const Text('Clear due date'),
+              child: const UiText('Clear due date'),
             ),
           DropdownButtonFormField<int>(
             isExpanded: true,
             initialValue: priority,
-            decoration: const InputDecoration(labelText: 'Priority'),
+            decoration: localizeDecoration(
+              context,
+              const InputDecoration(labelText: 'Priority'),
+            ),
             items: [
               for (var i = 0; i < 4; i++)
                 DropdownMenuItem(
                   value: i,
-                  child: Text(['Low', 'Normal', 'High', 'Urgent'][i]),
+                  child: UiText.raw(['Low', 'Normal', 'High', 'Urgent'][i]),
                 ),
             ],
             onChanged: (v) => setState(() => priority = v!),
@@ -368,7 +380,7 @@ class _TaskEditorState extends State<TaskEditor> {
         ),
         FilledButton(
           onPressed: busy ? null : save,
-          child: Text(
+          child: UiText(
             busy
                 ? 'Saving…'
                 : widget.createTeam
@@ -386,7 +398,7 @@ class TeamTasks extends StatelessWidget {
   final Api api;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Team tasks')),
+    appBar: AppBar(title: const UiText('Team tasks')),
     body: DataView(
       load: () async => [
         await api.get('/api/mobile/v2/manage/teams'),
@@ -396,14 +408,14 @@ class TeamTasks extends StatelessWidget {
         if (data[1]['canAssign'] == true)
           FilledButton.icon(
             icon: const Icon(Icons.add),
-            label: const Text('Create team task'),
+            label: const UiText('Create team task'),
             onPressed: () => openManager(
               context,
               TaskEditor(api: api, createTeam: true),
               reload,
             ),
           ),
-        if ((data[0] as List).isEmpty) const Text('No team tasks yet.'),
+        if ((data[0] as List).isEmpty) const UiText('No team tasks yet.'),
         for (final team in data[0] as List)
           Card(
             child: Padding(
@@ -411,35 +423,35 @@ class TeamTasks extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
+                  UiText.raw(
                     team['title'],
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  Text(team['brief'] ?? ''),
+                  UiText.raw(team['brief'] ?? ''),
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
                     value: team['total'] == 0
                         ? 0
                         : (team['done'] as num) / (team['total'] as num),
                   ),
-                  Text(
+                  UiText(
                     '${team['done']} / ${team['total']} assignments complete',
                   ),
-                  Text(
+                  UiText(
                     'Team: ${(team['members'] as List).map((p) => p['name']).join(', ')}',
                   ),
                   for (final sub in team['subtasks'] as List)
                     ExpansionTile(
-                      title: Text(sub['responsibility']),
+                      title: UiText.raw(sub['responsibility']),
                       children: [
                         for (final assignment
                             in sub['assignments'] as List? ?? [])
                           ListTile(
                             dense: true,
-                            title: Text(
+                            title: UiText.raw(
                               assignment['assigneeName'] ?? 'Employee',
                             ),
-                            subtitle: Text(assignment['status']),
+                            subtitle: UiText.raw(assignment['status']),
                             trailing: const Icon(Icons.chevron_right),
                             onTap:
                                 team['canManage'] == true ||
@@ -462,7 +474,7 @@ class TeamTasks extends StatelessWidget {
                   if (team['canManage'] == true)
                     OutlinedButton.icon(
                       icon: const Icon(Icons.add),
-                      label: const Text('Add subtask'),
+                      label: const UiText('Add subtask'),
                       onPressed: () => openManager(
                         context,
                         TaskEditor(
@@ -487,19 +499,22 @@ class TaskHistory extends StatelessWidget {
   final int id;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Task activity & progress')),
+    appBar: AppBar(title: const UiText('Task activity & progress')),
     body: DataView(
       load: () => api.get('/api/mobile/v2/manage/tasks/$id'),
       builder: (task, reload) => contentList([
-        Text(task['title'], style: Theme.of(context).textTheme.titleLarge),
-        Text('Assigned to ${task['assigneeName'] ?? 'Employee'}'),
-        Text('Status · ${task['status']}'),
+        UiText.raw(
+          task['title'],
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        UiText('Assigned to ${task['assigneeName'] ?? 'Employee'}'),
+        UiText('Status · ${task['status']}'),
         for (final event in task['activity'])
           Card(
             child: ListTile(
               leading: const Icon(Icons.history),
-              title: Text(event['action']),
-              subtitle: Text(
+              title: UiText.raw(event['action']),
+              subtitle: UiText(
                 '${event['actor'] ?? 'User'} · ${date(event['recordedUtc'], time: true)}\n${event['changedFields'] ?? ''}${event['newStatus'] == null ? '' : '\n${event['previousStatus'] ?? ''} → ${event['newStatus']}'}',
               ),
             ),
@@ -654,36 +669,45 @@ class _MeetingEditorState extends State<MeetingEditor> {
       if (loading)
         const Center(child: CircularProgressIndicator())
       else if (error != null)
-        Text(error!)
+        UiText.raw(error!)
       else ...[
         TextField(
           controller: title,
           maxLength: 160,
-          decoration: const InputDecoration(labelText: 'Meeting title'),
+          decoration: localizeDecoration(
+            context,
+            const InputDecoration(labelText: 'Meeting title'),
+          ),
         ),
         TextField(
           controller: agenda,
           maxLength: 2500,
           minLines: 3,
           maxLines: 6,
-          decoration: const InputDecoration(labelText: 'Main agenda'),
+          decoration: localizeDecoration(
+            context,
+            const InputDecoration(labelText: 'Main agenda'),
+          ),
         ),
         DropdownButtonFormField<String>(
           isExpanded: true,
           initialValue: mode,
-          decoration: const InputDecoration(labelText: 'Meeting type'),
+          decoration: localizeDecoration(
+            context,
+            const InputDecoration(labelText: 'Meeting type'),
+          ),
           items: const [
             DropdownMenuItem(
               value: 'BuiltIn',
-              child: Text('Garowe City video room'),
+              child: UiText('Garowe City video room'),
             ),
             DropdownMenuItem(
               value: 'InPerson',
-              child: Text('In-person / venue'),
+              child: UiText('In-person / venue'),
             ),
             DropdownMenuItem(
               value: 'External',
-              child: Text('Teams / Google Meet'),
+              child: UiText('Teams / Google Meet'),
             ),
           ],
           onChanged: (v) => setState(() => mode = v!),
@@ -692,26 +716,34 @@ class _MeetingEditorState extends State<MeetingEditor> {
           TextField(
             controller: location,
             maxLength: 250,
-            decoration: const InputDecoration(labelText: 'Venue / location'),
+            decoration: localizeDecoration(
+              context,
+              const InputDecoration(labelText: 'Venue / location'),
+            ),
           ),
         if (mode == 'External')
           TextField(
             controller: link,
-            decoration: const InputDecoration(
-              labelText: 'Teams or Google Meet join link',
+            decoration: localizeDecoration(
+              context,
+              const InputDecoration(
+                labelText: 'Teams or Google Meet join link',
+              ),
             ),
           ),
         OutlinedButton.icon(
           icon: const Icon(Icons.schedule),
-          label: Text('Starts · ${date(starts.toIso8601String(), time: true)}'),
+          label: UiText(
+            'Starts · ${date(starts.toIso8601String(), time: true)}',
+          ),
           onPressed: busy ? null : () => selectTime(true),
         ),
         OutlinedButton.icon(
           icon: const Icon(Icons.schedule),
-          label: Text('Ends · ${date(ends.toIso8601String(), time: true)}'),
+          label: UiText('Ends · ${date(ends.toIso8601String(), time: true)}'),
           onPressed: busy ? null : () => selectTime(false),
         ),
-        const Text('Meeting times are East Africa Time (UTC+3).'),
+        const UiText('Meeting times are East Africa Time (UTC+3).'),
         PeoplePicker(
           people: people,
           selected: selected,
@@ -719,7 +751,7 @@ class _MeetingEditorState extends State<MeetingEditor> {
         ),
         FilledButton(
           onPressed: busy ? null : save,
-          child: Text(
+          child: UiText(
             busy ? 'Saving…' : 'Save meeting and notify participants',
           ),
         ),
@@ -751,13 +783,16 @@ class _MinutesEditorState extends State<MinutesEditor> {
   Widget build(BuildContext context) => FormPage(
     title: 'Meeting minutes',
     children: [
-      Text(widget.meeting['title']),
+      UiText.raw(widget.meeting['title']),
       TextField(
         controller: text,
         minLines: 8,
         maxLines: 18,
         maxLength: 12000,
-        decoration: const InputDecoration(labelText: 'Minutes / decisions'),
+        decoration: localizeDecoration(
+          context,
+          const InputDecoration(labelText: 'Minutes / decisions'),
+        ),
       ),
       FilledButton(
         onPressed: busy
@@ -776,7 +811,7 @@ class _MinutesEditorState extends State<MinutesEditor> {
                   if (mounted) setState(() => busy = false);
                 }
               },
-        child: Text(busy ? 'Publishing…' : 'Publish minutes to participants'),
+        child: UiText(busy ? 'Publishing…' : 'Publish minutes to participants'),
       ),
     ],
   );

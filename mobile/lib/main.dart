@@ -1,3 +1,4 @@
+import 'ui_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -135,28 +136,55 @@ ThemeData civicTheme() => ThemeData(
   ),
 );
 
-class GaroweHrApp extends StatelessWidget {
+class GaroweHrApp extends StatefulWidget {
   const GaroweHrApp({super.key, required this.server});
   final Uri? server;
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Garowe City',
-    debugShowCheckedModeBanner: false,
-    theme: civicTheme(),
-    home: server == null
-        ? const Scaffold(
-            body: Center(
-              child: Text('Configure the Garowe City server address.'),
-            ),
-          )
-        : SessionGate(api: Api(server!)),
+  State<GaroweHrApp> createState() => _GaroweHrAppState();
+}
+
+class _GaroweHrAppState extends State<GaroweHrApp> {
+  final preferences = UiPreferences();
+  late final Api? api = widget.server == null ? null : Api(widget.server!);
+  @override
+  void initState() {
+    super.initState();
+    preferences.load();
+  }
+
+  @override
+  void dispose() {
+    preferences.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => UiPreferencesScope(
+    preferences: preferences,
+    child: ListenableBuilder(
+      listenable: preferences,
+      builder: (context, _) => MaterialApp(
+        title: 'Garowe City',
+        debugShowCheckedModeBanner: false,
+        theme: civicTheme(),
+        darkTheme: civicDarkTheme(civicTheme()),
+        themeMode: preferences.mode,
+        home: api == null
+            ? const Scaffold(
+                body: Center(
+                  child: UiText('Configure the Garowe City server address.'),
+                ),
+              )
+            : SessionGate(api: api!),
+      ),
+    ),
   );
 }
 
 void message(BuildContext context, Object text) {
   ScaffoldMessenger.of(
     context,
-  ).showSnackBar(SnackBar(content: Text(text.toString())));
+  ).showSnackBar(SnackBar(content: UiText(text.toString())));
 }
 
 class SessionGate extends StatefulWidget {
@@ -206,7 +234,7 @@ class _SessionGateState extends State<SessionGate> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(error!),
+                UiText.raw(error!),
                 FilledButton(
                   onPressed: () {
                     setState(() {
@@ -215,7 +243,7 @@ class _SessionGateState extends State<SessionGate> {
                     });
                     _restore();
                   },
-                  child: const Text('Try again'),
+                  child: const UiText('Try again'),
                 ),
                 TextButton(
                   onPressed: () async {
@@ -227,7 +255,7 @@ class _SessionGateState extends State<SessionGate> {
                       });
                     }
                   },
-                  child: const Text('Sign in'),
+                  child: const UiText('Sign in'),
                 ),
               ],
             ),
@@ -302,7 +330,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: const Color(0xffe1e8f3)),
                 boxShadow: const [
@@ -318,6 +346,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const UiDisplayPreferences(),
+                    const SizedBox(height: 16),
                     Center(
                       child: Image.asset(
                         'assets/garowe-local-government.jpg',
@@ -326,13 +356,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(
+                    UiText(
                       'Garowe City',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineMedium
                           ?.copyWith(fontWeight: FontWeight.w800, color: ink),
                     ),
-                    const Text(
+                    const UiText(
                       'MANAGEMENT SYSTEM',
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -344,13 +374,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text(
+                    UiText(
                       'Welcome back',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(color: ink, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    const UiText(
                       'Sign in to manage your work and stay connected.',
                       style: TextStyle(
                         fontFamily: 'Roboto',
@@ -361,31 +391,40 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: username,
-                      decoration: const InputDecoration(
-                        labelText: 'Employee ID or email',
-                        hintText: 'EMP0001',
-                        prefixIcon: Icon(Icons.person_outline),
+                      decoration: localizeDecoration(
+                        context,
+                        const InputDecoration(
+                          labelText: 'Employee ID or email',
+                          hintText: 'EMP0001',
+                          prefixIcon: Icon(Icons.person_outline),
+                        ),
                       ),
                       autofillHints: const [AutofillHints.username],
                       textInputAction: TextInputAction.next,
                       validator: (value) =>
                           value == null || value.trim().isEmpty
-                          ? 'Enter your employee ID or email.'
+                          ? tr(context, 'Enter your employee ID or email.')
                           : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: password,
                       obscureText: !show,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          tooltip: show ? 'Hide password' : 'Show password',
-                          icon: Icon(
-                            show ? Icons.visibility_off : Icons.visibility,
+                      decoration: localizeDecoration(
+                        context,
+                        InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            tooltip: tr(
+                              context,
+                              show ? 'Hide password' : 'Show password',
+                            ),
+                            icon: Icon(
+                              show ? Icons.visibility_off : Icons.visibility,
+                            ),
+                            onPressed: () => setState(() => show = !show),
                           ),
-                          onPressed: () => setState(() => show = !show),
                         ),
                       ),
                       autofillHints: const [AutofillHints.password],
@@ -393,13 +432,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         if (!busy) login();
                       },
                       validator: (value) => value == null || value.isEmpty
-                          ? 'Enter your password.'
+                          ? tr(context, 'Enter your password.')
                           : null,
                     ),
                     if (error != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text(
+                        child: UiText.raw(
                           error!,
                           style: const TextStyle(
                             fontFamily: 'Roboto',
@@ -410,7 +449,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
                     FilledButton(
                       onPressed: busy ? null : login,
-                      child: Text(busy ? 'Signing in…' : 'Sign in'),
+                      child: UiText(busy ? 'Signing in…' : 'Sign in'),
                     ),
                     TextButton(
                       onPressed: busy
@@ -421,7 +460,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 builder: (_) => RecoveryScreen(api: widget.api),
                               ),
                             ),
-                      child: const Text('Forgot password?'),
+                      child: const UiText('Forgot password?'),
                     ),
                   ],
                 ),
@@ -498,20 +537,26 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
   Widget build(BuildContext context) => FormPage(
     title: 'Reset password',
     children: [
-      const Text('Use the email registered with your account.'),
+      const UiText('Use the email registered with your account.'),
       TextField(
         controller: email,
         keyboardType: TextInputType.emailAddress,
-        decoration: const InputDecoration(labelText: 'Registered email'),
+        decoration: localizeDecoration(
+          context,
+          const InputDecoration(labelText: 'Registered email'),
+        ),
       ),
-      if (notice != null) Text(notice!),
+      if (notice != null) UiText.raw(notice!),
       if (sent) ...[
-        const Text(
+        const UiText(
           'Paste the code from your reset email, or paste the complete reset link.',
         ),
         TextField(
           controller: code,
-          decoration: const InputDecoration(labelText: 'Reset code or link'),
+          decoration: localizeDecoration(
+            context,
+            const InputDecoration(labelText: 'Reset code or link'),
+          ),
           onChanged: (value) {
             final uri = Uri.tryParse(value);
             if (uri != null && uri.queryParameters['code'] != null) {
@@ -523,18 +568,21 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
         TextField(
           controller: password,
           obscureText: !show,
-          decoration: InputDecoration(
-            labelText: 'New password',
-            suffixIcon: IconButton(
-              onPressed: () => setState(() => show = !show),
-              icon: Icon(show ? Icons.visibility_off : Icons.visibility),
+          decoration: localizeDecoration(
+            context,
+            InputDecoration(
+              labelText: 'New password',
+              suffixIcon: IconButton(
+                onPressed: () => setState(() => show = !show),
+                icon: Icon(show ? Icons.visibility_off : Icons.visibility),
+              ),
             ),
           ),
         ),
       ],
       FilledButton(
         onPressed: busy ? null : submit,
-        child: Text(
+        child: UiText(
           busy
               ? 'Please wait…'
               : sent
@@ -545,7 +593,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
       if (sent)
         TextButton(
           onPressed: busy ? null : () => setState(() => sent = false),
-          child: const Text('Send another email'),
+          child: const UiText('Send another email'),
         ),
     ],
   );
@@ -602,7 +650,9 @@ class _PasswordScreenState extends State<PasswordScreen> {
     canBack: !widget.requiredChange,
     children: [
       if (widget.requiredChange)
-        const Text('Choose your own password before entering your workspace. Your initial password is your employee ID followed by 123.'),
+        const UiText(
+          'Choose your own password before entering your workspace. Your initial password is your employee ID followed by 123.',
+        ),
       for (final entry in [
         (current, 'Current password'),
         (password, 'New password'),
@@ -611,19 +661,20 @@ class _PasswordScreenState extends State<PasswordScreen> {
         TextField(
           controller: entry.$1,
           obscureText: !show,
-          decoration: InputDecoration(labelText: entry.$2),
+          decoration: localizeDecoration(
+            context,
+            InputDecoration(labelText: entry.$2),
+          ),
         ),
       SwitchListTile(
-        title: const Text('Show passwords'),
+        title: const UiText('Show passwords'),
         value: show,
         onChanged: (value) => setState(() => show = value),
       ),
-      const Text(
-        'Use at least 4 characters.',
-      ),
+      const UiText('Use at least 4 characters.'),
       FilledButton(
         onPressed: busy ? null : save,
-        child: Text(busy ? 'Saving…' : 'Save password'),
+        child: UiText(busy ? 'Saving…' : 'Save password'),
       ),
     ],
   );
@@ -644,7 +695,7 @@ class FormPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(title),
+      title: UiText(title),
       automaticallyImplyLeading: canBack,
       actions: actions,
     ),
@@ -716,16 +767,16 @@ class _EmployeeShellState extends State<EmployeeShell> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text('This ends your signed-in mobile session.'),
+        title: const UiText('Sign out?'),
+        content: const UiText('This ends your signed-in mobile session.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const UiText('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sign out'),
+            child: const UiText('Sign out'),
           ),
         ],
       ),
@@ -762,7 +813,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
   @override
   Widget build(BuildContext context) => Scaffold(
     drawer: Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
@@ -782,7 +833,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      UiText(
                         'Garowe City',
                         style: TextStyle(
                           fontFamily: 'Roboto',
@@ -791,7 +842,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-                      Text(
+                      UiText(
                         'Management System',
                         style: TextStyle(
                           fontFamily: 'Roboto',
@@ -805,7 +856,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
               ],
             ),
             const SizedBox(height: 16),
-            Text(
+            UiText.raw(
               widget.api.email ?? 'My workspace',
               style: const TextStyle(
                 fontFamily: 'Roboto',
@@ -814,7 +865,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
               ),
             ),
             const Divider(),
-            const Text(
+            const UiText(
               'WORKSPACE',
               style: TextStyle(
                 fontFamily: 'Roboto',
@@ -833,9 +884,12 @@ class _EmployeeShellState extends State<EmployeeShell> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   selected: i == index,
-                  selectedTileColor: const Color(0xffe9f0ff),
+                  selectedTileColor:
+                      Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xff223e69)
+                      : const Color(0xffe9f0ff),
                   leading: Icon(icons[i]),
-                  title: Text(labels[i]),
+                  title: UiText(labels[i]),
                   onTap: () {
                     Navigator.pop(context);
                     setState(() {
@@ -848,7 +902,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
             const Divider(),
             ListTile(
               leading: const Icon(Icons.notifications_outlined),
-              title: const Text('Notifications'),
+              title: const UiText('Notifications'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -861,15 +915,16 @@ class _EmployeeShellState extends State<EmployeeShell> {
             ),
             ListTile(
               leading: const Icon(Icons.person_outline),
-              title: const Text('My profile'),
+              title: const UiText('My profile'),
               onTap: () {
                 Navigator.pop(context);
                 account('profile');
               },
             ),
+            const UiDisplayPreferences(),
             ListTile(
               leading: const Icon(Icons.logout, color: Color(0xffb64141)),
-              title: const Text(
+              title: const UiText(
                 'Sign out',
                 style: TextStyle(
                   fontFamily: 'Roboto',
@@ -882,8 +937,8 @@ class _EmployeeShellState extends State<EmployeeShell> {
               },
             ),
             const Divider(),
-            const Text(
-              'Garowe City · 2.2',
+            const UiText(
+              'Garowe City · 2.4.0',
               style: TextStyle(
                 fontFamily: 'Roboto',
                 color: Color(0xff8390a4),
@@ -910,7 +965,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                const UiText(
                   'GAROWE CITY',
                   style: TextStyle(
                     fontFamily: 'Roboto',
@@ -920,7 +975,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                Text(
+                UiText(
                   labels[index],
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -938,7 +993,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
       ),
       actions: [
         IconButton(
-          tooltip: 'Notifications',
+          tooltip: tr(context, 'Notifications'),
           icon: const Icon(Icons.notifications_outlined),
           onPressed: () => Navigator.push(
             context,
@@ -948,7 +1003,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
           ),
         ),
         PopupMenuButton<String>(
-          tooltip: 'Account',
+          tooltip: tr(context, 'Account'),
           onSelected: account,
           icon: CircleAvatar(
             radius: 16,
@@ -956,8 +1011,8 @@ class _EmployeeShellState extends State<EmployeeShell> {
             child: const Icon(Icons.person_outline, size: 20),
           ),
           itemBuilder: (_) => const [
-            PopupMenuItem(value: 'profile', child: Text('My profile')),
-            PopupMenuItem(value: 'logout', child: Text('Sign out')),
+            PopupMenuItem(value: 'profile', child: UiText('My profile')),
+            PopupMenuItem(value: 'logout', child: UiText('Sign out')),
           ],
         ),
       ],
@@ -984,7 +1039,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: SafeArea(
         top: false,
         child: Row(
@@ -994,7 +1049,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
                 child: Semantics(
                   selected: i == index,
                   button: true,
-                  label: labels[i],
+                  label: tr(context, labels[i]),
                   child: InkWell(
                     key: ValueKey('nav-$i'),
                     onTap: () => setState(() {
@@ -1027,7 +1082,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
                             ),
                           ),
                           const SizedBox(height: 3),
-                          Text(
+                          UiText(
                             labels[i],
                             textAlign: TextAlign.center,
                             style: TextStyle(
@@ -1082,8 +1137,14 @@ class _DataViewState extends State<DataView> {
               children: [
                 const Icon(Icons.cloud_off_outlined, size: 40, color: blue),
                 const SizedBox(height: 12),
-                Text(snapshot.error.toString(), textAlign: TextAlign.center),
-                FilledButton(onPressed: reload, child: const Text('Try again')),
+                UiText.raw(
+                  snapshot.error.toString(),
+                  textAlign: TextAlign.center,
+                ),
+                FilledButton(
+                  onPressed: reload,
+                  child: const UiText('Try again'),
+                ),
               ],
             ),
           ),
@@ -1142,7 +1203,7 @@ String statusLabel(String value) =>
     value == 'InProgress' ? 'In progress' : value;
 String money(dynamic value) => (value as num? ?? 0).toStringAsFixed(2);
 Widget badge(String text) => Chip(
-  label: Text(
+  label: UiText(
     statusLabel(text),
     style: const TextStyle(fontFamily: 'Roboto', fontSize: 12),
   ),
@@ -1173,7 +1234,7 @@ class DashboardMetric extends StatelessWidget {
           children: [
             Icon(icon, color: blue, size: 22),
             const SizedBox(height: 12),
-            Text(
+            UiText.raw(
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1185,7 +1246,7 @@ class DashboardMetric extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
+            UiText(
               label,
               style: const TextStyle(
                 fontFamily: 'Roboto',
@@ -1231,7 +1292,7 @@ class OverviewScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    UiText(
                       'YOUR WORKSPACE',
                       style: TextStyle(
                         fontFamily: 'Roboto',
@@ -1242,7 +1303,7 @@ class OverviewScreen extends StatelessWidget {
                       ),
                     ),
                     SizedBox(height: 8),
-                    Text(
+                    UiText(
                       'My dashboard',
                       style: TextStyle(
                         fontFamily: 'Roboto',
@@ -1252,7 +1313,7 @@ class OverviewScreen extends StatelessWidget {
                       ),
                     ),
                     SizedBox(height: 6),
-                    Text(
+                    UiText(
                       'Your work, at a glance.',
                       style: TextStyle(
                         fontFamily: 'Roboto',
@@ -1348,7 +1409,7 @@ class OverviewScreen extends StatelessWidget {
                           strokeWidth: 7,
                         ),
                         Center(
-                          child: Text(
+                          child: UiText(
                             '${total == 0 ? 0 : done * 100 ~/ total}%',
                             style: const TextStyle(
                               fontFamily: 'Roboto',
@@ -1364,15 +1425,15 @@ class OverviewScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        UiText(
                           'My task progress',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
-                        Text('$done of $total completed'),
-                        Text('$open open · $working in progress'),
+                        UiText('$done of $total completed'),
+                        UiText('$open open · $working in progress'),
                         TextButton(
                           onPressed: () => onOpen(1),
-                          child: const Text('View my tasks'),
+                          child: const UiText('View my tasks'),
                         ),
                       ],
                     ),
@@ -1385,7 +1446,7 @@ class OverviewScreen extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: reload,
           icon: const Icon(Icons.refresh),
-          label: const Text('Refresh progress'),
+          label: const UiText('Refresh progress'),
         ),
       ], refresh: () async => reload());
     },
@@ -1425,30 +1486,35 @@ class TasksScreen extends StatelessWidget {
 Widget statusPill(String value) {
   final done = value == 'Done' || value == 'Present';
   final closed = value == 'Cancelled' || value == 'Ended';
-  return Container(
-    margin: const EdgeInsets.symmetric(vertical: 6),
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: done
-          ? const Color(0xffe8f6ee)
-          : closed
-          ? const Color(0xffedf0f5)
-          : const Color(0xffeaf0ff),
-      borderRadius: BorderRadius.circular(7),
-    ),
-    child: Text(
-      value,
-      style: TextStyle(
-        fontFamily: 'Roboto',
-        color: done
-            ? const Color(0xff26734b)
-            : closed
-            ? const Color(0xff64748b)
-            : blue,
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-      ),
-    ),
+  return Builder(
+    builder: (context) {
+      final dark = Theme.of(context).brightness == Brightness.dark;
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: done
+              ? (dark ? const Color(0xff163e31) : const Color(0xffe8f6ee))
+              : closed
+              ? (dark ? const Color(0xff2b384b) : const Color(0xffedf0f5))
+              : (dark ? const Color(0xff223e69) : const Color(0xffeaf0ff)),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: UiText(
+          statusLabel(value),
+          style: TextStyle(
+            fontFamily: 'Roboto',
+            color: done
+                ? (dark ? const Color(0xffa6e7c8) : const Color(0xff26734b))
+                : closed
+                ? (dark ? const Color(0xffc4d2e5) : const Color(0xff64748b))
+                : (dark ? const Color(0xffc1d8ff) : blue),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    },
   );
 }
 
@@ -1498,9 +1564,12 @@ class _WorkListState extends State<WorkList> {
     }).toList();
     return contentList([
       TextField(
-        decoration: const InputDecoration(
-          hintText: 'Search',
-          prefixIcon: Icon(Icons.search),
+        decoration: localizeDecoration(
+          context,
+          const InputDecoration(
+            hintText: 'Search',
+            prefixIcon: Icon(Icons.search),
+          ),
         ),
         onChanged: (value) => setState(() => search = value),
       ),
@@ -1509,7 +1578,7 @@ class _WorkListState extends State<WorkList> {
         children: [
           for (final option in options)
             ChoiceChip(
-              label: Text(option),
+              label: UiText.raw(option),
               selected: filter == option,
               onSelected: (_) => setState(() => filter = option),
             ),
@@ -1518,7 +1587,7 @@ class _WorkListState extends State<WorkList> {
       if (rows.isEmpty)
         const Padding(
           padding: EdgeInsets.all(24),
-          child: Text('No records match this selection.'),
+          child: UiText('No records match this selection.'),
         ),
       for (final item in rows)
         Card(
@@ -1533,7 +1602,7 @@ class _WorkListState extends State<WorkList> {
                   : Icons.assignment_outlined,
               color: blue,
             ),
-            title: Text(
+            title: UiText.raw(
               item['responsibility'] ?? item['title'],
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -1550,7 +1619,7 @@ class _WorkListState extends State<WorkList> {
                       ? meetingStatus(item)
                       : statusLabel(item['status']),
                 ),
-                Text(
+                UiText.raw(
                   widget.isMeeting
                       ? date(item['startsUtc'], time: true)
                       : item['dueDate'] == null
@@ -1558,13 +1627,15 @@ class _WorkListState extends State<WorkList> {
                       : 'Due ${date(item['dueDate'])}',
                 ),
                 if (widget.isMeeting)
-                  Text('${item['attending']} / ${item['invited']} checked in'),
+                  UiText(
+                    '${item['attending']} / ${item['invited']} checked in',
+                  ),
                 if (!widget.isMeeting && item['assigneeName'] != null)
-                  Text('Assigned to ${item['assigneeName']}'),
+                  UiText('Assigned to ${item['assigneeName']}'),
                 if ((item['description'] ?? item['agenda'] ?? '')
                     .toString()
                     .isNotEmpty)
-                  Text(
+                  UiText.raw(
                     item['description'] ?? item['agenda'],
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -1612,22 +1683,22 @@ class _TaskScreenState extends State<TaskScreen> {
   Widget build(BuildContext context) => FormPage(
     title: 'Task details',
     children: [
-      Text(
+      UiText.raw(
         widget.task['responsibility'] ?? widget.task['title'],
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       if (widget.task['responsibility'] != null)
-        Text('Team task · ${widget.task['title']}'),
-      Text('Due ${date(widget.task['dueDate'])}'),
+        UiText('Team task · ${widget.task['title']}'),
+      UiText('Due ${date(widget.task['dueDate'])}'),
       if (widget.task['assigneeName'] != null)
-        Text('Assigned to ${widget.task['assigneeName']}'),
+        UiText('Assigned to ${widget.task['assigneeName']}'),
       if (widget.task['canManage'] == true && status != 'Cancelled')
         Wrap(
           spacing: 8,
           children: [
             OutlinedButton.icon(
               icon: const Icon(Icons.edit_outlined),
-              label: const Text('Edit / reassign'),
+              label: const UiText('Edit / reassign'),
               onPressed: () => openManager(
                 context,
                 TaskEditor(api: widget.api, taskId: widget.task['id']),
@@ -1638,7 +1709,7 @@ class _TaskScreenState extends State<TaskScreen> {
             ),
             TextButton.icon(
               icon: const Icon(Icons.cancel_outlined),
-              label: const Text('Cancel task'),
+              label: const UiText('Cancel task'),
               onPressed: () => confirmManage(
                 context,
                 widget.api,
@@ -1653,7 +1724,7 @@ class _TaskScreenState extends State<TaskScreen> {
         ),
       OutlinedButton.icon(
         icon: const Icon(Icons.history),
-        label: const Text('Activity & progress'),
+        label: const UiText('Activity & progress'),
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(
@@ -1661,23 +1732,26 @@ class _TaskScreenState extends State<TaskScreen> {
           ),
         ),
       ),
-      Text(widget.task['description'] ?? ''),
+      UiText.raw(widget.task['description'] ?? ''),
       if (status != 'Cancelled') ...[
         DropdownButtonFormField<String>(
           initialValue: status,
-          decoration: const InputDecoration(labelText: 'My status'),
+          decoration: localizeDecoration(
+            context,
+            const InputDecoration(labelText: 'My status'),
+          ),
           items: [
             for (final value in ['Open', 'InProgress', 'Done'])
-              DropdownMenuItem(value: value, child: Text(statusLabel(value))),
+              DropdownMenuItem(value: value, child: UiText(statusLabel(value))),
           ],
           onChanged: busy ? null : (value) => setState(() => status = value!),
         ),
         FilledButton(
           onPressed: busy ? null : save,
-          child: Text(busy ? 'Saving…' : 'Save status'),
+          child: UiText(busy ? 'Saving…' : 'Save status'),
         ),
       ] else
-        const Text('This task was cancelled.'),
+        const UiText('This task was cancelled.'),
     ],
   );
 }
@@ -1731,14 +1805,14 @@ class MeetingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Meeting details')),
+    appBar: AppBar(title: const UiText('Meeting details')),
     body: DataView(
       load: () => api.get('/api/mobile/v2/meetings/$id'),
       builder: (data, reload) {
         final m = data as Map<String, dynamic>;
         final closed = ['Ended', 'Cancelled'].contains(meetingStatus(m));
         return contentList([
-          Text(
+          UiText.raw(
             m['title'],
             style: Theme.of(
               context,
@@ -1753,7 +1827,7 @@ class MeetingScreen extends StatelessWidget {
                 if (!closed)
                   OutlinedButton.icon(
                     icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Edit meeting'),
+                    label: const UiText('Edit meeting'),
                     onPressed: () => openManager(
                       context,
                       MeetingEditor(api: api, meeting: m),
@@ -1762,7 +1836,7 @@ class MeetingScreen extends StatelessWidget {
                   ),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.notes_outlined),
-                  label: const Text('Manage minutes'),
+                  label: const UiText('Manage minutes'),
                   onPressed: () => openManager(
                     context,
                     MinutesEditor(api: api, meeting: m),
@@ -1772,7 +1846,7 @@ class MeetingScreen extends StatelessWidget {
                 if (!closed)
                   TextButton.icon(
                     icon: const Icon(Icons.cancel_outlined),
-                    label: const Text('Cancel meeting'),
+                    label: const UiText('Cancel meeting'),
                     onPressed: () => confirmManage(
                       context,
                       api,
@@ -1783,12 +1857,12 @@ class MeetingScreen extends StatelessWidget {
                   ),
               ],
             ),
-          Text(date(m['startsUtc'], time: true)),
-          Text(m['location'] ?? 'Online meeting'),
+          UiText.raw(date(m['startsUtc'], time: true)),
+          UiText.raw(m['location'] ?? 'Online meeting'),
           Card(
             child: ListTile(
               leading: const Icon(Icons.how_to_reg_outlined),
-              title: Text('${m['attending']} of ${m['invited']} checked in'),
+              title: UiText('${m['attending']} of ${m['invited']} checked in'),
             ),
           ),
           if (!closed && m['isInvited'] == true)
@@ -1797,7 +1871,7 @@ class MeetingScreen extends StatelessWidget {
                   ? null
                   : () => action(context, 'attend', reload),
               icon: const Icon(Icons.check_circle_outline),
-              label: Text(
+              label: UiText.raw(
                 m['checkedIn'] == true
                     ? 'Attendance recorded'
                     : "I'm attending",
@@ -1806,7 +1880,7 @@ class MeetingScreen extends StatelessWidget {
           if (!closed && m['location'] == null)
             FilledButton.icon(
               icon: const Icon(Icons.videocam_outlined),
-              label: const Text('Join meeting'),
+              label: const UiText('Join meeting'),
               onPressed: () async {
                 if ((m['joinUrl'] as String).isNotEmpty) {
                   final url = Uri.tryParse(m['joinUrl']);
@@ -1828,7 +1902,7 @@ class MeetingScreen extends StatelessWidget {
             ),
           if (m['participants'] != null)
             ExpansionTile(
-              title: const Text('Participants & attendance'),
+              title: const UiText('Participants & attendance'),
               children: [
                 for (final p in m['participants'] as List)
                   ListTile(
@@ -1838,8 +1912,8 @@ class MeetingScreen extends StatelessWidget {
                           ? Icons.person_outline
                           : Icons.check_circle_outline,
                     ),
-                    title: Text(p['name'] ?? 'Participant'),
-                    subtitle: Text(
+                    title: UiText.raw(p['name'] ?? 'Participant'),
+                    subtitle: UiText.raw(
                       p['attendedUtc'] == null
                           ? 'Not checked in'
                           : 'Checked in',
@@ -1847,8 +1921,11 @@ class MeetingScreen extends StatelessWidget {
                   ),
               ],
             ),
-          Text('Shared agenda', style: Theme.of(context).textTheme.titleLarge),
-          Text(
+          UiText(
+            'Shared agenda',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          UiText.raw(
             (m['agenda'] as String).isEmpty
                 ? 'No main agenda yet.'
                 : m['agenda'],
@@ -1856,14 +1933,14 @@ class MeetingScreen extends StatelessWidget {
           for (final item in m['agendaItems'] as List)
             Card(
               child: ListTile(
-                title: Text(item['title']),
-                subtitle: Text(item['notes'] ?? ''),
+                title: UiText.raw(item['title']),
+                subtitle: UiText.raw(item['notes'] ?? ''),
               ),
             ),
           if (!closed)
             OutlinedButton.icon(
               icon: const Icon(Icons.add),
-              label: const Text('Add agenda item'),
+              label: const UiText('Add agenda item'),
               onPressed: () async {
                 await Navigator.push(
                   context,
@@ -1874,28 +1951,30 @@ class MeetingScreen extends StatelessWidget {
                 reload();
               },
             ),
-          Text(
+          UiText(
             'Published minutes',
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          Text(m['publishedMinutes'] ?? 'Minutes have not been published.'),
+          UiText.raw(
+            m['publishedMinutes'] ?? 'Minutes have not been published.',
+          ),
           if (meetingStatus(m) == 'In progress' && m['isOwner'] == true)
             OutlinedButton.icon(
               icon: const Icon(Icons.stop_circle_outlined),
-              label: const Text('End meeting for everyone'),
+              label: const UiText('End meeting for everyone'),
               onPressed: () async {
                 final yes = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('End meeting for everyone?'),
+                    title: const UiText('End meeting for everyone?'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
+                        child: const UiText('Cancel'),
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(context, true),
-                        child: const Text('End meeting'),
+                        child: const UiText('End meeting'),
                       ),
                     ],
                   ),
@@ -1955,18 +2034,24 @@ class _AgendaScreenState extends State<AgendaScreen> {
       TextField(
         controller: title,
         maxLength: 160,
-        decoration: const InputDecoration(labelText: 'Title'),
+        decoration: localizeDecoration(
+          context,
+          const InputDecoration(labelText: 'Title'),
+        ),
       ),
       TextField(
         controller: notes,
         maxLength: 2000,
         minLines: 4,
         maxLines: 8,
-        decoration: const InputDecoration(labelText: 'Notes'),
+        decoration: localizeDecoration(
+          context,
+          const InputDecoration(labelText: 'Notes'),
+        ),
       ),
       FilledButton(
         onPressed: busy ? null : save,
-        child: Text(busy ? 'Saving…' : 'Add to shared agenda'),
+        child: UiText(busy ? 'Saving…' : 'Add to shared agenda'),
       ),
     ],
   );
@@ -1979,15 +2064,15 @@ class AttendanceScreen extends StatelessWidget {
   Widget build(BuildContext context) => DataView(
     load: () => api.get('/api/mobile/v1/attendance'),
     builder: (data, reload) => contentList([
-      Text('My attendance', style: Theme.of(context).textTheme.titleLarge),
+      UiText('My attendance', style: Theme.of(context).textTheme.titleLarge),
       if ((data['items'] as List).isEmpty)
-        Text(data['message'] ?? 'No attendance records yet.'),
+        UiText.raw(data['message'] ?? 'No attendance records yet.'),
       for (final item in data['items'])
         Card(
           child: ListTile(
             leading: const Icon(Icons.event_available_outlined, color: blue),
-            title: Text(item['title']),
-            subtitle: Text('${item['subtitle']}\n${item['details']}'),
+            title: UiText.raw(item['title']),
+            subtitle: UiText('${item['subtitle']}\n${item['details']}'),
           ),
         ),
     ], refresh: () async => reload()),
@@ -2001,17 +2086,19 @@ class PayrollScreen extends StatelessWidget {
   Widget build(BuildContext context) => DataView(
     load: () => api.get('/api/mobile/v2/payroll'),
     builder: (data, reload) => contentList([
-      Text(
+      UiText(
         'My published payslips',
         style: Theme.of(context).textTheme.titleLarge,
       ),
-      if ((data as List).isEmpty) const Text('No published payslips yet.'),
+      if ((data as List).isEmpty) const UiText('No published payslips yet.'),
       for (final pay in data)
         Card(
           child: ListTile(
             leading: const Icon(Icons.receipt_long_outlined, color: blue),
-            title: Text('${date(pay['from'])} – ${date(pay['to'])}'),
-            subtitle: Text('Net pay · ${pay['currency']} ${money(pay['net'])}'),
+            title: UiText('${date(pay['from'])} – ${date(pay['to'])}'),
+            subtitle: UiText(
+              'Net pay · ${pay['currency']} ${money(pay['net'])}',
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
               context,
@@ -2031,11 +2118,11 @@ class PayslipScreen extends StatelessWidget {
   final int id;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Payslip')),
+    appBar: AppBar(title: const UiText('Payslip')),
     body: DataView(
       load: () => api.get('/api/mobile/v2/payroll/$id'),
       builder: (p, reload) => contentList([
-        Text(
+        UiText(
           '${date(p['from'])} – ${date(p['to'])}',
           style: Theme.of(context).textTheme.titleLarge,
         ),
@@ -2050,14 +2137,14 @@ class PayslipScreen extends StatelessWidget {
         ])
           Card(
             child: ListTile(
-              title: Text(label),
-              trailing: Text('${p['currency']} ${money(p[key])}'),
+              title: UiText.raw(label),
+              trailing: UiText('${p['currency']} ${money(p[key])}'),
             ),
           ),
-        Text(
+        UiText(
           'Attendance waived · ${money((p['attendanceCalculated'] as num) - (p['attendanceApplied'] as num))}',
         ),
-        Text('Revision ${p['revision']}'),
+        UiText('Revision ${p['revision']}'),
       ]),
     ),
   );
@@ -2068,7 +2155,7 @@ class NotificationsScreen extends StatelessWidget {
   final Api api;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Notifications')),
+    appBar: AppBar(title: const UiText('Notifications')),
     body: DataView(
       load: () => api.get('/api/mobile/v2/notifications'),
       builder: (data, reload) => contentList([
@@ -2081,9 +2168,9 @@ class NotificationsScreen extends StatelessWidget {
               if (context.mounted) message(context, e);
             }
           },
-          child: const Text('Mark all read'),
+          child: const UiText('Mark all read'),
         ),
-        if ((data as List).isEmpty) const Text('You have no notifications.'),
+        if ((data as List).isEmpty) const UiText('You have no notifications.'),
         for (final n in data)
           Card(
             child: ListTile(
@@ -2093,8 +2180,8 @@ class NotificationsScreen extends StatelessWidget {
                     : Icons.drafts_outlined,
                 color: blue,
               ),
-              title: Text(n['title']),
-              subtitle: Text(date(n['createdUtc'], time: true)),
+              title: UiText.raw(n['title']),
+              subtitle: UiText.raw(date(n['createdUtc'], time: true)),
               onTap: () async {
                 try {
                   await api.post(
@@ -2143,7 +2230,7 @@ class ProfileScreen extends StatelessWidget {
   final VoidCallback onChanged;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('My profile')),
+    appBar: AppBar(title: const UiText('My profile')),
     body: DataView(
       load: () async => [
         await api.get('/api/mobile/v2/profile'),
@@ -2154,6 +2241,7 @@ class ProfileScreen extends StatelessWidget {
         final employee = profile['employee'] as Map?;
         final photo = data[1] as Uint8List?;
         return contentList([
+          const UiDisplayPreferences(),
           Center(
             child: CircleAvatar(
               radius: 48,
@@ -2161,7 +2249,7 @@ class ProfileScreen extends StatelessWidget {
               child: const Icon(Icons.person_outline, size: 42),
             ),
           ),
-          Text(
+          UiText.raw(
             employee?['fullName'] ?? api.email ?? 'My account',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineSmall,
@@ -2169,30 +2257,30 @@ class ProfileScreen extends StatelessWidget {
           if (employee != null) ...[
             Card(
               child: ListTile(
-                title: Text(employee['employeeNumber']),
-                subtitle: Text(employee['status']),
+                title: UiText.raw(employee['employeeNumber']),
+                subtitle: UiText.raw(employee['status']),
               ),
             ),
             Card(
               child: ListTile(
-                title: const Text('Employment start'),
-                subtitle: Text(date(employee['hireDate'])),
+                title: const UiText('Employment start'),
+                subtitle: UiText.raw(date(employee['hireDate'])),
               ),
             ),
           ] else
-            const Text(
+            const UiText(
               'Ask HR to link your employee record to view personal attendance and payroll.',
             ),
           Card(
             child: ListTile(
               leading: const Icon(Icons.email_outlined),
-              title: Text(profile['email'] ?? ''),
+              title: UiText.raw(profile['email'] ?? ''),
             ),
           ),
           if (employee != null)
             FilledButton.icon(
               icon: const Icon(Icons.photo_camera_outlined),
-              label: const Text('Change profile photo'),
+              label: const UiText('Change profile photo'),
               onPressed: () async {
                 try {
                   final selected = await FilePicker.pickFiles(
@@ -2211,7 +2299,7 @@ class ProfileScreen extends StatelessWidget {
             ),
           OutlinedButton.icon(
             icon: const Icon(Icons.lock_outline),
-            label: const Text('Change password'),
+            label: const UiText('Change password'),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(

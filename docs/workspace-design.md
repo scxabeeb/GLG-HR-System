@@ -21,7 +21,7 @@ The language selector and sun/moon button are available on sign-in and workspace
 
 ## Administrator employee reset
 
-`/Admin/DataReset` is restricted to Admin with antiforgery protection. It previews affected counts, saves a private server backup (plus uploaded employee documents), and requires an exact confirmation phrase. The backup expires for reset use after 15 minutes; a changed data fingerprint requires a fresh backup. Deletions run within a database transaction. Administrator accounts, organization configuration, device pairing/stamps and other module records remain. Asset/vehicle employee links are cleared. Employee login accounts linked to deleted profiles are removed, and existing employee sessions stop authenticating.
+`/Admin/DataReset` is restricted to Admin with antiforgery protection. It previews affected counts, saves a private server backup (plus uploaded employee documents), and requires an exact confirmation phrase. The backup expires for reset use after 15 minutes; a changed data fingerprint requires a fresh backup. Deletions run within a database transaction. Admin and General Secretary accounts, organization configuration, device pairing/stamps and other module records remain. Asset/vehicle employee links are cleared. All other login accounts are removed, and existing employee sessions stop authenticating.
 
 Employee numbering starts again at EMP0001 when available, but terminal PINs stay above the previous known PIN range so retained terminal fingerprints cannot accidentally match new staff. Physical terminal users/fingerprints are not erased. Backups are outside the public web root; only Admin can download backup data. This is a permanent maintenance action, not a normal employee deletion screen.
 

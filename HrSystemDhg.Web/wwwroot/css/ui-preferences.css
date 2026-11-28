@@ -53,3 +53,5 @@
 [data-theme=dark] #workspace-nav .nav-search input::placeholder{color:#adbfda}
 [data-theme=dark] #workspace-nav .nav-tools button{background:#223e69;color:#d5e6ff}
 [data-theme=dark] .dashboard-workspace .portal-branch-row strong,[data-theme=dark] .dashboard-workspace .portal-branch-row small,[data-theme=dark] .dashboard-workspace .portal-donut>div>span,[data-theme=dark] .dashboard-workspace .portal-payroll-amount>small{color:#b8cdeb}
+[data-theme=dark] .workspace-section-index{background:#18273e;border-color:#30425b}
+[data-theme=dark] .workspace-section-index strong{color:#b9cce6}

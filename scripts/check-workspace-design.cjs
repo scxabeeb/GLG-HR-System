@@ -49,6 +49,14 @@ const fs=require('fs');
     if(route==='/Reports/All'||route==='/Reports?report=Employees')await page.screenshot({path:out+'/'+(route.includes('?')?'report-results':'reports')+'-'+width+'.png',fullPage:true});
    }
   }
+  await page.setViewportSize({width:1440,height:960});await page.goto(base+'/Admin/Dashboard');
+  if((await page.locator('#expand-menus').textContent()).includes('Expand'))await page.locator('#expand-menus').click();
+  await page.locator('#expand-menus').click();await page.reload();
+  if(await page.locator('#workspace-nav details[data-menu][open]').count())throw Error('Collapsed menus reopen after refresh');
+  const activeWorkspace=page.locator('details[data-menu=workspace]');await activeWorkspace.locator(':scope > summary').click();await page.waitForTimeout(80);await page.reload();
+  if(!await activeWorkspace.getAttribute('open') && await activeWorkspace.getAttribute('open')===null)throw Error('Expanded menu preference was lost');
+  await activeWorkspace.locator(':scope > summary').click();await page.waitForTimeout(80);await page.reload();
+  if(await activeWorkspace.getAttribute('open')!==null)throw Error('Active menu ignores explicit collapsed preference');
   if(errors.length)throw Error(errors.join('; '));
   console.log('PASS responsive login/dashboard at 320–1440px, focusable searchable menu, and 12 module layouts; screenshots: '+out);
  }finally{await browser.close();}

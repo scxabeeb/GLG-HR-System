@@ -29,26 +29,31 @@
         expand.setAttribute('aria-label', expanded ? 'Collapse all menu groups' : 'Expand all menu groups');
     }
 
+    const savedMenus = new Map(groups.map(group => {
+        try { return [group, localStorage.getItem('dhg-menu-' + group.dataset.menu)]; } catch { return [group, null]; }
+    }));
     groups.forEach(group => {
         const key = 'dhg-menu-' + group.dataset.menu;
-        try { group.open = localStorage.getItem(key) === 'open'; } catch {}
+        group.open = savedMenus.get(group) === 'open';
         const current = selectedLink([...group.querySelectorAll('a')]
             .filter(link => link.closest('details[data-menu]') === group));
         if (current) {
             current.setAttribute('aria-current', normalizePath(current.pathname) === path ? 'page' : 'location');
             for (let menu = group; menu; menu = menu.parentElement.closest('details[data-menu]')) {
-                menu.open = true;
+                if (savedMenus.get(menu) !== 'closed') menu.open = true;
             }
         }
         group.addEventListener('toggle', () => {
-            try { localStorage.setItem(key, group.open ? 'open' : 'closed'); } catch {}
+            if (!document.getElementById('nav-search')?.value.trim()) {
+                try { localStorage.setItem(key, group.open ? 'open' : 'closed'); } catch {}
+            }
             syncExpandButton();
         });
     });
     if (expand && groups.length) {
         expand.addEventListener('click', () => {
             const open = !groups.every(group => group.open);
-            groups.forEach(group => { group.open = open; });
+            groups.forEach(group => { group.open = open; try { localStorage.setItem('dhg-menu-' + group.dataset.menu, open ? 'open' : 'closed'); } catch {} });
             syncExpandButton();
         });
         syncExpandButton();

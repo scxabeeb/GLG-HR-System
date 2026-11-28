@@ -1,3 +1,4 @@
+import 'ui_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -233,7 +234,7 @@ class _NativeMeetingRoomState extends State<NativeMeetingRoom> {
       lines.clear();
     } else if (type == 'record-start' && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The organizer has started recording.')),
+        const SnackBar(content: UiText('The organizer has started recording.')),
       );
     }
     update();
@@ -304,7 +305,7 @@ class _NativeMeetingRoomState extends State<NativeMeetingRoom> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Screen sharing could not start on this device.'),
+            content: UiText('Screen sharing could not start on this device.'),
           ),
         );
       }
@@ -349,7 +350,7 @@ class _NativeMeetingRoomState extends State<NativeMeetingRoom> {
             bottom: 8,
             left: 8,
             right: 8,
-            child: Text(
+            child: UiText.raw(
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -393,12 +394,12 @@ class _NativeMeetingRoomState extends State<NativeMeetingRoom> {
       appBar: AppBar(
         backgroundColor: const Color(0xff101d30),
         foregroundColor: Colors.white,
-        title: Text(title, style: const TextStyle(fontSize: 16)),
+        title: UiText.raw(title, style: const TextStyle(fontSize: 16)),
         actions: [
           Padding(
             padding: const EdgeInsets.all(12),
             child: Center(
-              child: Text(
+              child: UiText(
                 '${peers.length + 1} people',
                 style: const TextStyle(fontSize: 12),
               ),
@@ -419,7 +420,7 @@ class _NativeMeetingRoomState extends State<NativeMeetingRoom> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
+                            UiText.raw(
                               ended
                                   ? 'This meeting has ended.'
                                   : error ?? 'You left the meeting.',
@@ -430,7 +431,7 @@ class _NativeMeetingRoomState extends State<NativeMeetingRoom> {
                             if (!ended)
                               FilledButton(
                                 onPressed: connect,
-                                child: const Text('Rejoin meeting'),
+                                child: const UiText('Rejoin meeting'),
                               ),
                           ],
                         ),
@@ -545,15 +546,15 @@ class _NativeMeetingRoomState extends State<NativeMeetingRoom> {
                         final yes = await showDialog<bool>(
                           context: context,
                           builder: (c) => AlertDialog(
-                            title: const Text('End meeting for everyone?'),
+                            title: const UiText('End meeting for everyone?'),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(c, false),
-                                child: const Text('Cancel'),
+                                child: const UiText('Cancel'),
                               ),
                               FilledButton(
                                 onPressed: () => Navigator.pop(c, true),
-                                child: const Text('End meeting'),
+                                child: const UiText('End meeting'),
                               ),
                             ],
                           ),

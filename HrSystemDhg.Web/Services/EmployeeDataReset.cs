@@ -15,12 +15,12 @@ public sealed class EmployeeDataReset(HrDbContext db, IWebHostEnvironment env, D
     static readonly JsonSerializerOptions Json = new() { ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles };
     async Task<string[]> AccountIdsAsync()
     {
-        var admins = db.UserRoles.Where(r => db.Roles.Any(role => role.Id == r.RoleId && role.Name == "Admin")).Select(r => r.UserId);
-        return await db.Users.Where(u => u.EmployeeId != null && !admins.Contains(u.Id)).Select(u => u.Id).ToArrayAsync();
+        var admins = db.UserRoles.Where(r => db.Roles.Any(role => role.Id == r.RoleId && (role.Name == "Admin" || role.Name == "General Secretary"))).Select(r => r.UserId);
+        return await db.Users.Where(u => !admins.Contains(u.Id)).Select(u => u.Id).ToArrayAsync();
     }
     public async Task<Preview> PreviewAsync() => new(await db.Employees.IgnoreQueryFilters().CountAsync(), await db.AttendanceDays.IgnoreQueryFilters().CountAsync(),
         await db.SalaryVersions.IgnoreQueryFilters().CountAsync(), await db.PayrollLines.IgnoreQueryFilters().CountAsync(), await db.LeaveRequests.IgnoreQueryFilters().CountAsync(),
-        (await AccountIdsAsync()).Length, await db.UserRoles.CountAsync(r => db.Roles.Any(role => role.Id == r.RoleId && role.Name == "Admin")));
+        (await AccountIdsAsync()).Length, await db.UserRoles.Where(r => db.Roles.Any(role => role.Id == r.RoleId && (role.Name == "Admin" || role.Name == "General Secretary"))).Select(r=>r.UserId).Distinct().CountAsync());
     async Task<Dictionary<string, JsonElement>> SnapshotAsync()
     {
         var tables = new Dictionary<string, JsonElement>();
@@ -30,6 +30,7 @@ public sealed class EmployeeDataReset(HrDbContext db, IWebHostEnvironment env, D
             var rows = data.Select(row => JsonSerializer.SerializeToElement(row, Json)).OrderBy(row => row.GetRawText()).ToArray();
             tables[name] = JsonSerializer.SerializeToElement(rows, Json);
         }
+        await Add<Microsoft.AspNetCore.Identity.IdentityRole>("Roles");
         await Add<Employee>("Employees"); await Add<EmployeeAssignment>("EmployeeAssignments"); await Add<Education>("Educations");
         await Add<WorkExperience>("WorkExperiences"); await Add<EmployeeDocument>("EmployeeDocuments"); await Add<SalaryVersion>("SalaryVersions");
         await Add<AttendanceDay>("AttendanceDays"); await Add<ZkPunch>("ZkPunchs"); await Add<ZkPunchReview>("ZkPunchReviews"); await Add<ZkDeviceCommand>("ZkDeviceCommands");
@@ -102,7 +103,7 @@ public sealed class EmployeeDataReset(HrDbContext db, IWebHostEnvironment env, D
         await db.Users.Where(x=>users.Contains(x.Id)).ExecuteDeleteAsync(); await db.Employees.IgnoreQueryFilters().ExecuteDeleteAsync();
         // Employee numbers restart; terminal PINs deliberately remain monotonic to avoid old fingerprints mapping to new people.
         await db.EmployeeNumberSequences.ExecuteUpdateAsync(s=>s.SetProperty(x=>x.NextNumber,1).SetProperty(x=>x.NextPin,nextPin));
-        db.AuditLogs.Add(new(){Actor=actor,Action=$"Employee data reset: backup {backupId:N}; {backup.Counts.Employees} employees; {users.Length} employee accounts; admins and configuration preserved"});
+        db.AuditLogs.Add(new(){Actor=actor,Action=$"Employee data reset: backup {backupId:N}; {backup.Counts.Employees} employees; {users.Length} employee accounts; Admin and General Secretary accounts and configuration preserved"});
         await db.SaveChangesAsync(); await transaction.CommitAsync();
         foreach (var name in files.Select(Path.GetFileName).OfType<string>())
             if (!string.IsNullOrEmpty(name)) { try { File.Delete(Path.Combine(documents.Root,name)); } catch (Exception error) when (error is IOException or UnauthorizedAccessException) { /* The private backup remains available. */ } }

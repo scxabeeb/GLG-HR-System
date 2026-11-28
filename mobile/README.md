@@ -38,3 +38,5 @@ Version 2.2 adds native administrator task and meeting reports with search, stat
 Version 2.3 supports automatic employee ID sign-in (for example EMP0001). New registrations receive EMPID123 as their initial password and must change it before using the workspace. Email sign-in and email password recovery remain supported.
 
 Version 2.3.1 accepts passwords with a minimum of 4 characters, without required uppercase letters, numbers or symbols. Password-change and recovery screens match the deployed server policy.
+
+Version 2.4.0 adds English/Somali interface selection and light/dark mode on sign-in, in the navigation drawer and on the profile page. Preferences persist on the phone without replacing the signed-in API session or changing employee names and entered values. Android release APKs target ARM64 for Infinix and other 64-bit phones.

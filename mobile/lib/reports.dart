@@ -1,3 +1,4 @@
+import 'ui_preferences.dart';
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'main.dart' show DataView, TaskScreen, MeetingScreen, contentList, date;
@@ -22,7 +23,7 @@ class AdminReportEntry extends StatelessWidget {
       if (dashboard) return EmployeeProgress(api: api);
       return OutlinedButton.icon(
         icon: const Icon(Icons.assessment_outlined),
-        label: Text(module == 'tasks' ? 'Task report' : 'Meeting report'),
+        label: UiText(module == 'tasks' ? 'Task report' : 'Meeting report'),
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(
@@ -44,11 +45,11 @@ class EmployeeProgress extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          UiText(
             'Employee task progress',
             style: Theme.of(context).textTheme.titleMedium,
           ),
-          const Text('Completion excludes cancelled assignments.'),
+          const UiText('Completion excludes cancelled assignments.'),
           SizedBox(
             height: 370,
             child: DataView(
@@ -58,7 +59,7 @@ class EmployeeProgress extends StatelessWidget {
                   data['employees'] as List,
                 );
                 return employees.isEmpty
-                    ? const Center(child: Text('No assigned tasks yet.'))
+                    ? const Center(child: UiText('No assigned tasks yet.'))
                     : ListView.separated(
                         itemCount: employees.length,
                         separatorBuilder: (_, _) => const Divider(),
@@ -88,7 +89,7 @@ class EmployeeProgress extends StatelessWidget {
               ),
             ),
             icon: const Icon(Icons.assessment_outlined),
-            label: const Text('View task report'),
+            label: const UiText('View task report'),
           ),
         ],
       ),
@@ -111,12 +112,12 @@ class ProgressRow extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
+                child: UiText(
                   '${employee['name']}',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              Text('${employee['progress']}%'),
+              UiText('${employee['progress']}%'),
             ],
           ),
           const SizedBox(height: 8),
@@ -126,7 +127,7 @@ class ProgressRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
           ),
           const SizedBox(height: 8),
-          Text(
+          UiText(
             '${employee['done']} done · ${employee['inProgress']} in progress · ${employee['open']} open · ${employee['overdue']} overdue',
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -173,7 +174,7 @@ class _OperationsReportState extends State<OperationsReport> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(tasks ? 'Task report' : 'Meeting report')),
+    appBar: AppBar(title: UiText(tasks ? 'Task report' : 'Meeting report')),
     body: Column(
       children: [
         Padding(
@@ -182,9 +183,12 @@ class _OperationsReportState extends State<OperationsReport> {
             children: [
               TextField(
                 controller: search,
-                decoration: InputDecoration(
-                  labelText: tasks ? 'Task or employee' : 'Meeting or agenda',
-                  prefixIcon: const Icon(Icons.search),
+                decoration: localizeDecoration(
+                  context,
+                  InputDecoration(
+                    labelText: tasks ? 'Task or employee' : 'Meeting or agenda',
+                    prefixIcon: const Icon(Icons.search),
+                  ),
                 ),
                 onSubmitted: (_) => setState(() {
                   page = 1;
@@ -196,11 +200,14 @@ class _OperationsReportState extends State<OperationsReport> {
                 key: ValueKey(status),
                 initialValue: status,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Status'),
+                decoration: localizeDecoration(
+                  context,
+                  const InputDecoration(labelText: 'Status'),
+                ),
                 items: [
                   const DropdownMenuItem(
                     value: '',
-                    child: Text('All statuses'),
+                    child: UiText('All statuses'),
                   ),
                   for (final value
                       in tasks
@@ -213,7 +220,7 @@ class _OperationsReportState extends State<OperationsReport> {
                             ])
                     DropdownMenuItem(
                       value: value,
-                      child: Text(
+                      child: UiText(
                         value == 'InProgress' ? 'In progress' : value,
                       ),
                     ),
@@ -229,7 +236,7 @@ class _OperationsReportState extends State<OperationsReport> {
                 children: [
                   TextButton.icon(
                     icon: const Icon(Icons.date_range),
-                    label: Text(
+                    label: UiText.raw(
                       range == null
                           ? (tasks ? 'Due dates' : 'Meeting dates (EAT)')
                           : '${date(range!.start.toIso8601String())} – ${date(range!.end.toIso8601String())}',
@@ -258,14 +265,14 @@ class _OperationsReportState extends State<OperationsReport> {
                       page = 1;
                       revision++;
                     }),
-                    child: const Text('Clear'),
+                    child: const UiText('Clear'),
                   ),
                   FilledButton(
                     onPressed: () => setState(() {
                       page = 1;
                       revision++;
                     }),
-                    child: const Text('Apply'),
+                    child: const UiText('Apply'),
                   ),
                 ],
               ),
@@ -282,18 +289,18 @@ class _OperationsReportState extends State<OperationsReport> {
               );
               final summary = data['summary'] as Map;
               return contentList([
-                Text(
+                UiText(
                   '${data['total']} ${tasks ? 'assignments' : 'meetings'} match',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                Text(
+                UiText(
                   tasks
                       ? '${summary['done']} done · ${summary['active']} active · ${summary['overdue']} overdue'
                       : '${summary['completed']} completed · ${summary['withMinutes']} with minutes · ${summary['cancelled']} cancelled',
                 ),
                 if (tasks)
                   ExpansionTile(
-                    title: const Text('Progress by employee'),
+                    title: const UiText('Progress by employee'),
                     children: [
                       for (final employee in List<Map<String, dynamic>>.from(
                         data['employees'] as List,
@@ -307,14 +314,16 @@ class _OperationsReportState extends State<OperationsReport> {
                 if (items.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text('No records match these filters.'),
+                    child: UiText('No records match these filters.'),
                   ),
                 for (final item in items)
                   Card(
                     child: ListTile(
                       isThreeLine: true,
-                      title: Text('${item['responsibility'] ?? item['title']}'),
-                      subtitle: Text(
+                      title: UiText(
+                        '${item['responsibility'] ?? item['title']}',
+                      ),
+                      subtitle: UiText(
                         tasks
                             ? '${item['assigneeName']} · ${item['status']}\nDue ${date(item['dueDate'])}'
                             : '${item['organizer']} · ${item['status']}\n${date(item['startsUtc'])} · ${item['attended']}/${item['invited']} attended · ${item['hasMinutes'] == true ? 'Minutes available' : 'No minutes'}',
@@ -349,9 +358,9 @@ class _OperationsReportState extends State<OperationsReport> {
                               page--;
                             })
                           : null,
-                      child: const Text('Previous'),
+                      child: const UiText('Previous'),
                     ),
-                    Text('Page $page'),
+                    UiText('Page $page'),
                     TextButton(
                       onPressed:
                           page * (data['pageSize'] as int) <
@@ -360,7 +369,7 @@ class _OperationsReportState extends State<OperationsReport> {
                               page++;
                             })
                           : null,
-                      child: const Text('Next'),
+                      child: const UiText('Next'),
                     ),
                   ],
                 ),

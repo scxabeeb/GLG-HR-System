@@ -30,7 +30,7 @@ public class DataResetModel(EmployeeDataReset reset) : PageModel
         if(!ModelState.IsValid){await OnGetAsync();return Page();}
         try{await reset.ResetAsync(BackupId!.Value,Actor);}
         catch(InvalidOperationException e){ModelState.AddModelError("",e.Message);await OnGetAsync();return Page();}
-        TempData["Success"]="Employee, attendance, salary, payroll and leave records cleared. Employee login accounts removed; administrator accounts and system configuration retained.";
+        TempData["Success"]="Employee, attendance, salary, payroll and leave records cleared. Other login accounts removed; Admin and General Secretary accounts and system configuration retained.";
         return RedirectToPage();
     }
 }
