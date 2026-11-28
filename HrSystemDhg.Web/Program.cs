@@ -74,6 +74,7 @@ builder.Services.AddRateLimiter(o=>{o.RejectionStatusCode=429;o.AddPolicy("passw
 builder.Services.AddScoped<CalendarService>();
 builder.Services.AddScoped<LeaveService>();
 builder.Services.AddScoped<DocumentService>();
+builder.Services.AddScoped<EmployeeDataReset>();
 builder.Services.AddScoped<PayrollService>();
 builder.Services.AddScoped<AttendanceService>();
 builder.Services.AddScoped<OperationsNotices>();

@@ -14,3 +14,15 @@ The web application uses one shared shell for its modules. `workspace-polish.css
 The existing isolated native/browser fixture can additionally run `scripts/check-workspace-design.cjs` by setting `DHG_WORKSPACE_DESIGN_CHECK=1` alongside `DHG_SETTINGS_BROWSER_CHECK=1`. The visual checks use disposable local data and Chrome/Playwright, validate viewport widths from 320 to 1440 pixels, and visit the main employee, attendance, leave, salary, payroll, task, meeting, asset, fleet, settings and report pages. `DESIGN_SCREENSHOTS` optionally selects an output folder.
 
 The browser suite also audits rendered navigation, registration, permissions, report exports, payroll review controls and connector forwarding. This is a regression check of those workflows, not a claim that every possible production action or terminal firmware has been exercised.
+
+## Display preferences
+
+The language selector and sun/moon button are available on sign-in and workspace pages. English/Somali and light/dark preferences persist in the current browser. Somali translates navigation, dashboard labels, common forms, report headings and shared actions. Employee names, entered values, stored records and exported data are preserved. Translation uses text nodes rather than injected HTML, and option values remain unchanged. The server continues to enforce the same permissions in either language.
+
+## Administrator employee reset
+
+`/Admin/DataReset` is restricted to Admin with antiforgery protection. It previews affected counts, saves a private server backup (plus uploaded employee documents), and requires an exact confirmation phrase. The backup expires for reset use after 15 minutes; a changed data fingerprint requires a fresh backup. Deletions run within a database transaction. Administrator accounts, organization configuration, device pairing/stamps and other module records remain. Asset/vehicle employee links are cleared. Employee login accounts linked to deleted profiles are removed, and existing employee sessions stop authenticating.
+
+Employee numbering starts again at EMP0001 when available, but terminal PINs stay above the previous known PIN range so retained terminal fingerprints cannot accidentally match new staff. Physical terminal users/fingerprints are not erased. Backups are outside the public web root; only Admin can download backup data. This is a permanent maintenance action, not a normal employee deletion screen.
+
+The optional `DHG_RESET_CHECK=1` browser check exercises this workflow only on the disposable loopback fixture. Never point this destructive test at a real-data server.

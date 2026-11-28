@@ -16,8 +16,20 @@ const fs=require('fs');
    if(!await page.locator('#Username').isVisible() || !await page.locator('#Password').isVisible())throw Error('Login inputs missing');
    if(width===1440||width===390)await page.screenshot({path:out+'/login-'+width+'.png',fullPage:true});
   }
+  await page.setViewportSize({width:390,height:960});
+  await page.locator('#Username').fill('language-check@example.test');await page.locator('#Password').fill('temporary-test-value');
+  await page.locator('#workspace-language').selectOption('so');await page.locator('#workspace-theme').click();
+  if(await page.locator('html').getAttribute('lang')!=='so'||await page.locator('html').getAttribute('data-theme')!=='dark')throw Error('Display preferences did not apply');
+  if(!await page.getByRole('heading',{name:'Soo gal goobtaada shaqada'}).isVisible())throw Error('Somali sign-in translation missing');
+  if(await page.locator('#Username').inputValue()!=='language-check@example.test'||await page.locator('#Password').inputValue()!=='temporary-test-value')throw Error('Language selection changed entered credentials');
+  await fit('Somali dark login');await page.screenshot({path:out+'/login-somali-dark.png',fullPage:true});
+  await page.reload();if(await page.locator('html').getAttribute('lang')!=='so'||await page.locator('html').getAttribute('data-theme')!=='dark')throw Error('Display preferences did not persist');
+  await page.locator('#workspace-language').selectOption('en');await page.locator('#workspace-theme').click();
   await page.locator('#Username').fill(process.env.E2E_USER);await page.locator('#Password').fill(process.env.E2E_PASSWORD);
   await page.locator('.auth-submit').click();await page.waitForURL('**/Admin/Dashboard');
+  await page.setViewportSize({width:1440,height:1000});await page.locator('#workspace-language').selectOption('so');await page.locator('#workspace-theme').click();
+  await page.screenshot({path:out+'/dashboard-somali-dark.png',fullPage:true});await fit('Somali dark dashboard');
+  await page.locator('#workspace-language').selectOption('en');await page.locator('#workspace-theme').click();
   for(const width of [1440,1024,768,390,320]){
    await page.setViewportSize({width,height:1000});await page.goto(base+'/Admin/Dashboard');await fit('Dashboard '+width);
    if(!await page.locator('.dashboard-welcome').isVisible())throw Error('Dashboard welcome panel missing');

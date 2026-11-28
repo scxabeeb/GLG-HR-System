@@ -239,6 +239,8 @@ try:
             except (OSError,AssertionError):time.sleep(.5)
         else:raise Exception('Access-control test server failed to restart')
         subprocess.run(['node',str(root/'scripts/check-role-management.cjs')],env=browserenv,check=True)
+        if os.environ.get('DHG_RESET_CHECK') == '1':
+            subprocess.run(['node',str(root/'scripts/check-data-reset.cjs')],env=browserenv,check=True)
 
     token=administrator
     req('v2/auth/logout',{});req('v2/auth/me',expected=401)

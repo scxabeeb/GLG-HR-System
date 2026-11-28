@@ -1,0 +1,14 @@
+@page
+@model HrSystemDhg.Web.Pages.Admin.DataResetModel
+@{ViewData["Title"]="Employee data reset";}
+<div class="eyebrow">ADMINISTRATOR MAINTENANCE</div><h1>Employee data reset</h1>
+<p class="page-intro">Clear existing HR records before entering real employee data. This operation deletes records and cannot be undone through the normal employee screens.</p>
+@if(TempData["Success"] is string message){<div class="notice" role="status">@message</div>}
+<div asp-validation-summary="All"></div>
+<section class="card"><h2>Records to remove</h2><div class="table-scroll"><table><thead><tr><th>Record type</th><th>Count</th></tr></thead><tbody><tr><td>Employees</td><td>@Model.Counts.Employees</td></tr><tr><td>Attendance days</td><td>@Model.Counts.Attendance</td></tr><tr><td>Salary versions</td><td>@Model.Counts.Salaries</td></tr><tr><td>Payroll lines</td><td>@Model.Counts.PayrollLines</td></tr><tr><td>Leave requests</td><td>@Model.Counts.LeaveRequests</td></tr><tr><td>Employee login accounts (excluding Admin)</td><td>@Model.Counts.EmployeeAccounts</td></tr></tbody></table></div>
+<p>Includes raw attendance punches, clock reviews, salary history, payslips, payroll runs, leave balances, employee documents and employee assignments. Assets and vehicles remain; their employee/driver assignments are unlinked.</p>
+<p><strong>Retained:</strong> @Model.Counts.PreservedAdmins administrator accounts, roles, branches, departments, work rules, leave policies, branding, devices, tasks, meetings, assets, fleet and audit history. Device pairing and attendance upload stamps are retained.</p>
+<p>Employee numbers restart at EMP0001 when available. Terminal PINs continue forward so fingerprints stored on a terminal cannot accidentally identify a newly registered employee. This does not erase fingerprints or users on the physical terminal.</p></section>
+<section class="card"><h2>1. Back up existing records</h2><p>Create a private server backup before the reset. Uploaded CVs, certificates and photos are retained with it. The data download contains private employee and account information; store it securely.</p><form method="post" asp-page-handler="Backup"><button>Create reset backup</button></form>
+@if(Model.BackupId is Guid id){<p role="status">Backup prepared. It is valid for 15 minutes while records remain unchanged.</p><a class="button secondary" asp-page-handler="Download" asp-route-id="@id" download="employee-data-backup.json">Download data backup</a>}</section>
+@if(Model.BackupId != null){<section class="card"><h2>2. Clear employee data</h2><p>Review the record counts above. Type <strong>RESET EMPLOYEE DATA</strong> to confirm the reset.</p><form method="post"><input asp-for="BackupId" type="hidden"/><label>Confirmation<input asp-for="Confirmation" autocomplete="off" required/></label><button class="danger">Delete employee data and employee accounts</button></form></section>}
